@@ -165,7 +165,7 @@ export default function Player({ session, level, preferences, reader, persist, l
       : visibleHint?.text
   const seconds = Math.floor(display / 1000)
   return <div className="play-page">
-    <div className="play-navigation">
+    <div className="game-navigation">
       <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/> Game menu</button>
       <button className="icon-button" title="Sudoku settings" aria-label="Sudoku settings" onClick={openSettings}><Settings2 size={18}/></button>
     </div>
@@ -212,7 +212,7 @@ export default function Player({ session, level, preferences, reader, persist, l
           {hintText && <p role="status" className="feedback">{hintText}{visibleHint?.stage === 1 ? ' Press Hint again to highlight the cell.'
             : visibleHint?.stage === 2 ? ' Press Hint again to reveal the digit.' : ''}</p>}
           </>}
-        <button className="text-button" onClick={() => { if (confirm('Start a fresh attempt? Your current attempt will be archived.')) reset() }}>
+        <button className="text-button" onClick={() => { if (confirm('Start over? Your current saved game will be deleted.')) reset() }}>
           <RotateCcw size={16}/> Reset puzzle
         </button>
         <p role="alert" className="error">{problem}</p>

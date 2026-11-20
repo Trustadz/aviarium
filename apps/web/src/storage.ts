@@ -1,11 +1,13 @@
 import { Dexie, type EntityTable } from 'dexie'
-import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
+import { savedGameLimit, type PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import { api, json } from './api.js'
 
 export const localProfile = 'local-play'
 
-export type LocalSession = StoredSession & { profile: string; updated: number; dirty: boolean; sent?: Mutation }
+export type LocalSession = StoredSession & {
+  profile: string; updated: number; dirty: boolean; sent?: Mutation; expired?: true
+}
 interface LocalPrefs { profile: string; data: Preferences; pending: Partial<Preferences> }
 interface StoredLevel { key: string; level: PublishedLevel }
 interface Completion { key: string; profile: string; level: string; revision: number }
@@ -23,8 +25,29 @@ export async function cacheLevels(levels: PublishedLevel[]) {
   await db.levels.bulkPut(levels.map(level => ({ key: levelKey(level.id, level.revision), level })))
 }
 
-export async function listSessions(profile: string) {
-  return (await db.sessions.where('profile').equals(profile).toArray()).sort((a, b) => b.updated - a.updated)
+async function trimSavedGames(profile: string) {
+  const sessions = (await db.sessions.where('profile').equals(profile).toArray())
+    .sort((a, b) => b.updated - a.updated || b.revision - a.revision || b.id.localeCompare(a.id))
+  const expired = sessions.filter(session => !session.archived && !session.data.completed).slice(savedGameLimit)
+  for (const session of expired) {
+    session.archived = true
+    session.dirty = profile !== localProfile
+    session.expired = true
+  }
+  if (expired.length) await db.sessions.bulkPut(expired)
+  return sessions
+}
+
+export function listSessions(profile: string) {
+  return db.transaction('rw', db.sessions, () => trimSavedGames(profile))
+}
+
+export function deleteSavedGame(profile: string, id: string) {
+  return db.transaction('rw', db.sessions, async () => {
+    const session = await db.sessions.get(id)
+    if (session?.profile === profile && !session.archived)
+      await db.sessions.put({ ...session, archived: true, dirty: profile !== localProfile, expired: undefined })
+  })
 }
 export async function saveLocal(session: LocalSession) {
   await db.transaction('rw', db.sessions, async () => {
@@ -33,6 +56,7 @@ export async function saveLocal(session: LocalSession) {
     if (stored && (stored.revision !== session.revision || stored.updated > session.updated))
       throw new Error('This attempt changed in another tab. Reopen it before continuing.')
     await db.sessions.put({ ...session, sent: stored?.sent, dirty: session.profile !== localProfile })
+    await trimSavedGames(session.profile)
   })
 }
 
@@ -40,14 +64,16 @@ export async function saveLocal(session: LocalSession) {
 export function writeAttempt(expected: LocalSession, data: LocalSession['data']) {
   return db.transaction('rw', db.sessions, async () => {
     const current = await db.sessions.get(expected.id)
-    const concurrent = current && (current.profile !== expected.profile ||
-      current.revision !== expected.revision || current.updated !== expected.updated || current.archived)
+    if (!current || current.profile !== expected.profile || current.archived)
+      throw new Error('This saved game was deleted.')
+    const concurrent = current.revision !== expected.revision || current.updated !== expected.updated
     const dirty = expected.profile !== localProfile
     const next: LocalSession = concurrent
       ? { ...expected, id: crypto.randomUUID(), parentId: expected.id, revision: 0, sent: undefined,
           updated: Date.now(), data, dirty, archived: false }
       : { ...expected, sent: current?.sent, updated: Math.max(Date.now(), expected.updated + 1), data, dirty }
     await db.sessions.put(next)
+    if (concurrent) await trimSavedGames(next.profile)
     return next
   })
 }
@@ -85,7 +111,8 @@ async function synchronize(profile: string) {
       if (!current?.dirty && !current?.sent) return undefined
       if (current.sent) return current.sent
       const mutation: Mutation = { sessionId: current.id, mutationId: crypto.randomUUID(),
-        baseRevision: current.revision, data: current.data, archived: current.archived }
+        baseRevision: current.revision, data: current.data, archived: current.archived, updatedAt: current.updated,
+        archiveIfUnchanged: current.expired }
       await db.sessions.put({ ...current, sent: mutation, dirty: false })
       return mutation
     })
@@ -96,9 +123,10 @@ async function synchronize(profile: string) {
       if (current?.sent?.mutationId !== mutation.mutationId) return
       if (saved.id !== current.id) await db.sessions.delete(current.id)
       await db.sessions.put({
-        ...saved, profile, updated: current.updated, dirty: current.dirty,
+        ...saved, profile, updated: current.dirty ? current.updated : saved.updatedAt ?? current.updated, dirty: current.dirty,
         data: current.dirty ? current.data : saved.data,
-        archived: current.dirty ? current.archived : saved.archived,
+        archived: saved.archived || (current.dirty && current.archived),
+        expired: current.dirty ? current.expired : undefined,
       })
     })
   }
@@ -120,9 +148,10 @@ async function synchronize(profile: string) {
   await db.transaction('rw', db.sessions, db.prefs, db.completions, async () => {
     for (const remote of progress.sessions) {
       const local = await db.sessions.get(remote.id)
-      if (local?.dirty || local?.sent || local && local.revision >= remote.revision) continue
-      await db.sessions.put({ ...remote, profile, updated: local?.updated ?? Date.now(), dirty: false })
+      if (local && (local.revision >= remote.revision || (!remote.archived && (local.dirty || local.sent)))) continue
+      await db.sessions.put({ ...remote, profile, updated: remote.updatedAt ?? local?.updated ?? 0, dirty: false })
     }
+    await trimSavedGames(profile)
     const current = await db.prefs.get(profile)
     await db.prefs.put({ profile, data: { ...defaults, ...progress.prefs.data, ...current?.pending }, pending: current?.pending ?? {} })
     await db.completions.bulkPut(progress.completions.map(completion =>

@@ -117,6 +117,19 @@ if (adminToken && playerToken) {
   const progress = await request('/api/progress', { headers: playerHeaders })
   assert.ok(progress.completions.some(item => item.level === selected.id))
   assert.ok(progress.sessions.some(item => item.id === conflict.id))
+
+  const savedGames = []
+  for (let i = 0; i < 6; i++) {
+    savedGames.push(await push({ ...save(initial, 0), updatedAt: Date.now() - (6 - i) * 60_000 }))
+  }
+  const retained = (await request('/api/progress', { headers: playerHeaders })).sessions
+  const resumable = retained.filter(item => !item.archived && !item.data.completed)
+  assert.equal(resumable.length, 5)
+  assert.ok(resumable.some(item => item.id === savedGames.at(-1).id))
+  assert.equal(retained.find(item => item.id === savedGames[0].id).archived, true)
+  const newest = savedGames.at(-1)
+  assert.equal((await push({ ...save(newest.data, 0), sessionId: newest.id, archived: true })).archived, true)
+  assert.equal((await push({ ...save(newest.data, newest.revision), sessionId: newest.id })).archived, true)
   if (process.env.AVIARIUM_TEST_BACKUPS) {
     const backup = await request('/api/admin/backup', { headers: adminHeaders })
     const { folder, retention, schedule } = backup
@@ -310,7 +323,10 @@ try {
     assert.equal(await deviceB.evaluate(() => caches.has('aviarium-game-sudoku')), false)
     assert.equal(await deviceB.getByRole('button', { name: 'Remove Sudoku download' }).count(), 0)
     await deviceB.getByRole('button', { name: 'Explore Sudoku' }).click()
-    const savedRow = deviceB.locator('.attempts .level-row').filter({ hasText: 'Quiet Current' })
+    const savedRow = deviceB.getByRole('region', { name: 'Continue' }).getByRole('listitem').filter({ hasText: 'Quiet Current' })
+    const savedCell = savedRow.first().locator('.saved-board .cell').nth(blank)
+    await savedCell.filter({ hasText: String(digit) }).waitFor()
+    assert.match(await savedCell.getAttribute('class'), /entry/)
     await savedRow.getByRole('button', { name: 'Resume' }).first().click()
     await deviceB.getByRole('button', { name: label + digit, exact: true }).waitFor()
     await first.close()

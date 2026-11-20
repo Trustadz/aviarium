@@ -1,18 +1,20 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { savedGameLimit } from '../../../packages/game-sdk/src/index.js'
 import { mutationSchema, preferenceSchema, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import { rules } from '../../../packages/sudoku/src/rules.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import { digest, HttpError, requireUser, userFields, type User } from './auth.js'
 import { pool, transaction } from './config.js'
 
-const fields = 'id,revision,data,parent_id AS "parentId",archived'
+const fields = 'id,revision,data,parent_id AS "parentId",archived,floor(extract(epoch FROM updated_at) * 1000)::double precision AS "updatedAt"'
+const continueOrder = 'updated_at DESC NULLS LAST, revision DESC, id DESC'
 
 export function registerProgress(app: FastifyInstance) {
   app.get('/api/progress', async request => {
     const user = await requireUser(request)
     const [saves, completions, prefs, levels] = await Promise.all([
-      pool.query<StoredSession>(`SELECT ${fields} FROM saves WHERE owner_id=$1`, [user.id]),
+      pool.query<StoredSession>(`SELECT ${fields} FROM saves WHERE owner_id=$1 ORDER BY ${continueOrder}`, [user.id]),
       pool.query('SELECT level_id AS level,level_revision AS revision FROM completions WHERE owner_id=$1', [user.id]),
       pool.query('SELECT revision,data FROM preferences WHERE owner_id=$1', [user.id]),
       pool.query(`SELECT DISTINCT l.id,l.revision,l.ruleset,l.title,l.grid,l.difficulty,l.source
@@ -48,15 +50,28 @@ export function registerProgress(app: FastifyInstance) {
       if (existing && (existing.data.level !== mutation.data.level || existing.data.levelRevision !== mutation.data.levelRevision))
         throw new HttpError(422, 'A saved attempt is bound to one level revision.')
       let saved: StoredSession
-      if (existing?.revision === mutation.baseRevision && (!existing.archived || mutation.archived) &&
-          (!existing.data.completed || mutation.data.completed)) {
-        saved = (await db.query<StoredSession>(`UPDATE saves SET data=$1,revision=revision+1,archived=$2
-          WHERE id=$3 AND owner_id=$4 RETURNING ${fields}`, [mutation.data, mutation.archived, mutation.sessionId, user.id])).rows[0]
+      const now = Date.now()
+      const updatedAt = new Date(Math.min(mutation.updatedAt ?? now, now))
+      if (existing && (existing.archived ||
+          (mutation.archived && mutation.archiveIfUnchanged && existing.revision !== mutation.baseRevision))) {
+        saved = existing
+      } else if (existing && mutation.archived) {
+        saved = (await db.query<StoredSession>(`UPDATE saves SET archived=true,revision=revision+1
+          WHERE id=$1 AND owner_id=$2 RETURNING ${fields}`, [mutation.sessionId, user.id])).rows[0]
+      } else if (existing?.revision === mutation.baseRevision && (!existing.data.completed || mutation.data.completed)) {
+        saved = (await db.query<StoredSession>(`UPDATE saves SET data=$1,revision=revision+1,updated_at=GREATEST(updated_at,$2)
+          WHERE id=$3 AND owner_id=$4 RETURNING ${fields}`, [mutation.data, updatedAt, mutation.sessionId, user.id])).rows[0]
       } else {
-        saved = (await db.query<StoredSession>(`INSERT INTO saves(id,owner_id,data,parent_id,archived)
-          VALUES(COALESCE($1::uuid,gen_random_uuid()),$2,$3,$4,$5) ON CONFLICT(id) DO NOTHING RETURNING ${fields}`,
-        [existing ? null : mutation.sessionId, user.id, mutation.data, existing?.id, mutation.archived])).rows[0]
+        saved = (await db.query<StoredSession>(`INSERT INTO saves(id,owner_id,data,parent_id,archived,updated_at)
+          VALUES(COALESCE($1::uuid,gen_random_uuid()),$2,$3,$4,$5,$6) ON CONFLICT(id) DO NOTHING RETURNING ${fields}`,
+        [existing ? null : mutation.sessionId, user.id, mutation.data, existing?.id, mutation.archived, updatedAt])).rows[0]
         if (!saved) throw new HttpError(409, 'The session ID is already in use.')
+      }
+      if (!saved.archived && !saved.data.completed) {
+        const expired = await db.query<StoredSession>(`UPDATE saves SET archived=true,revision=revision+1
+          WHERE id IN (SELECT id FROM saves WHERE owner_id=$1 AND NOT archived AND data->>'completed' = 'false'
+            ORDER BY ${continueOrder} OFFSET $2) RETURNING ${fields}`, [user.id, savedGameLimit])
+        saved = expired.rows.find(item => item.id === saved.id) ?? saved
       }
       if (mutation.data.completed) await db.query(`INSERT INTO completions(owner_id,level_id,level_revision)
         VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, [user.id, mutation.data.level, mutation.data.levelRevision])

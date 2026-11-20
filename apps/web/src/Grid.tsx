@@ -15,12 +15,12 @@ function cellClasses(cell: number, selected: number, given: boolean, related = t
   ].filter(Boolean).join(' ')
 }
 
-export function SudokuPreview({ grid }: { grid: string }) {
-  const previewGivens = Array.from(grid, Number)
-  const previewSelection = previewGivens.indexOf(0)
-  return <div className="board" aria-hidden="true">
-    {previewGivens.map((value, cell) =>
-      <span key={cell} className={cellClasses(cell, previewSelection, Boolean(value))}>{value || ''}</span>)}
+export function SudokuPreview({ grid, entries }: { grid?: string; entries?: readonly number[] }) {
+  const previewGivens = Array.from(grid ?? '', Number)
+  const previewSelection = entries ? -1 : previewGivens.indexOf(0)
+  return <div className={entries ? 'board saved-board' : 'board'} aria-hidden="true">
+    {(entries ?? previewGivens).map((value, cell) =>
+      <span key={cell} className={cellClasses(cell, previewSelection, Boolean(previewGivens[cell]), !entries)}>{value || ''}</span>)}
   </div>
 }
 

@@ -40,3 +40,5 @@ export interface SaveEnvelope {
   ruleset: number
   format: number
 }
+
+export const savedGameLimit = 5

@@ -31,7 +31,11 @@ export const defaults: Preferences = {
 export const mutationSchema = z.object({
   mutationId: z.uuid(), sessionId: z.uuid(), baseRevision: z.number().int().nonnegative(),
   data: saveSchema, archived: z.boolean(),
+  updatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  archiveIfUnchanged: z.literal(true).optional(),
 })
 export type Mutation = z.infer<typeof mutationSchema>
-export interface StoredSession { id: string; revision: number; data: SudokuSave; parentId?: string; archived: boolean }
+export interface StoredSession {
+  id: string; revision: number; data: SudokuSave; parentId?: string; archived: boolean; updatedAt?: number | null
+}
 export const generationSchema = z.object({ seed: z.string().trim().min(1).max(100), difficulty: difficultySchema, unique: z.boolean() })
