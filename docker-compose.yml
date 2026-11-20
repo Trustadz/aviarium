@@ -1,22 +1,38 @@
-x-app: &app
-  image: "${AVIARIUM_IMAGE:-ghcr.io/trustadz/aviarium:acceptance}"
-  environment:
-    DATABASE_URL: "${DATABASE_URL:-}"
-    PGHOST: db
-    PGPORT: "5432"
-    PGUSER: aviarium
-    PGPASSWORD: "${POSTGRES_PASSWORD:-aviarium-local}"
-    PGDATABASE: aviarium
-    PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://localhost:4173}"
-    OIDC_ISSUER: "${OIDC_ISSUER:-}"
-    OIDC_CLIENT_ID: "${OIDC_CLIENT_ID:-}"
-    OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET:-}"
-    OIDC_CALLBACK_URL: "${OIDC_CALLBACK_URL:-}"
-    OIDC_ADMIN_SUBJECT: "${OIDC_ADMIN_SUBJECT:-}"
-  init: true
 services:
+  app:
+    image: "${AVIARIUM_IMAGE:-ghcr.io/trustadz/aviarium:acceptance}"
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-4173}:4173"
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-}"
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: aviarium
+      PGPASSWORD: "${POSTGRES_PASSWORD:-aviarium-local}"
+      PGDATABASE: aviarium
+      PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://localhost:4173}"
+      OIDC_ISSUER: "${OIDC_ISSUER:-}"
+      OIDC_CLIENT_ID: "${OIDC_CLIENT_ID:-}"
+      OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET:-}"
+      OIDC_CALLBACK_URL: "${OIDC_CALLBACK_URL:-}"
+      OIDC_ADMIN_SUBJECT: "${OIDC_ADMIN_SUBJECT:-}"
+    volumes:
+      - "${BACKUP_STORAGE:-backups}:/backup"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "--input-type=module", "-e", "if (!(await fetch('http://127.0.0.1:4173/health/ready')).ok) process.exit(1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+    stop_grace_period: 25s
+
   db:
     image: postgres:15-bookworm
+    restart: unless-stopped
     environment:
       POSTGRES_USER: aviarium
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-aviarium-local}"
@@ -24,48 +40,11 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aviarium -d aviarium"]
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "aviarium", "-d", "aviarium"]
       interval: 3s
       timeout: 3s
       retries: 15
-    restart: unless-stopped
-  migrate:
-    <<: *app
-    command: ["node", "dist/apps/server/src/migrate.js"]
-    depends_on:
-      db:
-        condition: service_healthy
-  app:
-    <<: *app
-    ports:
-      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-4173}:4173"
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173/health/ready').then(r=>{if(!r.ok) process.exit(1)}).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 4s
-      retries: 5
-    restart: unless-stopped
-  worker:
-    <<: *app
-    command: ["node", "dist/apps/server/src/worker.js"]
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    cpus: 1.0
-    mem_limit: 256m
-    restart: unless-stopped
-  backup:
-    <<: *app
-    command: ["node", "dist/apps/server/src/backup-runner.js"]
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    volumes:
-      - "${BACKUP_STORAGE:-backups}:/backup"
-    restart: unless-stopped
+
 volumes:
   pgdata:
   backups:

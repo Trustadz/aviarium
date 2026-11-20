@@ -7,9 +7,11 @@ Use the same `docker-compose.yml` in both environments. Copy `.env.example` as `
 | Setting | Acceptance example | Production example |
 |---|---|---|
 | `COMPOSE_PROJECT_NAME` | `aviarium-accept` | `aviarium-prod` |
-| `AVIARIUM_IMAGE` | `ghcr.io/trustadz/aviarium:acceptance` | `ghcr.io/trustadz/aviarium:v0.1.1` |
+| `AVIARIUM_IMAGE` | `ghcr.io/trustadz/aviarium:acceptance` | `ghcr.io/trustadz/aviarium:v0.1.2` |
 | `APP_PORT` | `4183` | `4173` |
 | `PUBLIC_ORIGIN` | `https://puzzles-accept.example.org` | `https://puzzles.example.org` |
+
+Compose starts Aviarium and PostgreSQL. Both have health checks. Aviarium runs schema migrations at startup and handles puzzle jobs and backups in the app container.
 
 Set a strong `POSTGRES_PASSWORD`. A named backup volume is created automatically. To store backups in a host directory instead, set `BACKUP_STORAGE` to an existing absolute path writable by UID 1000. `DATABASE_URL` is optional for an externally managed PostgreSQL database.
 
@@ -21,6 +23,8 @@ docker compose up -d --wait
 ```
 
 For updates on a moving tag, run `docker compose pull` followed by `docker compose up -d --wait`. Main publishes the moving `acceptance` tag and a `sha-<commit>` tag. Production can pin the accepted SHA or a version tag. A Git version tag promotes the already published image for that commit.
+
+If your existing stack has separate migration, worker, and backup services, use `docker compose up -d --wait --remove-orphans` on the first upgrade. Keep the same project name and backup storage setting to retain the existing database and archives. Use the matching image and Compose file from the same release.
 
 ## Custom URL and Pocket ID
 
@@ -39,6 +43,8 @@ Sign in to grant other users access through **Admin**. Each Pocket ID identity h
 ## Scheduled backup
 
 The default is `0 3 * * *` UTC with three successful archives retained. The admin page can choose a subfolder within `/backup`, set the five-field UTC schedule, set retention, or request an immediate run. The runner creates valid subfolders on the first run. It never traverses symlinks inside the configured mount. A failed run leaves earlier archives intact. When the folder changes, older archives stay in the old folder.
+
+With the default backup volume, copy an archive to the host with `docker compose cp app:/backup/ARCHIVE.dump ./ARCHIVE.dump`. Include the configured subfolder in the source path if you use one.
 
 The archive contains Aviarium's PostgreSQL database. Pocket ID passkeys and data still need their own backups. Compose configuration, credentials, and the application image are also separate. Keep a copy of the release source and configuration with the backup policy. Backups on the same physical disk share its failure risk.
 
@@ -59,4 +65,4 @@ SELECT count(*) AS saves FROM saves;
 SQL
 ```
 
-Keep the original database available. For a production cutover, have users export any newer local saves they want to retain. Stop app, worker, and backup, switch `DATABASE_URL` to the verified restored database, and start the services. Sign in again and import newer local saves if needed. A save referencing a revision published after the archive was taken needs that level restored before it can sync. Rotate secrets independently if the incident involved credential exposure.
+Keep the original database available. For a production cutover, have users export any newer local saves they want to retain. Stop `app`, switch `DATABASE_URL` to the verified restored database, and start the services. Sign in again and import newer local saves if needed. A save referencing a revision published after the archive was taken needs that level restored before it can sync. Rotate secrets independently if the incident involved credential exposure.

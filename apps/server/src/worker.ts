@@ -1,9 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
+import { pathToFileURL } from 'node:url'
 import { Worker } from 'node:worker_threads'
 import { pool } from './config.js'
-
-let stopping = false
-for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => { stopping = true })
 
 async function processPuzzle() {
   await pool.query(`UPDATE puzzle_jobs SET status='failed',result='{"error":"Worker stopped before completing the job."}'
@@ -38,8 +36,19 @@ async function processPuzzle() {
   return true
 }
 
-while (!stopping) {
-  try { if (!await processPuzzle()) await delay(800) }
-  catch (error) { console.error('Job polling failed', error); await delay(3000) }
+export async function runPuzzleJobs(signal: AbortSignal) {
+  while (!signal.aborted) {
+    let interval = 0
+    try { if (!await processPuzzle()) interval = 800 }
+    catch (error) { console.error('Job polling failed', error); interval = 3000 }
+    if (interval) await delay(interval, undefined, { signal }).catch(error => {
+      if (!signal.aborted) throw error
+    })
+  }
 }
-await pool.end()
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const stop = new AbortController()
+  for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => stop.abort())
+  try { await runPuzzleJobs(stop.signal) } finally { await pool.end() }
+}

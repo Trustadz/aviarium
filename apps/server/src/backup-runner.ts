@@ -1,12 +1,21 @@
 import { setTimeout as delay } from 'node:timers/promises'
+import { pathToFileURL } from 'node:url'
 import { backupTick } from './backups.js'
 import { pool } from './config.js'
 
-process.umask(0o077)
-let stop = false
-for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => { stop = true })
-while (!stop) {
-  try { await backupTick() } catch { console.error(JSON.stringify({ event: 'backup_connection_failed' })) }
-  if (!stop) await delay(5000)
+export async function runBackups(signal: AbortSignal) {
+  while (!signal.aborted) {
+    try { await backupTick(signal) }
+    catch { console.error(JSON.stringify({ event: 'backup_connection_failed' })) }
+    await delay(5000, undefined, { signal }).catch(error => {
+      if (!signal.aborted) throw error
+    })
+  }
 }
-await pool.end()
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.umask(0o077)
+  const stop = new AbortController()
+  for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => stop.abort())
+  try { await runBackups(stop.signal) } finally { await pool.end() }
+}

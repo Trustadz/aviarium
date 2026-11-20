@@ -4,10 +4,13 @@ import cookie from '@fastify/cookie'
 import staticFiles from '@fastify/static'
 import { ZodError } from 'zod'
 import { HttpError, registerAuth } from './auth.js'
+import { runBackups } from './backup-runner.js'
 import { registerBackups } from './backups.js'
 import { origin, pool } from './config.js'
 import { registerLevels } from './levels.js'
 import { registerProgress } from './progress.js'
+import { migrate } from './migrate.js'
+import { runPuzzleJobs } from './worker.js'
 
 export async function makeApp() {
   const app = Fastify({
@@ -61,7 +64,21 @@ export async function makeApp() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.umask(0o077)
+  const stop = new AbortController()
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => stop.abort())
+  await migrate()
   const app = await makeApp()
-  await app.listen({ host: process.env.HOST || '0.0.0.0', port: Number(process.env.PORT || 4173) })
-  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await app.close(); await pool.end() })
+  try {
+    await app.listen({ host: process.env.HOST || '0.0.0.0', port: Number(process.env.PORT || 4173) })
+    const jobs = runPuzzleJobs(stop.signal)
+    const backups = runBackups(stop.signal)
+    try { await Promise.all([jobs, backups]) }
+    finally {
+      stop.abort()
+      await Promise.allSettled([jobs, backups, app.close()])
+    }
+  } finally {
+    await pool.end()
+  }
 }

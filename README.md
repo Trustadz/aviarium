@@ -10,6 +10,8 @@ Copy `docker-compose.yml` and `.env.example` to your server. Name your local cop
 docker compose up -d --wait
 ```
 
+Compose runs two services. Aviarium handles its schema upgrades, puzzle jobs, and scheduled backups internally. PostgreSQL runs in its own container. Both services have health checks.
+
 The default image comes from the private GitHub Container Registry. Sign in to that registry on the host once before pulling it. Acceptance and production can share the same Compose file with separate project names, volumes, and image tags. See [deployment and Pocket ID setup](docs/deployment.md).
 
 ## Run from the source checkout

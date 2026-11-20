@@ -1,13 +1,5 @@
-x-build: &build
-  image: aviarium:local
-  build: .
-  pull_policy: never
 services:
   app:
-    <<: *build
-  migrate:
-    <<: *build
-  worker:
-    <<: *build
-  backup:
-    <<: *build
+    image: aviarium:local
+    build: .
+    pull_policy: never

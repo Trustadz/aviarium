@@ -67,7 +67,7 @@ export function registerBackups(app: FastifyInstance) {
   })
 }
 
-export async function backupTick() {
+export async function backupTick(signal?: AbortSignal) {
   const connection = await pool.connect()
   try {
     const { rows: [lock] } = await connection.query('SELECT pg_try_advisory_lock(14016434) AS acquired')
@@ -76,7 +76,7 @@ export async function backupTick() {
       const { rows: [config] } = await connection.query<BackupConfig>('SELECT * FROM backup_config')
       const from = config.last_attempt && config.last_attempt > config.schedule_since ? config.last_attempt : config.schedule_since
       const next = nextRun(config.schedule, from)
-      if (!config.requested_at && (!next || next > new Date())) return
+      if (signal?.aborted || !config.requested_at && (!next || next > new Date())) return
       await connection.query('UPDATE backup_config SET last_attempt=now(), requested_at=NULL,error=NULL')
       const directory = await destination(config.folder)
       const filename = 'aviarium-' + new Date().toISOString().replace(/[.:]/g, '-') + '-' + randomUUID() + '.dump'
@@ -96,8 +96,8 @@ export async function backupTick() {
           connection.push('--dbname', database.href)
         }
         await run('pg_dump', [...connection, '--format=custom', '--no-owner', '--no-acl',
-          '--lock-wait-timeout=30s', '--file', temporary], { env, timeout: 15 * 60_000 })
-        await run('pg_restore', ['--list', temporary], { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })
+          '--lock-wait-timeout=30s', '--file', temporary], { env, signal, timeout: 15 * 60_000 })
+        await run('pg_restore', ['--list', temporary], { signal, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })
         await rename(temporary, path)
       } finally {
         await rm(temporary, { force: true })
@@ -108,6 +108,10 @@ export async function backupTick() {
         archives=CASE WHEN folder=$2 THEN $1 ELSE archives END`, [JSON.stringify(names.slice(0, config.retention)), config.folder])
       console.info(JSON.stringify({ event: 'backup_complete', archive: filename }))
     } catch (error) {
+      if (signal?.aborted && error instanceof Error && error.name === 'AbortError') {
+        await connection.query('UPDATE backup_config SET requested_at=COALESCE(requested_at,now())')
+        return
+      }
       const failure = error as NodeJS.ErrnoException & { stderr?: string }
       const message = failure.code === 'ENOSPC' || failure.stderr?.includes('No space') ? 'Backup disk is full.'
         : failure.code === 'EACCES' || failure.stderr?.includes('Permission denied') ? 'Backup folder is not writable.'

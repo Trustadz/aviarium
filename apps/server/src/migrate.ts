@@ -1,8 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
 import { pool, transaction } from './config.js'
 import { starterCatalog } from '../../../packages/sudoku/src/catalog.js'
 
-try {
+export async function migrate() {
   await transaction(async db => {
     await db.query('SELECT pg_advisory_xact_lock(14016433)')
     await db.query('CREATE TABLE IF NOT EXISTS migrations (name text PRIMARY KEY, applied_at timestamptz DEFAULT now())')
@@ -20,6 +21,8 @@ try {
       [level.id, level.revision, level.ruleset, level.title, level.grid, level.difficulty, level.source])
     }
   })
-} finally {
-  await pool.end()
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try { await migrate() } finally { await pool.end() }
 }
