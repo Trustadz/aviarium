@@ -92,7 +92,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
   const openGame = games.find(game => game.url === path)
-  const { installed, remove } = useGameDownloads(openGame?.id, online)
+  const { installed, remove, recordActivity } = useGameDownloads(openGame?.id, online)
   const canPlay = online || installed.includes(featuredGame.id)
   const saves = useRef<Promise<void>>(Promise.resolve())
   const refreshCatalog = useCallback(async () => {
@@ -157,6 +157,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
     event.preventDefault(); go(next)
   }
   function record(attempt: NonNullable<typeof active>, data: SudokuSave) {
+    recordActivity(featuredGame.id)
     const result = saves.current.catch(() => undefined).then(async () => {
       attempt.head = await writeAttempt(attempt.head, data)
       if (attempt.head.id !== attempt.session.id) setNotice('This attempt changed in another tab or device. Your moves are saved in a separate copy.')
@@ -216,7 +217,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   return <div className={reader ? 'app reader' : 'app'} data-theme={theme} data-surface={surface}>
     {inLibrary && <header className="site-header"><div className="frame header-frame">
       <a className="brand" href="/" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/><span>Aviarium</span></a>
-      {(canEditSudoku || online && account?.role === 'admin') && <nav aria-label="Main navigation" className="main-nav">
+      {canEditSudoku && <nav aria-label="Main navigation" className="main-nav">
         {canEditSudoku && <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>}
         {online && account?.role === 'admin' && <a href="/admin" onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
       </nav>}

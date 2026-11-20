@@ -86,6 +86,8 @@ async function manageDownloads({ operation, game }) {
     } else {
       await installGame(game, Date.now())
     }
+  } else if (operation === 'touch' && Object.hasOwn(installed, game)) {
+    await (await caches.open(gameCache(game))).put(lastPlayedKey, new Response(String(Date.now())))
   } else if (operation === 'remove' && Object.hasOwn(gameAssets, game)) {
     await caches.delete(gameCache(game))
     if (game === 'sudoku') {
@@ -118,7 +120,7 @@ async function manageDownloads({ operation, game }) {
 self.addEventListener('message', event => {
   if (event.data === 'activate') {
     event.waitUntil(self.skipWaiting())
-  } else if (event.ports[0] && ['open', 'remove', 'check', 'list'].includes(event.data?.operation)) {
+  } else if (event.ports[0] && ['open', 'touch', 'remove', 'check', 'list'].includes(event.data?.operation)) {
     const result = operations.then(() => manageDownloads(event.data))
     operations = result.catch(() => {})
     event.waitUntil(result.then(

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-async function offlineRequest(worker: ServiceWorker, operation: 'open' | 'remove' | 'check' | 'list', game?: string) {
+async function offlineRequest(worker: ServiceWorker, operation: 'open' | 'touch' | 'remove' | 'check' | 'list', game?: string) {
   return new Promise<string[]>((resolve, reject) => {
     const error = () => new Error('Could not update game downloads on this device.')
     const { port1, port2 } = new MessageChannel()
@@ -17,28 +17,37 @@ async function offlineRequest(worker: ServiceWorker, operation: 'open' | 'remove
 
 export function useGameDownloads(game: string | undefined, online: boolean, enabled = true) {
   const [installed, setInstalled] = useState<string[]>([])
+  const opened = useRef<{ game: string; worker: ServiceWorker; installed: boolean } | undefined>(undefined)
+  const nextActivity = useRef(0)
   useEffect(() => {
     const serviceWorker = navigator.serviceWorker
     if (!enabled || !serviceWorker) return
     let current = true
-    const update = async () => {
+    if (!game) opened.current = undefined
+    const update = async (enter = false) => {
       const worker = serviceWorker.controller
       if (!worker) return
-      if (game) await offlineRequest(worker, 'open', game).catch(() => undefined)
+      if (game && enter && (opened.current?.game !== game || opened.current.worker !== worker || !opened.current.installed)) {
+        const entry = { game, worker, installed: false }
+        opened.current = entry
+        const games = await offlineRequest(worker, 'open', game).catch(() => undefined)
+        entry.installed = games?.includes(game) ?? false
+      }
       if (!current) return
       const games = await offlineRequest(worker, online ? 'check' : 'list').catch(() => undefined)
       if (current && games) setInstalled(games)
     }
     const refresh = () => { if (!document.hidden) void update() }
-    void update()
+    const controllerChanged = () => { void update(true) }
+    void update(true)
     const interval = window.setInterval(refresh, 60_000)
     document.addEventListener('visibilitychange', refresh)
-    serviceWorker.addEventListener('controllerchange', refresh)
+    serviceWorker.addEventListener('controllerchange', controllerChanged)
     return () => {
       current = false
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', refresh)
-      serviceWorker.removeEventListener('controllerchange', refresh)
+      serviceWorker.removeEventListener('controllerchange', controllerChanged)
     }
   }, [enabled, game, online])
 
@@ -46,7 +55,13 @@ export function useGameDownloads(game: string | undefined, online: boolean, enab
     const worker = navigator.serviceWorker?.controller
     if (worker) setInstalled(await offlineRequest(worker, 'remove', id))
   }, [])
-  return { installed, remove }
+  const recordActivity = useCallback((id: string) => {
+    const worker = navigator.serviceWorker?.controller
+    if (!worker || Date.now() < nextActivity.current) return
+    nextActivity.current = Date.now() + 60 * 60 * 1000
+    void offlineRequest(worker, 'touch', id).catch(() => { nextActivity.current = 0 })
+  }, [])
+  return { installed, remove, recordActivity }
 }
 
 export async function registerOffline(onUpdate: (activate: () => void) => void) {

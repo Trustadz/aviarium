@@ -196,6 +196,11 @@ try {
   await remove.waitFor()
   assert.equal(await cachedGame(), true)
 
+  const backgroundGame = await context.newPage()
+  await backgroundGame.goto(origin + '/games/sudoku')
+  await backgroundGame.getByRole('button', { name: 'Exit to library' }).waitFor()
+  await backgroundGame.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
+  await page.bringToFront()
   await context.setOffline(true)
   await page.reload()
   await page.getByRole('button', { name: 'Explore Sudoku' }).click()
@@ -210,6 +215,9 @@ try {
   await page.getByRole('button', { name: 'Exit to library' }).click()
 
   await context.setOffline(false)
+  await backgroundGame.bringToFront()
+  assert.equal(await cachedGame(), false)
+  await backgroundGame.close()
   await page.getByRole('button', { name: 'Explore Sudoku' }).click()
   await page.getByRole('button', { name: 'Resume', exact: true }).first().click()
   await cell('1').waitFor()
@@ -238,6 +246,13 @@ try {
   await page.getByRole('heading', { name: 'Game library' }).waitFor()
   await remove.waitFor({ state: 'hidden' })
   assert.deepEqual(syncRequests, [])
+  await page.evaluate(async () => {
+    const legacy = await caches.open('aviarium-000000000000')
+    await legacy.put('/assets/Player-legacy.js', new Response('legacy player'))
+  })
+  await page.reload()
+  await remove.waitFor()
+  assert.equal(await page.evaluate(() => caches.has('aviarium-000000000000')), false)
   console.info('Downloads smoke passed: automatic install, offline play and removal, save preservation, and expiry only on a live connection.')
 
   await startApp(env)
