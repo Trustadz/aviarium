@@ -12,7 +12,7 @@ docker compose up -d
 
 Compose runs two services. Aviarium handles its schema upgrades, puzzle jobs, and scheduled backups internally. PostgreSQL runs in its own container. Both services have health checks.
 
-Compose pulls `ghcr.io/trustadz/aviarium:latest`, which tracks the latest versioned release in the private GitHub Container Registry. Sign in to that registry on the host once before pulling it. The containers are named `aviarium` and `aviarium-db`. PostgreSQL and backups are stored in `./data/postgres` and `./data/backups` beside the Compose file. See [deployment](docs/deployment.md) and [Pocket ID setup](docs/deployment.md#connect-pocket-id).
+Compose pulls `ghcr.io/trustadz/aviarium:latest`, which tracks the latest public release image. The containers are named `aviarium` and `aviarium-db`. PostgreSQL and backups are stored in `./data/postgres` and `./data/backups` beside the Compose file. See [deployment](docs/deployment.md) and [Pocket ID setup](docs/deployment.md#connect-pocket-id).
 
 ## Run from the source checkout
 

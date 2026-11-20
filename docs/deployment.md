@@ -19,10 +19,9 @@ Compose maps two directories on the host, relative to `docker-compose.yml`.
 
 The containers initialize missing directories on first start. Use dedicated directories for both mounts. If you select an existing backup directory, make it writable by the app's UID 1000. Use the generated archives for database backups. `DATABASE_URL` is optional for an externally managed PostgreSQL database.
 
-GHCR requires a one-time host sign-in for the private image. Use a GitHub token with `read:packages` and access to the Aviarium package. Once Docker has the credential, normal startup and updates use Compose.
+The container image is public. Start Aviarium with Compose.
 
 ```sh
-docker login ghcr.io
 docker compose up -d
 ```
 
