@@ -110,7 +110,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
       listSessions(profile), db.prefs.get(profile), db.completions.where('profile').equals(profile).toArray(),
     ])
     setSessions(items)
-    setPrefs(settings?.data ?? defaults)
+    setPrefs({ ...defaults, ...settings?.data })
     setCompletions(completed.map(item => levelKey(item.level, item.revision)))
   }, [profile])
   useEffect(() => {
@@ -274,7 +274,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
           {!matches.length && <p className="empty">No games match this view.</p>}
         </section></>
       : path === '/games/sudoku' && active ? <Player key={active.session.id} session={active.session} level={active.level} preferences={prefs}
-        reader={reader} persist={data => record(active, data)}
+        reader={reader} persist={data => record(active, data)} openSettings={() => showDialog('sudoku')}
         leave={() => { go('/games/sudoku'); void refreshLocal() }}
         reset={() => perform(async () => { await archive(active.head); await open(active.level) })}/>
       : path === '/games/sudoku' ? <section className="catalog" aria-labelledby="game-menu-title">
@@ -336,7 +336,8 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
           }}/></label>
           <p className="muted">These settings apply to this device.</p>
         </>}
-        {dialog === 'sudoku' && ([['mistakes', 'Highlight conflicts'], ['timer', 'Show timer'], ['hints', 'Enable hints']] as const)
+        {dialog === 'sudoku' && ([['mistakes', 'Highlight conflicts'], ['timer', 'Show timer'], ['hints', 'Enable hints'],
+          ['autoNotes', 'Show Auto notes button'], ['autoNoteDeletion', 'Automatically remove conflicting notes']] as const)
           .map(([key, label]) => <label className="setting-row" key={key}>{label}<input type="checkbox" checked={prefs[key]}
             onChange={event => changePrefs({ [key]: event.target.checked })}/></label>)}
         {dialog === 'account' && account && <>

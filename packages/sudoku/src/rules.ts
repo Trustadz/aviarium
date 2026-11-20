@@ -23,13 +23,18 @@ export function conflicts(grid: readonly number[]): Set<number> {
 }
 
 export interface Board { entries: number[]; notes: number[] }
-export interface Move { cell: number; digit: number; note?: boolean }
+export interface Move { cell: number; digit: number; note?: boolean; autoNoteDeletion?: boolean }
+
+export function candidateMasks(entries: readonly number[]): number[] {
+  return cells.map(cell => entries[cell] ? 0 : peers[cell].reduce((mask, peer) =>
+    entries[peer] ? mask & ~bit(entries[peer]) : mask, FULL))
+}
 
 export const rules: GameRules<readonly number[], Board, Move, readonly number[]> = {
   ruleset: 1,
   saveFormat: 1,
   create: level => ({ entries: [...level], notes: cells.map(() => 0) }),
-  apply(level, state, { cell, digit, note }) {
+  apply(level, state, { cell, digit, note, autoNoteDeletion = true }) {
     if (!Number.isInteger(cell) || cell < 0 || cell >= SIZE || level[cell] ||
         !Number.isInteger(digit) || digit < 0 || digit > 9) return state
     if (note && digit) {
@@ -43,7 +48,7 @@ export const rules: GameRules<readonly number[], Board, Move, readonly number[]>
     const notes = [...state.notes]
     entries[cell] = digit
     notes[cell] = 0
-    if (digit) for (const peer of peers[cell]) notes[peer] &= ~bit(digit)
+    if (digit && autoNoteDeletion) for (const peer of peers[cell]) notes[peer] &= ~bit(digit)
     return { entries, notes }
   },
   verify(level, candidate) {

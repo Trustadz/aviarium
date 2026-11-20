@@ -4,6 +4,7 @@ import { bit, box, cells, column, row } from '../../../packages/sudoku/src/rules
 interface GridProps {
   entries: readonly number[]; givens?: readonly number[]; notes?: readonly number[]
   selected: number; select: (cell: number) => void; enter: (digit: number) => void
+  activate?: (cell: number) => void; highlightedDigit?: number; hintCell?: number
   errors?: ReadonlySet<number>; disabled?: boolean; related?: boolean
 }
 function cellClasses(cell: number, selected: number, given: boolean, related = true, wrong = false) {
@@ -23,7 +24,8 @@ export function SudokuPreview({ grid }: { grid: string }) {
   </div>
 }
 
-export function Grid({ entries, givens, notes, selected, select, enter, errors, disabled, related = true }: GridProps) {
+export function Grid({ entries, givens, notes, selected, select, enter, activate = select, highlightedDigit,
+  hintCell, errors, disabled, related = true }: GridProps) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   function key(event: KeyboardEvent<HTMLButtonElement>, cell: number) {
     if (event.ctrlKey || event.metaKey || event.altKey) return
@@ -40,10 +42,13 @@ export function Grid({ entries, givens, notes, selected, select, enter, errors, 
   return <div className="board" aria-label="Sudoku board">
     {cells.map(cell => {
       const value = entries[cell], mask = notes?.[cell] ?? 0
-      return <button key={cell} type="button" className={cellClasses(cell, selected, Boolean(givens?.[cell]), related, errors?.has(cell))} ref={element => { buttons.current[cell] = element }}
+      const matching = Boolean(value && value === highlightedDigit)
+      const hinted = cell === hintCell
+      const classes = cellClasses(cell, selected, Boolean(givens?.[cell]), related, errors?.has(cell))
+      return <button key={cell} type="button" className={classes + (matching ? ' matching' : '') + (hinted ? ' hinted' : '')} ref={element => { buttons.current[cell] = element }}
         tabIndex={selected === cell ? 0 : -1} aria-pressed={selected === cell} disabled={disabled}
-        aria-label={`Row ${row(cell) + 1}, column ${column(cell) + 1}, ${value || 'empty'}${givens?.[cell] ? ', given' : ''}`}
-        onFocus={() => select(cell)} onClick={() => select(cell)} onKeyDown={event => key(event, cell)}>
+        aria-label={`Row ${row(cell) + 1}, column ${column(cell) + 1}, ${value || 'empty'}${givens?.[cell] ? ', given' : ''}${hinted ? ', hint target' : ''}`}
+        onFocus={() => select(cell)} onClick={() => activate(cell)} onKeyDown={event => key(event, cell)}>
         {value || (mask ? <span className="cell-notes">{Array.from({ length: 9 }, (_, i) =>
           <span key={i}>{mask & bit(i + 1) ? i + 1 : ''}</span>)}</span> : '')}
       </button>

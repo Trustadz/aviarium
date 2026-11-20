@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { starterCatalog } from './catalog.js'
-import { bit, parseGrid, rules } from './rules.js'
+import { bit, candidateMasks, FULL, parseGrid, rules } from './rules.js'
 import { analyze, generate, validate } from './solver.js'
 
 const start = Array.from(starterCatalog[0].grid, Number)
@@ -40,6 +40,23 @@ test('moves preserve givens, support candidates, and reject invalid moves', () =
   assert.equal(move.notes[8], 0)
   assert.equal(rules.apply(start, move, { cell: 7, digit: 0 }).entries[7], 0)
   assert.equal(rules.verify(start, move.entries), false)
+})
+test('candidates and automatic note deletion use row, column, and box peers', () => {
+  const givens = Array<number>(81).fill(0)
+  const board = rules.create(givens)
+  const rowPeer = 4, columnPeer = 36, boxPeer = 10, unrelated = 40
+  for (const cell of [rowPeer, columnPeer, boxPeer, unrelated]) board.notes[cell] = bit(2) | bit(5)
+  const keep = rules.apply(givens, board, { cell: 0, digit: 5, autoNoteDeletion: false })
+  assert.deepEqual(keep.notes, board.notes)
+  const remove = rules.apply(givens, board, { cell: 0, digit: 5, autoNoteDeletion: true })
+  const candidates = candidateMasks(keep.entries)
+  for (const cell of [rowPeer, columnPeer, boxPeer]) {
+    assert.equal(remove.notes[cell], bit(2))
+    assert.equal(candidates[cell], FULL & ~bit(5))
+  }
+  assert.equal(remove.notes[unrelated], board.notes[unrelated])
+  assert.equal(candidates[unrelated], FULL)
+  assert.equal(candidates[0], 0)
 })
 test('generates deterministic validated levels for every requested difficulty', () => {
   for (const level of starterCatalog) {

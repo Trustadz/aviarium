@@ -1,5 +1,5 @@
 import type { Difficulty, Validation } from '../../game-sdk/src/index.js'
-import { bit, box, cells, column, conflicts, FULL, peers, row, units } from './rules.js'
+import { bit, box, candidateMasks, cells, column, conflicts, FULL, row, units } from './rules.js'
 
 const counts = Array.from({ length: FULL + 1 }, (_, value) => value.toString(2).replace(/0/g, '').length)
 const digitOf = (mask: number) => 32 - Math.clz32(mask)
@@ -50,22 +50,28 @@ export function validate(input: readonly number[], budget = 150_000): Validation
   return solution ? { kind: 'unique', solution } : { kind: 'unsolvable' }
 }
 
-export interface Step { cell: number; digit: number; technique: 'Naked single' | 'Hidden single' | 'Guess or search' }
+export type Step = { cell: number; digit: number } & (
+  { technique: 'Naked single' | 'Guess or search' } |
+  { technique: 'Hidden single'; unit: 'row' | 'column' | 'box' }
+)
 export function analyze(input: readonly number[], solution?: readonly number[]) {
   const grid = [...input]
   const steps: Step[] = []
   let advanced = 0
   while (grid.includes(0)) {
-    const masks = cells.map(cell => grid[cell] ? 0 : peers[cell].reduce((mask, peer) =>
-      grid[peer] ? mask & ~bit(grid[peer]) : mask, FULL))
+    const masks = candidateMasks(grid)
     let step: Step | undefined
     const single = masks.findIndex(mask => counts[mask] === 1)
     if (single >= 0) step = { cell: single, digit: digitOf(masks[single]), technique: 'Naked single' }
     if (!step) {
-      for (const unit of units) {
+      for (const [index, unit] of units.entries()) {
         for (let digit = 1; digit <= 9; digit++) {
           const matches = unit.filter(cell => masks[cell] & bit(digit))
-          if (matches.length === 1) { step = { cell: matches[0], digit, technique: 'Hidden single' }; break }
+          if (matches.length === 1) {
+            const unitType = index < 9 ? 'row' : index < 18 ? 'column' : 'box'
+            step = { cell: matches[0], digit, technique: 'Hidden single', unit: unitType }
+            break
+          }
         }
         if (step) break
       }
