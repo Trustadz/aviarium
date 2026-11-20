@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { mutationSchema, preferenceSchema, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import { rules } from '../../../packages/sudoku/src/rules.js'
-import { digest, HttpError, requireUser } from './auth.js'
+import { sudoku } from '../../../packages/sudoku/src/metadata.js'
+import { digest, HttpError, requireUser, userFields, type User } from './auth.js'
 import { pool, transaction } from './config.js'
 
 const fields = 'id,revision,data,parent_id AS "parentId",archived'
@@ -74,15 +75,24 @@ export function registerProgress(app: FastifyInstance) {
   })
   app.get('/api/admin/users', async request => {
     await requireUser(request, 'admin')
-    return (await pool.query('SELECT id,name,role FROM users ORDER BY name,id')).rows
+    return (await pool.query<User>(`SELECT ${userFields} FROM users u ORDER BY u.name,u.id`)).rows
   })
   app.patch('/api/admin/users/:id', async request => {
-    const user = await requireUser(request, 'admin')
+    const admin = await requireUser(request, 'admin')
     const id = z.uuid().parse((request.params as { id: string }).id)
-    const { role } = z.object({ role: z.enum(['player', 'creator', 'admin']) }).parse(request.body)
-    if (id === user.id && role !== 'admin') throw new HttpError(409, 'Another admin must change your role.')
-    const result = await pool.query('UPDATE users SET role=$1 WHERE id=$2 RETURNING id,name,role', [role, id])
-    if (!result.rowCount) throw new HttpError(404, 'Account was not found.')
-    return result.rows[0]
+    const patch = z.union([
+      z.strictObject({ role: z.enum(['user', 'admin']) }),
+      z.strictObject({ editor: z.literal(sudoku.id), enabled: z.boolean() }),
+    ]).parse(request.body)
+    if ('role' in patch && id === admin.id && patch.role !== 'admin')
+      throw new HttpError(409, 'Another admin must change your role.')
+    return transaction(async db => {
+      const found = await db.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [id])
+      if (!found.rowCount) throw new HttpError(404, 'Account was not found.')
+      if ('role' in patch) await db.query('UPDATE users SET role=$1 WHERE id=$2', [patch.role, id])
+      else if (patch.enabled) await db.query('INSERT INTO game_editors (user_id,game_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, patch.editor])
+      else await db.query('DELETE FROM game_editors WHERE user_id=$1 AND game_id=$2', [id, patch.editor])
+      return (await db.query<User>(`SELECT ${userFields} FROM users u WHERE u.id=$1`, [id])).rows[0]
+    })
   })
 }

@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { generationSchema, gridSchema } from '../../../packages/sudoku/src/contracts.js'
-import { HttpError, requireUser } from './auth.js'
+import { sudoku } from '../../../packages/sudoku/src/metadata.js'
+import { HttpError, requireGameEditor, requireUser } from './auth.js'
 import { pool, transaction } from './config.js'
 
 interface Draft { id: string; owner_id: string; title: string; grid: string; version: number; seed: string | null }
@@ -35,11 +36,11 @@ export function registerLevels(app: FastifyInstance) {
     return { hidden }
   })
   app.get('/api/drafts', async request => {
-    const user = await requireUser(request, 'creator')
+    const user = await requireGameEditor(request, sudoku.id)
     return (await pool.query('SELECT id,title,grid,version,seed FROM drafts WHERE owner_id=$1 ORDER BY updated_at DESC', [user.id])).rows
   })
   app.post('/api/drafts', async request => {
-    const user = await requireUser(request, 'creator')
+    const user = await requireGameEditor(request, sudoku.id)
     const input = draftInput.parse(request.body)
     const metadata = await generation(user.id, input)
     return (await pool.query<Draft>(`INSERT INTO drafts(owner_id,title,grid,seed,generator_version)
@@ -47,7 +48,7 @@ export function registerLevels(app: FastifyInstance) {
     [user.id, input.title, input.grid, metadata?.seed, metadata?.generatorVersion])).rows[0]
   })
   app.put('/api/drafts/:id', async request => {
-    const user = await requireUser(request, 'creator')
+    const user = await requireGameEditor(request, sudoku.id)
     const input = draftInput.extend({ version: z.number().int().positive() }).parse(request.body)
     const metadata = await generation(user.id, input)
     const result = await pool.query(`UPDATE drafts SET title=$1,grid=$2,version=version+1,updated_at=now(),
@@ -59,11 +60,11 @@ export function registerLevels(app: FastifyInstance) {
     return result.rows[0]
   })
   app.get('/api/jobs', async request => {
-    const user = await requireUser(request, 'creator')
+    const user = await requireGameEditor(request, sudoku.id)
     return (await pool.query(`SELECT ${jobColumns} FROM puzzle_jobs WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 30`, [user.id])).rows
   })
   app.post('/api/jobs', async request => {
-    const user = await requireUser(request, 'creator')
+    const user = await requireGameEditor(request, sudoku.id)
     const input = z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('validate'), draftId: z.uuid(), version: z.number().int().positive() }),
       z.object({ kind: z.literal('generate'), options: generationSchema }),
@@ -87,7 +88,7 @@ export function registerLevels(app: FastifyInstance) {
     })
   })
   app.post('/api/drafts/:id/publish', async request => {
-    const user = await requireUser(request, 'creator')
+    const user = await requireGameEditor(request, sudoku.id)
     const { jobId } = z.object({ jobId: z.uuid() }).parse(request.body)
     const id = recordId(request)
     return transaction(async db => {

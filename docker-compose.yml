@@ -1,5 +1,6 @@
 services:
   app:
+    container_name: aviarium
     image: ghcr.io/trustadz/aviarium:latest
     init: true
     restart: unless-stopped
@@ -31,6 +32,7 @@ services:
     stop_grace_period: 25s
 
   db:
+    container_name: aviarium-db
     image: postgres:15-bookworm
     restart: unless-stopped
     environment:

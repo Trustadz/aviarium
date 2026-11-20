@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Archive, Clock3, Save } from 'lucide-react'
 import { api, errorMessage, json, type Account } from './api.js'
+import { games } from './registry.js'
 
 interface Backup {
   folder: string; schedule: string; retention: number
@@ -33,6 +34,12 @@ export default function Admin({ account, onCatalogChange }: {account: Account; o
     setBusy(true); setProblem(''); setMessage('')
     void task().catch(error => setProblem(errorMessage(error))).finally(() => setBusy(false))
   }
+  function updateAccount(id: string, patch: { role: Account['role'] } | { editor: string; enabled: boolean }) {
+    run(async () => {
+      const updated = await api<Account>('/admin/users/' + id, json('PATCH', patch), account.id)
+      setAccounts(items => items.map(item => item.id === updated.id ? updated : item))
+    })
+  }
   return <section className="admin">
     <div className="section-heading"><div><h1>Administration</h1><p>Manage Aviarium accounts and scheduled database backups.</p></div></div>
     {message && <p className="feedback" role="status">{message}</p>}
@@ -62,15 +69,20 @@ export default function Admin({ account, onCatalogChange }: {account: Account; o
         <h3>Retained archives</h3>
         {config?.archives.length ? <ul className="archive-list">{config.archives.map(name => <li key={name}>{name}</li>)}</ul> : <p>No successful backups yet.</p>}
       </section>
-      <section className="panel padded"><h2>Accounts</h2>
-        {accounts.map(user => <label className="setting-row" key={user.id}>{user.name}<select aria-label={'Role for ' + user.name}
-          disabled={busy || user.id === account.id} value={user.role} onChange={event => {
-            const role = event.target.value
-            run(async () => {
-              const updated = await api<Account>('/admin/users/' + user.id, json('PATCH', { role }), account.id)
-              setAccounts(items => items.map(item => item.id === updated.id ? updated : item))
-            })
-          }}>{['player', 'creator', 'admin'].map(role => <option key={role}>{role}</option>)}</select></label>)}
+      <section className="panel padded"><h2>Users</h2>
+        <p>Users can play every game. Editors can create and publish puzzles for the games you assign.</p>
+        {accounts.map(user => <section className="user-permissions" key={user.id} aria-label={user.name}>
+          <label className="setting-row"><strong>{user.name}</strong><select aria-label={'Role for ' + user.name}
+            disabled={busy || user.id === account.id} value={user.role}
+            onChange={event => updateAccount(user.id, { role: event.target.value as Account['role'] })}>
+            <option value="user">User</option><option value="admin">Admin</option>
+          </select></label>
+          {games.map(game => <label className="setting-row" key={game.id}>{game.title} editor
+            <input type="checkbox" aria-label={game.title + ' editor for ' + user.name}
+              checked={user.role === 'admin' || user.editorGames.includes(game.id)} disabled={busy || user.role === 'admin'}
+              onChange={event => updateAccount(user.id, { editor: game.id, enabled: event.target.checked })}/>
+          </label>)}
+        </section>)}
       </section>
       <section className="panel padded"><h2>Published puzzles</h2>
         {publications.length === 0 && <p>No creator puzzles published yet.</p>}

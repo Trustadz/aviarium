@@ -12,7 +12,8 @@ import { cacheLevels, db, exportProfile, importProfile, levelKey, listSessions, 
   sync, updatePreferences, writeAttempt, type LocalSession } from './storage.js'
 import './styles.css'
 
-const Player = lazy(games[0].player)
+const featuredGame = games[0]
+const Player = lazy(featuredGame.player)
 const Studio = lazy(() => import('./Studio.js'))
 const Admin = lazy(() => import('./Admin.js'))
 const knownAccount = 'aviarium:profile'
@@ -185,6 +186,7 @@ function App() {
   const recent = sessions.find(session => !session.archived)
   const levelTitle = (session: LocalSession) => catalog.find(level => level.id === session.data.level)?.title ?? 'Published puzzle'
 
+  const canEditSudoku = account?.role === 'admin' || account?.editorGames?.includes(featuredGame.id)
   const inLibrary = path === '/'
   const inGame = games.some(game => game.url === path)
   const surface = path === '/games/sudoku' || path === '/studio' ? 'sudoku' : 'library'
@@ -194,7 +196,7 @@ function App() {
       <a className="brand" href="/" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/><span>Aviarium</span></a>
       <nav aria-label="Main navigation" className="main-nav">
         <a href="/" className="nav-selected" aria-current="page" onClick={event => link(event, '/')}><Grid3X3 size={16}/> Library</a>
-        {account && account.role !== 'player' && <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>}
+        {account && canEditSudoku && <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>}
         {account?.role === 'admin' && <a href="/admin" onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
       </nav>
       <div className="header-actions">
@@ -216,7 +218,8 @@ function App() {
             <h1>Aviarium</h1>
             <p>A quiet place to play. Find your next puzzle<br className="wide-only"/> or pick up where you left off.</p>
             <button className="primary hero-action" onClick={() => go('/games/sudoku')}>Explore Sudoku <ArrowRight size={17}/></button>
-          </div><BoardArt />
+          </div>
+          <div className={'hero-art ' + featuredGame.theme} aria-hidden="true"><featuredGame.Preview/></div>
         </section>
         {reviewSession && <section className="continue-card">
           <div className="mini-board"><Grid3X3 size={24}/></div>
@@ -234,8 +237,8 @@ function App() {
           </div>
           <div className="tabs" aria-label="Game categories">{['All games', 'Logic', 'Favorites'].map(name =>
             <button key={name} aria-pressed={name === category} onClick={() => setCategory(name)}>{name}</button>)}</div>
-          <div className="game-list">{matches.map(game => <article className={'game-card ' + game.theme} key={game.id}>
-            <a className="game-card-image" href={game.url} onClick={event => link(event, game.url)} aria-label={'Open ' + game.title}><game.Preview/></a>
+          <div className="game-list">{matches.map(game => <article className="game-card" key={game.id}>
+            <a className={'game-card-image ' + game.theme} href={game.url} onClick={event => link(event, game.url)} aria-label={'Open ' + game.title}><game.Preview/></a>
             <div className="game-card-body">
               <div className="card-title"><h3><a href={game.url} onClick={event => link(event, game.url)}>{game.title}</a></h3>
               <button className="icon-button" aria-label={prefs.favorite ? 'Remove Sudoku from favorites' : 'Add Sudoku to favorites'}
@@ -283,7 +286,7 @@ function App() {
           <button className="icon-button" aria-label={'Play ' + level.title} onClick={() => perform(() => open(level))}><ChevronRight size={22}/></button></div>
         </div>)}{!difficultyCounts.length && <p className="empty">No published puzzles match these filters.</p>}</div>
       </section>
-      : path === '/studio' && account && account.role !== 'player' ? <>
+      : path === '/studio' && account && canEditSudoku ? <>
         <button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
         <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
       </>
@@ -355,20 +358,6 @@ function App() {
       </section>
     </div>}
     {inLibrary && <footer className="frame footer"><span>Aviarium</span><span>Play at your own pace.</span></footer>}
-  </div>
-}
-
-function BoardArt() {
-  const values = ['', '7', '', '2', '', '9', '', '', '4', '5', '', '', '', '8', '', '3', '', '', '', '6', '', '', '1', '', '', '', '8',
-    '6', '', '2', '', '', '', '7', '', '', '', '4', '', '9', '', '3', '', '5', '', '', '', '8', '', '', '', '1', '', '2',
-    '1', '', '', '', '4', '', '', '9', '', '', '', '6', '', '3', '', '', '', '5', '3', '', '', '6', '', '2', '', '7', '']
-  return <div className="board-art hero-art" aria-hidden="true">
-    <div className="art-grid">{values.map((digit, cell) => <span key={cell} className={[
-      cell % 9 === 2 || cell % 9 === 5 ? 'art-box-right' : '',
-      Math.floor(cell / 9) === 2 || Math.floor(cell / 9) === 5 ? 'art-box-bottom' : '',
-      cell === 39 || cell === 41 ? 'art-selected' : '',
-      cell >= 36 && cell < 45 ? 'art-active-row' : '',
-    ].join(' ')}>{digit}</span>)}</div>
   </div>
 }
 

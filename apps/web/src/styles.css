@@ -124,21 +124,12 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .hero-content > p:not(.hero-kicker) { color: var(--ink); font-size: clamp(.95rem, 2vw, 1.11rem); }
 .hero-action { margin-top: 23px; background: var(--ink); color: var(--sand); }
 .hero-action:hover:not(:disabled) { background: #2e3046; }
-.board-art { position: absolute; container-type: inline-size; width: var(--art-size); aspect-ratio: 1; pointer-events: none; }
-.hero-art { --art-size: min(53%, 484px); right: 42px; top: 21px; transform: rotate(-13deg); }
-.art-grid {
-  display: grid; grid-template: repeat(9,1fr)/repeat(9,1fr); width: 100%; height: 100%;
-  color: var(--ink); background: var(--sand); border: 5px solid var(--sand); border-radius: 17px; overflow: hidden;
-  box-shadow: 0 16px 44px #3d405b44;
+.hero-art {
+  position: absolute; width: var(--art-size); --art-size: min(53%, 440px);
+  right: 42px; top: 18px; transform: rotate(-13deg);
+  pointer-events: none;
 }
-.art-grid > span {
-  display: grid; place-items: center; border-right: 1px solid #c3c3ab; border-bottom: 1px solid #c3c3ab;
-  font-family: ui-monospace, monospace; font-size: 5.2cqw; font-weight: 750;
-}
-.art-grid .art-box-right { border-right: 2px solid #81856f; }
-.art-grid .art-box-bottom { border-bottom: 2px solid #81856f; }
-.art-grid .art-active-row { background: #dbebd7; }
-.art-grid .art-selected { background: var(--coral); color: var(--ink); }
+.hero-art .board { box-shadow: 0 16px 44px #142c2644; border-radius: 16px; }
 .section-heading { display: flex; justify-content: space-between; gap: 16px; align-items: end; }
 .section-heading p { margin-top: 7px; }
 .library { margin-top: 32px; }
@@ -245,6 +236,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .file-label input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
 .playback { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; font-size: .9rem; }
 .admin form { display: grid; gap: 14px; }
+.user-permissions { border-top: 1px solid var(--border); }
 .status-list { display: grid; grid-template-columns: auto 1fr; gap: 6px 9px; font-size: .87rem; margin: 0; }
 .status-list dt { font-weight: 670; }
 .status-list dd { margin: 0; color: var(--muted); }
@@ -271,7 +263,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .reader .hero { background: var(--surface); color: var(--text); border: 2px solid var(--text); }
 .reader .hero p { color: var(--text); }
 .reader .hero-action { background: var(--accent); color: var(--button-text); }
-.reader img, .reader .board-art, .reader .game-card-image { filter: grayscale(1); }
+.reader img { filter: grayscale(1); }
 .reader .cell { color: var(--text); }
 .reader .cell.given { background: var(--given-bg); }
 .reader .cell.selected { box-shadow: inset 0 0 0 3px var(--text); }

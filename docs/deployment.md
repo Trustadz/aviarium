@@ -1,18 +1,16 @@
 # Deployment and recovery
 
-## Acceptance and production
+## Install
 
-Put each environment in its own directory. Copy `docker-compose.yml` and `.env.example` there, rename the environment file to `.env`, and set the variables below.
+Copy `docker-compose.yml` and `.env.example` to your server. Rename the environment file to `.env`, set `PUBLIC_ORIGIN` to your Aviarium URL, and generate a password for `POSTGRES_PASSWORD`.
 
-| Setting | Acceptance example | Production example |
-|---|---|---|
-| `COMPOSE_PROJECT_NAME` | `aviarium-accept` | `aviarium-prod` |
-| `APP_PORT` | `4183` | `4173` |
-| `PUBLIC_ORIGIN` | `https://puzzles-accept.example.org` | `https://puzzles.example.org` |
+```sh
+openssl rand -hex 32
+```
 
-Compose starts Aviarium and PostgreSQL. The app uses `ghcr.io/trustadz/aviarium:latest`, which is updated when a versioned release is published. To test an unreleased build in acceptance, change the app image to `ghcr.io/trustadz/aviarium:acceptance` in that environment’s Compose file. Both have health checks. Aviarium runs schema migrations at startup and handles puzzle jobs and backups in the app container.
+Compose starts `aviarium` and `aviarium-db`. Both containers have health checks. The app uses `ghcr.io/trustadz/aviarium:latest` and handles database migrations, puzzle jobs, and backups internally.
 
-Set a strong `POSTGRES_PASSWORD`. Compose maps two directories on the host, relative to `docker-compose.yml`.
+Compose maps two directories on the host, relative to `docker-compose.yml`.
 
 | Host directory | Content | Optional override |
 |---|---|---|
@@ -49,7 +47,7 @@ Point your existing reverse proxy at the application's loopback port and configu
 
 4. Run `docker compose up -d`. Open Aviarium and choose **Sign in → Sign in with Pocket ID**.
 
-To grant the first Aviarium admin role, set `OIDC_ADMIN_SUBJECT` to that user's Pocket ID subject before they sign in. Use the **Admin** page to assign roles to other users after they sign in.
+To grant the first Aviarium admin role, set `OIDC_ADMIN_SUBJECT` to that user's Pocket ID subject before they sign in. Once someone signs in, they appear in **Admin → Users**. New accounts are **User** and can see and play every game. Enable **Sudoku editor** to let that person create, test, and publish Sudoku puzzles. **Admin** grants platform administration and editing access to every game.
 
 ## Scheduled backup
 

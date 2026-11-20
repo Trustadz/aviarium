@@ -1,4 +1,4 @@
-export interface Account { id: string; name: string; role: 'player' | 'creator' | 'admin' }
+export interface Account { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) { super(message) }
 }

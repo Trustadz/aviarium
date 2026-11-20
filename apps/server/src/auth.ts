@@ -3,7 +3,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import * as openid from 'openid-client'
 import { callback, oidc, origin, pool, transaction } from './config.js'
 
-export interface User { id: string; name: string; role: 'player' | 'creator' | 'admin' }
+export interface User { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
+export const userFields = `u.id,u.name,u.role,
+  ARRAY(SELECT game_id FROM game_editors WHERE user_id=u.id ORDER BY game_id) AS "editorGames"`
 export class HttpError extends Error {
   constructor(readonly statusCode: number, message: string) { super(message) }
 }
@@ -16,18 +18,25 @@ const cookies = { path: '/', httpOnly: true, secure, sameSite: 'lax' as const }
 export async function currentUser(request: FastifyRequest): Promise<User | undefined> {
   const cookie = request.cookies[sessionCookie]
   if (!cookie) return undefined
-  const result = await pool.query<User>(`SELECT u.id,u.name,u.role FROM users u JOIN auth_sessions s
+  const result = await pool.query<User>(`SELECT ${userFields} FROM users u JOIN auth_sessions s
     ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()`, [digest(cookie)])
   return result.rows[0]
 }
 
-export async function requireUser(request: FastifyRequest, permission?: 'creator' | 'admin'): Promise<User> {
+export async function requireUser(request: FastifyRequest, permission?: 'admin'): Promise<User> {
   const user = await currentUser(request)
   if (!user) throw new HttpError(401, 'Sign in to continue.')
   if (request.headers["x-aviarium-account"] && request.headers["x-aviarium-account"] !== user.id)
     throw new HttpError(409, "The active account changed. Refresh and sign in again.")
-  if (permission === 'admin' && user.role !== 'admin' || permission === 'creator' && user.role === 'player')
+  if (permission === 'admin' && user.role !== 'admin')
     throw new HttpError(403, 'Your account does not have this permission.')
+  return user
+}
+
+export async function requireGameEditor(request: FastifyRequest, game: string): Promise<User> {
+  const user = await requireUser(request)
+  if (user.role !== 'admin' && !user.editorGames.includes(game))
+    throw new HttpError(403, 'Your account cannot edit this game.')
   return user
 }
 
@@ -78,7 +87,7 @@ export function registerAuth(app: FastifyInstance) {
     if (!claims?.sub) throw new HttpError(400, 'Pocket ID returned no user identity.')
     const name = [claims.name, claims.preferred_username].find(value => typeof value === 'string')
     const session = token()
-    const initialRole = claims.sub === process.env.OIDC_ADMIN_SUBJECT ? 'admin' : 'player'
+    const initialRole = claims.sub === process.env.OIDC_ADMIN_SUBJECT ? 'admin' : 'user'
     await transaction(async db => {
       const { rows: [user] } = await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role) VALUES($1,$2,$3,$4)
         ON CONFLICT (issuer,subject) DO UPDATE SET name=excluded.name,

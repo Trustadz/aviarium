@@ -39,6 +39,28 @@ if (adminToken && playerToken) {
   await request('/api/admin/backup', { headers: playerHeaders, expected: 403 })
   await request('/api/admin/backup', { method: 'POST', headers: { ...adminHeaders, Origin: 'https://example.org' }, expected: 403 })
 
+  const member = (await request('/api/me', { headers: playerHeaders })).user
+  assert.equal(member.role, 'user')
+  assert.deepEqual(member.editorGames, [])
+  const accessPath = '/api/admin/users/' + member.id
+  const editorPatch = enabled => ({ editor: 'sudoku', enabled })
+  await request(accessPath, { method: 'PATCH', headers: playerHeaders, body: editorPatch(true), expected: 403 })
+  await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: { ...editorPatch(true), editor: 'unknown' }, expected: 400 })
+  const editor = await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: editorPatch(true) })
+  assert.equal(editor.role, 'user')
+  assert.deepEqual(editor.editorGames, ['sudoku'])
+  await request('/api/drafts', { headers: playerHeaders })
+  await request('/api/admin/levels', { headers: playerHeaders, expected: 403 })
+  await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: editorPatch(false) })
+  await request('/api/drafts', { headers: playerHeaders, expected: 403 })
+  assert.deepEqual(await request('/api/catalog', { headers: playerHeaders }), await request('/api/catalog'))
+  const promoted = await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: { role: 'admin' } })
+  assert.equal(promoted.role, 'admin')
+  await request('/api/admin/levels', { headers: playerHeaders })
+  await request('/api/drafts', { headers: playerHeaders })
+  await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: { role: 'user' } })
+  await request('/api/admin/levels', { headers: playerHeaders, expected: 403 })
+
   const job = await request('/api/jobs', { method: 'POST', headers: adminHeaders,
     body: { kind: 'generate', options: { seed: 'aviarium-v1:first-light', difficulty: 'Easy', unique: true } } })
   const jobResult = async id => until(async () => {
@@ -119,6 +141,16 @@ try {
   await page.goto(origin)
   await page.getByRole('heading', { name: 'Game library' }).waitFor()
   assert.equal(await page.getByRole('link', { name: 'Sudoku', exact: true }).count(), 1)
+  const boardAppearance = locator => locator.evaluate(board => Array.from(board.querySelectorAll('.cell'), cell => {
+    const style = getComputedStyle(cell)
+    return [cell.textContent, style.backgroundColor, style.color, style.borderRightColor]
+  }))
+  const heroPreview = page.locator('.hero-art .board')
+  const cardPreview = page.locator('.game-card-image .board')
+  assert.equal(await cardPreview.locator('.cell').count(), 81)
+  assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
+  const cardSurface = await page.locator('.game-card').evaluate(card => getComputedStyle(card).backgroundColor)
+  assert.equal(cardSurface, await page.getByRole('banner').evaluate(header => getComputedStyle(header).backgroundColor))
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
   await page.getByRole('button', { name: 'Favorites', exact: true }).click()
   await page.getByRole('link', { name: 'Sudoku', exact: true }).waitFor()
@@ -201,6 +233,30 @@ try {
     await adminPage.getByRole('link', { name: 'Admin' }).click()
     await adminPage.getByRole('heading', { name: 'Administration' }).waitFor()
     await adminPage.getByRole('button', { name: 'Run now' }).waitFor()
+    if (playerToken) {
+      const users = await request('/api/admin/users', { headers: adminHeaders })
+      const member = (await request('/api/me', { headers: playerHeaders })).user
+      const person = users.find(item => item.id === member.id)
+      const grant = adminPage.getByRole('checkbox', { name: 'Sudoku editor for ' + person.name })
+      await grant.click()
+      await until(async () => {
+        const result = await request('/api/me', { headers: playerHeaders })
+        return result.user.editorGames.includes('sudoku')
+      }, 'Sudoku editor grant from Admin')
+      const editorContext = await browser.newContext()
+      await editorContext.addCookies([{ name: 'aviarium', value: playerToken, url: origin }])
+      const editorPage = await editorContext.newPage()
+      await editorPage.goto(origin)
+      await editorPage.getByRole('link', { name: 'Studio' }).click()
+      await editorPage.getByRole('heading', { name: 'Creator studio' }).waitFor()
+      assert.equal(await editorPage.getByRole('link', { name: 'Admin' }).count(), 0)
+      await editorContext.close()
+      await grant.click()
+      await until(async () => {
+        const result = await request('/api/me', { headers: playerHeaders })
+        return !result.user.editorGames.includes('sudoku')
+      }, 'Sudoku editor revocation from Admin')
+    }
     await desktop.close()
   }
   if (playerToken) {
