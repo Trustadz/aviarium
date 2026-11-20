@@ -54,6 +54,12 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --sudoku-page: var(--sudoku-frost);
   min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
 }
+.login-page { justify-content: center; align-items: center; padding: 24px; }
+.login-panel { display: grid; justify-items: center; gap: 20px; width: min(100%, 420px); padding: 40px 24px; text-align: center; }
+.login-panel img { border-radius: 16px; }
+.install-help { text-align: left; }
+.install-help summary { cursor: pointer; }
+.install-help p { margin: 8px 0 0; }
 .app[data-theme=dark] {
   color-scheme: dark;
   --bg: #26283c; --surface: #33354c; --text: var(--sand); --muted: #d6d0ba;

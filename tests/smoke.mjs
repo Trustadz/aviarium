@@ -24,7 +24,11 @@ async function until(check, label) {
   }
   throw new Error('Timed out waiting for ' + label)
 }
-const starting = await request('/api/catalog')
+const playbackToken = playerToken || adminToken
+if (!playbackToken) throw new Error('Set AVIARIUM_TEST_PLAYER or AVIARIUM_TEST_ADMIN to a test session cookie.')
+await request('/api/catalog', { expected: 401 })
+await request('/api/progress', { expected: 401 })
+const starting = await request('/api/catalog', { headers: playerToken ? playerHeaders : adminHeaders })
 assert.ok(starting.some(level => level.id === 'first-light'))
 assert.equal((await request('/health/ready')).status, 'ok')
 await request('/api/drafts', { expected: 401 })
@@ -53,7 +57,7 @@ if (adminToken && playerToken) {
   await request('/api/admin/levels', { headers: playerHeaders, expected: 403 })
   await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: editorPatch(false) })
   await request('/api/drafts', { headers: playerHeaders, expected: 403 })
-  assert.deepEqual(await request('/api/catalog', { headers: playerHeaders }), await request('/api/catalog'))
+  assert.deepEqual(await request('/api/catalog', { headers: playerHeaders }), await request('/api/catalog', { headers: adminHeaders }))
   const promoted = await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: { role: 'admin' } })
   assert.equal(promoted.role, 'admin')
   await request('/api/admin/levels', { headers: playerHeaders })
@@ -90,11 +94,11 @@ if (adminToken && playerToken) {
   const second = await request('/api/drafts/' + draft.id + '/publish', { method: 'POST', headers: adminHeaders,
     body: { jobId: nextJob.id } })
   assert.equal(second.revision, 2)
-  assert.deepEqual(await request('/api/catalog'), await request('/api/catalog', { headers: playerHeaders }))
+  assert.deepEqual(await request('/api/catalog', { headers: adminHeaders }), await request('/api/catalog', { headers: playerHeaders }))
   await request('/api/admin/levels/' + published.id, { method: 'PATCH', headers: adminHeaders, body: { hidden: true } })
-  assert.ok(!(await request('/api/catalog')).some(level => level.id === published.id))
+  assert.ok(!(await request('/api/catalog', { headers: adminHeaders })).some(level => level.id === published.id))
   await request('/api/admin/levels/' + published.id, { method: 'PATCH', headers: adminHeaders, body: { hidden: false } })
-  assert.ok((await request('/api/catalog')).some(level => level.id === published.id))
+  assert.ok((await request('/api/catalog', { headers: adminHeaders })).some(level => level.id === published.id))
 
   const sessionId = crypto.randomUUID()
   const initial = { game: 'sudoku', format: 1, ruleset: 1, level: selected.id, levelRevision: selected.revision,
@@ -136,6 +140,15 @@ const browser = await chromium.launch({ executablePath: process.env.AVIARIUM_CHR
 try {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   const page = await context.newPage()
+  for (const route of ['/', '/games/sudoku', '/studio', '/admin']) {
+    await page.goto(origin + route)
+    await page.getByRole('link', { name: 'Login with Pocket ID' }).waitFor()
+    assert.equal(await page.getByRole('link').count(), 1)
+    assert.equal(await page.getByRole('button').count(), 0)
+    assert.equal(await page.getByRole('banner').count(), 0)
+    assert.equal(await page.getByRole('heading', { name: 'Game library' }).count(), 0)
+  }
+  await context.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
   const pageErrors = []
   page.on('pageerror', error => pageErrors.push(error.message))
   await page.goto(origin)
@@ -147,6 +160,7 @@ try {
   }))
   const heroPreview = page.locator('.hero-art .board')
   const cardPreview = page.locator('.game-card-image .board')
+  await cardPreview.waitFor()
   assert.equal(await cardPreview.locator('.cell').count(), 81)
   assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
   const cardSurface = await page.locator('.game-card').evaluate(card => getComputedStyle(card).backgroundColor)
@@ -155,8 +169,10 @@ try {
   await page.getByRole('button', { name: 'Favorites', exact: true }).click()
   await page.getByRole('link', { name: 'Sudoku', exact: true }).waitFor()
   if (process.env.AVIARIUM_SCREENSHOTS) await page.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/library-mobile.png', fullPage: true })
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  const playbackAccount = (await request('/api/me', { headers: playerToken ? playerHeaders : adminHeaders })).user
+  await page.getByRole('button', { name: playbackAccount.name }).click()
   await page.getByRole('dialog', { name: 'Account' }).waitFor()
+  assert.equal(await page.getByText(/(export|import) saves/i).count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
   await page.getByRole('button', { name: 'Display settings' }).click()
   await page.getByLabel('Theme').selectOption('dark')
@@ -213,6 +229,14 @@ try {
   const keypadBounds = await page.getByRole('button', { name: '1', exact: true }).boundingBox()
   assert.ok(keypadBounds && keypadBounds.y + keypadBounds.height <= 390)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
+  await page.evaluate(() => {
+    const cached = JSON.parse(localStorage.getItem('aviarium:session'))
+    cached.expiresAt = new Date(Date.now() - 1000).toISOString()
+    localStorage.setItem('aviarium:session', JSON.stringify(cached))
+  })
+  await page.reload()
+  await page.getByRole('link', { name: 'Login with Pocket ID' }).waitFor()
+  assert.equal(await page.locator('.board').count(), 0)
   assert.deepEqual(pageErrors, [])
   if (adminToken) {
     const desktop = await browser.newContext({ viewport: { width: 1440, height: 945 } })

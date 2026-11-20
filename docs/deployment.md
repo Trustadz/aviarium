@@ -31,6 +31,8 @@ Use `docker compose ps` to see when both services are healthy.
 
 Point your existing reverse proxy at the application's loopback port and configure HTTPS on the proxy. Set `PUBLIC_ORIGIN` to the external origin without a path, for example `https://puzzles.example.org`. If the proxy runs on another host, set `APP_BIND` to an interface it can reach.
 
+On iPhone or iPad, open that HTTPS URL in Safari. Use **Share → Add to Home Screen**, turn on **Open as Web App** if offered, and tap **Add**. Launch Aviarium from its new Home Screen icon. [Apple’s iPhone instructions](https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios)
+
 ## Connect Pocket ID
 
 1. In Pocket ID, go to **Administration → OIDC Clients → Add OIDC Client**. Name it **Aviarium**, select **Confidential**, and enter your Aviarium URL followed by `/api/auth/callback` as the callback. For example, register `https://puzzles.example.org/api/auth/callback`. Enable PKCE if your Pocket ID version exposes that option.
@@ -44,9 +46,9 @@ Point your existing reverse proxy at the application's loopback port and configu
    OIDC_CLIENT_SECRET=your-client-secret
    ```
 
-4. Run `docker compose up -d`. Open Aviarium and choose **Sign in → Sign in with Pocket ID**.
+4. Run `docker compose up -d`. Open Aviarium and choose **Login with Pocket ID**. Sign-in is required to open the library.
 
-To grant the first Aviarium admin role, set `OIDC_ADMIN_SUBJECT` to that user's Pocket ID subject before they sign in. Once someone signs in, they appear in **Admin → Users**. New accounts are **User** and can see and play every game. Enable **Sudoku editor** to let that person create, test, and publish Sudoku puzzles. **Admin** grants platform administration and editing access to every game.
+To grant the first Aviarium admin role, set `OIDC_ADMIN_SUBJECT` to that user's Pocket ID subject before they sign in. Once someone signs in, they appear in **Admin → Users**. New accounts are **User** and can see and play every game. Saves and game preferences sync with the signed-in account. Enable **Sudoku editor** to let that person create, test, and publish Sudoku puzzles. **Admin** grants platform administration and editing access to every game.
 
 ## Scheduled backup
 

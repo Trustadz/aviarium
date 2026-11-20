@@ -20,7 +20,7 @@ Compose pulls `ghcr.io/trustadz/aviarium:latest`, which tracks the latest public
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
-Open [http://localhost:4173](http://localhost:4173). Open **Sign in** to view account options. A guest can play immediately on a preview with no Pocket ID credentials.
+Configure Pocket ID in `.env`, open [http://localhost:4173](http://localhost:4173), and choose **Login with Pocket ID**.
 
 ## Develop and verify
 

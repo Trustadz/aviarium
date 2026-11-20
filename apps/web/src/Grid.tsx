@@ -1,5 +1,4 @@
 import { useRef, type KeyboardEvent } from 'react'
-import { starterCatalog } from '../../../packages/sudoku/src/catalog.js'
 import { bit, box, cells, column, row } from '../../../packages/sudoku/src/rules.js'
 
 interface GridProps {
@@ -15,10 +14,9 @@ function cellClasses(cell: number, selected: number, given: boolean, related = t
   ].filter(Boolean).join(' ')
 }
 
-const previewGivens = Array.from(starterCatalog[0].grid, Number)
-const previewSelection = previewGivens.indexOf(0)
-
-export function SudokuPreview() {
+export function SudokuPreview({ grid }: { grid: string }) {
+  const previewGivens = Array.from(grid, Number)
+  const previewSelection = previewGivens.indexOf(0)
   return <div className="board" aria-hidden="true">
     {previewGivens.map((value, cell) =>
       <span key={cell} className={cellClasses(cell, previewSelection, Boolean(value))}>{value || ''}</span>)}

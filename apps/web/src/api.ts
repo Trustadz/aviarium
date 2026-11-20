@@ -1,4 +1,5 @@
 export interface Account { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
+export interface SessionAccount extends Account { expiresAt: string }
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) { super(message) }
 }

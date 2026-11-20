@@ -1,8 +1,6 @@
 import { Dexie, type EntityTable } from 'dexie'
-import { z } from 'zod'
 import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
-import { defaults, preferenceSchema, saveSchema, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
-import { rules } from '../../../packages/sudoku/src/rules.js'
+import { defaults, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import { api, json } from './api.js'
 
 export type LocalSession = StoredSession & { profile: string; updated: number; dirty: boolean; sent?: Mutation }
@@ -55,7 +53,7 @@ export async function updatePreferences(profile: string, patch: Partial<Preferen
   return db.transaction('rw', db.prefs, async () => {
     const current = await db.prefs.get(profile)
     const data = { ...defaults, ...current?.data, ...patch }
-    await db.prefs.put({ profile, data, pending: profile === 'guest' ? {} : { ...current?.pending, ...patch } })
+    await db.prefs.put({ profile, data, pending: { ...current?.pending, ...patch } })
     return data
   })
 }
@@ -68,7 +66,6 @@ interface Progress {
 }
 const synchronizing = new Map<string, Promise<void>>()
 export function sync(profile: string) {
-  if (profile === 'guest') return Promise.resolve()
   const current = synchronizing.get(profile)
   if (current) return current
   const pending = synchronize(profile).finally(() => synchronizing.delete(profile))
@@ -136,39 +133,4 @@ export function downloadFile(name: string, text: string) {
   link.download = name
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-export async function exportProfile(profile: string) {
-  const sessions = (await listSessions(profile)).map(({ data, archived }) => ({ data, archived }))
-  const prefs = (await db.prefs.get(profile))?.data
-  downloadFile('aviarium-data.json', JSON.stringify({ format: 1, sessions, prefs }, null, 2))
-}
-
-const exportSchema = z.object({
-  format: z.literal(1),
-  sessions: z.array(z.object({ data: saveSchema, archived: z.boolean() })).max(500),
-  prefs: preferenceSchema.optional(),
-})
-export async function importProfile(profile: string, file: File) {
-  if (file.size > 10_000_000) throw new Error('Select an Aviarium export under 10 MB.')
-  const payload = exportSchema.parse(JSON.parse(await file.text()))
-  await db.transaction('rw', db.sessions, db.prefs, db.levels, async () => {
-    const imported = []
-    for (const session of payload.sessions) {
-      const { data } = session
-      const stored = await db.levels.get(levelKey(data.level, data.levelRevision))
-      if (!stored || stored.level.ruleset !== data.ruleset) throw new Error('Download the matching puzzles before importing these saves.')
-      const givens = Array.from(stored.level.grid, Number)
-      const changesGivens = [data.board, ...data.undo, ...data.redo].some(board =>
-        givens.some((value, cell) => value && value !== board.entries[cell]))
-      if (changesGivens || data.completed && !rules.verify(givens, data.board.entries))
-        throw new Error('A saved attempt contains an invalid board.')
-      imported.push({
-        ...session, id: crypto.randomUUID(), revision: 0, profile, updated: Date.now(), dirty: true,
-      })
-    }
-    await db.sessions.bulkAdd(imported)
-    if (payload.prefs) await updatePreferences(profile, payload.prefs)
-  })
-  return payload.sessions.length
 }

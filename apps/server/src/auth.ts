@@ -4,6 +4,7 @@ import * as openid from 'openid-client'
 import { callback, oidc, origin, pool, transaction } from './config.js'
 
 export interface User { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
+interface SessionUser extends User { expiresAt: Date }
 export const userFields = `u.id,u.name,u.role,
   ARRAY(SELECT game_id FROM game_editors WHERE user_id=u.id ORDER BY game_id) AS "editorGames"`
 export class HttpError extends Error {
@@ -15,10 +16,10 @@ const secure = origin.startsWith('https:')
 const sessionCookie = secure ? '__Host-aviarium' : 'aviarium'
 const cookies = { path: '/', httpOnly: true, secure, sameSite: 'lax' as const }
 
-export async function currentUser(request: FastifyRequest): Promise<User | undefined> {
+export async function currentUser(request: FastifyRequest): Promise<SessionUser | undefined> {
   const cookie = request.cookies[sessionCookie]
   if (!cookie) return undefined
-  const result = await pool.query<User>(`SELECT ${userFields} FROM users u JOIN auth_sessions s
+  const result = await pool.query<SessionUser>(`SELECT ${userFields}, s.expires_at AS "expiresAt" FROM users u JOIN auth_sessions s
     ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()`, [digest(cookie)])
   return result.rows[0]
 }
