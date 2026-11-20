@@ -45,5 +45,7 @@ jobs:
               docker pull "$IMAGE:sha-$GITHUB_SHA"
               docker tag "$IMAGE:sha-$GITHUB_SHA" "$IMAGE:$GITHUB_REF_NAME"
               docker push "$IMAGE:$GITHUB_REF_NAME"
+              docker tag "$IMAGE:sha-$GITHUB_SHA" "$IMAGE:latest"
+              docker push "$IMAGE:latest"
               ;;
           esac

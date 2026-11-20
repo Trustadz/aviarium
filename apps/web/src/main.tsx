@@ -234,8 +234,8 @@ function App() {
           </div>
           <div className="tabs" aria-label="Game categories">{['All games', 'Logic', 'Favorites'].map(name =>
             <button key={name} aria-pressed={name === category} onClick={() => setCategory(name)}>{name}</button>)}</div>
-          <div className="game-list">{matches.map(game => <article className="game-card" key={game.id}>
-            <a className="game-card-image" href={game.url} onClick={event => link(event, game.url)} aria-label="Open Sudoku"><BoardArt compact/></a>
+          <div className="game-list">{matches.map(game => <article className={'game-card ' + game.theme} key={game.id}>
+            <a className="game-card-image" href={game.url} onClick={event => link(event, game.url)} aria-label={'Open ' + game.title}><game.Preview/></a>
             <div className="game-card-body">
               <div className="card-title"><h3><a href={game.url} onClick={event => link(event, game.url)}>{game.title}</a></h3>
               <button className="icon-button" aria-label={prefs.favorite ? 'Remove Sudoku from favorites' : 'Add Sudoku to favorites'}
@@ -358,11 +358,11 @@ function App() {
   </div>
 }
 
-function BoardArt({ compact = false }: {compact?: boolean}) {
+function BoardArt() {
   const values = ['', '7', '', '2', '', '9', '', '', '4', '5', '', '', '', '8', '', '3', '', '', '', '6', '', '', '1', '', '', '', '8',
     '6', '', '2', '', '', '', '7', '', '', '', '4', '', '9', '', '3', '', '5', '', '', '', '8', '', '', '', '1', '', '2',
     '1', '', '', '', '4', '', '', '9', '', '', '', '6', '', '3', '', '', '', '5', '3', '', '', '6', '', '2', '', '7', '']
-  return <div className={compact ? 'board-art compact-art' : 'board-art hero-art'} aria-hidden="true">
+  return <div className="board-art hero-art" aria-hidden="true">
     <div className="art-grid">{values.map((digit, cell) => <span key={cell} className={[
       cell % 9 === 2 || cell % 9 === 5 ? 'art-box-right' : '',
       Math.floor(cell / 9) === 2 || Math.floor(cell / 9) === 5 ? 'art-box-bottom' : '',

@@ -46,7 +46,12 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --feedback: #354735;
   --error-background: #f8e0d5;
   --error-text: #7a3524;
-  --sudoku-page: #edf4fb;
+  --sudoku-sage: #6b9080;
+  --sudoku-moss: #a4c3b2;
+  --sudoku-mist: #cce3de;
+  --sudoku-frost: #eaf4f4;
+  --sudoku-paper: #f6fff8;
+  --sudoku-page: var(--sudoku-frost);
   min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
 }
 .app[data-theme=dark] {
@@ -54,23 +59,25 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --bg: #26283c; --surface: #33354c; --text: var(--sand); --muted: #d6d0ba;
   --accent: var(--gold); --accent-strong: #ffe0aa; --button-text: #292b40;
   --tint: #484a63; --border: #585b75; --feedback: #d7ebdd; --error-background: #54342e;
-  --error-text: #ffc5b2; --sudoku-page: #101a2c;
+  --error-text: #ffc5b2; --sudoku-page: #101f1a;
 }
 .app[data-surface=sudoku] { background: var(--sudoku-page); }
 .sudoku-theme {
-  --surface: #fff; --text: #152846; --muted: #52667e; --accent: #255da0;
-  --accent-strong: #164982; --button-text: #fff; --tint: #e1edf9; --border: #ceddeb;
-  --error-background: #fce6e1; --error-text: #963c30; --feedback: #214b79;
-  --grid-line: #456181; --grid-related: #f0f6fb; --grid-selected: #c6ddf6; --grid-error: #a73542;
-  --easy-bg: #dcefe6; --easy-fg: #1d5944; --medium-bg: #f9ecd0; --medium-fg: #694514; --hard-bg: #f8dfdf; --hard-fg: #7a3030;
+  --surface: var(--sudoku-paper); --text: #19372e; --muted: #455f56; --accent: #2c5948;
+  --accent-strong: #214838; --button-text: var(--sudoku-paper); --tint: var(--sudoku-mist); --border: #b8d1c8;
+  --error-background: #fce6e1; --error-text: #963c30; --feedback: #285545;
+  --grid-line: var(--sudoku-sage); --grid-related: var(--sudoku-frost); --grid-selected: var(--sudoku-moss); --grid-error: #a73542;
+  --easy-bg: var(--sudoku-mist); --easy-fg: #1d5944; --medium-bg: #f9ecd0; --medium-fg: #694514; --hard-bg: #f8dfdf; --hard-fg: #7a3030;
+  --card-art: linear-gradient(128deg, var(--sudoku-mist), var(--sudoku-moss));
   color: var(--text);
 }
 .app[data-theme=dark] .sudoku-theme {
-  --surface: #19283e; --text: #e6f1ff; --muted: #bbcde3; --accent: #9bc9ff;
-  --accent-strong: #c1deff; --button-text: #101a2c; --tint: #263d59; --border: #3a516d;
-  --error-background: #522d33; --error-text: #ffbfc4; --feedback: #c1deff;
-  --grid-line: #7598bc; --grid-related: #233650; --grid-selected: #304f76; --grid-error: #ffb0ac;
-  --easy-bg: #1d4a3b; --easy-fg: #c9f2de; --medium-bg: #544025; --medium-fg: #fae0af; --hard-bg: #55363d; --hard-fg: #fed0d5;
+  --surface: #1b3028; --text: var(--sudoku-paper); --muted: var(--sudoku-mist); --accent: var(--sudoku-moss);
+  --accent-strong: var(--sudoku-mist); --button-text: #101f1a; --tint: #29473b; --border: #436154;
+  --error-background: #522d33; --error-text: #ffbfc4; --feedback: var(--sudoku-mist);
+  --grid-line: var(--sudoku-sage); --grid-related: #243f34; --grid-selected: #3a5d4d; --grid-error: #ffb0ac;
+  --easy-bg: #1d4a3b; --easy-fg: var(--sudoku-mist); --medium-bg: #544025; --medium-fg: #fae0af; --hard-bg: #55363d; --hard-fg: #fed0d5;
+  --card-art: linear-gradient(128deg, #29473b, #395c4d);
 }
 .frame { width: min(1120px, calc(100% - 64px)); margin-inline: auto; }
 .site-header { background: var(--surface); border-bottom: 1px solid var(--border); }
@@ -145,9 +152,11 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .game-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px,100%),1fr)); gap: 18px; }
 .game-card, .panel, .continue-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .game-card { overflow: hidden; }
-.game-card-image { display: block; height: 151px; position: relative; overflow: hidden; background: linear-gradient(135deg,var(--sage),var(--gold)); }
-.compact-art { --art-size: 215px; top: 17px; left: calc(50% - 108px); transform: rotate(-11deg); }
-.compact-art .art-grid { border-width: 4px; border-radius: 10px; }
+.game-card-image {
+  display: grid; place-items: center; min-height: 184px;
+  background: var(--card-art, var(--tint)); border-bottom: 1px solid var(--border);
+}
+.game-card-image .board { width: 150px; box-shadow: 0 8px 18px #142c2633; }
 .game-card-body { padding: 14px 17px; }
 .card-title { display: flex; align-items: center; justify-content: space-between; }
 .card-title h3 { font-size: 1.3rem; }
@@ -250,14 +259,14 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --surface: #fff; --border: #777; --bg: #fff; --button-text: #fff; --sudoku-page: #fff;
   --grid-line: #222; --grid-related: #fff; --grid-selected: #fff; --grid-error: #000;
   --easy-bg: #eee; --easy-fg: #111; --medium-bg: #eee; --medium-fg: #111; --hard-bg: #eee; --hard-fg: #111;
-  --feedback: #111; --error-background: #eee; --error-text: #111; --given-bg: #e6e6e6;
+  --feedback: #111; --error-background: #eee; --error-text: #111; --given-bg: #e6e6e6; --card-art: var(--tint);
 }
 .app[data-theme=dark].reader, .app[data-theme=dark].reader .sudoku-theme {
   --text: #fff; --muted: #ddd; --accent: #fff; --accent-strong: #fff; --tint: #303030;
   --surface: #141414; --border: #aaa; --bg: #080808; --button-text: #111; --sudoku-page: #080808;
   --grid-line: #ccc; --grid-related: #141414; --grid-selected: #141414; --grid-error: #fff;
   --easy-bg: #333; --easy-fg: #fff; --medium-bg: #333; --medium-fg: #fff; --hard-bg: #333; --hard-fg: #fff;
-  --feedback: #fff; --error-background: #303030; --error-text: #fff; --given-bg: #333;
+  --feedback: #fff; --error-background: #303030; --error-text: #fff; --given-bg: #333; --card-art: var(--tint);
 }
 .reader .hero { background: var(--surface); color: var(--text); border: 2px solid var(--text); }
 .reader .hero p { color: var(--text); }

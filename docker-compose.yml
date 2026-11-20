@@ -1,6 +1,6 @@
 services:
   app:
-    image: "${AVIARIUM_IMAGE:-ghcr.io/trustadz/aviarium:acceptance}"
+    image: ghcr.io/trustadz/aviarium:latest
     init: true
     restart: unless-stopped
     ports:

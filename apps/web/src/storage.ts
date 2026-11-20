@@ -2,6 +2,7 @@ import { Dexie, type EntityTable } from 'dexie'
 import { z } from 'zod'
 import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, preferenceSchema, saveSchema, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
+import { rules } from '../../../packages/sudoku/src/rules.js'
 import { api, json } from './api.js'
 
 export type LocalSession = StoredSession & { profile: string; updated: number; dirty: boolean; sent?: Mutation }
@@ -151,7 +152,6 @@ const exportSchema = z.object({
 export async function importProfile(profile: string, file: File) {
   if (file.size > 10_000_000) throw new Error('Select an Aviarium export under 10 MB.')
   const payload = exportSchema.parse(JSON.parse(await file.text()))
-  const { rules } = await import('../../../packages/sudoku/src/rules.js')
   await db.transaction('rw', db.sessions, db.prefs, db.levels, async () => {
     const imported = []
     for (const session of payload.sessions) {

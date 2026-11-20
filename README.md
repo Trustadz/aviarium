@@ -4,7 +4,7 @@ A self-hosted, installable puzzle library. Sudoku is the only game in the first 
 
 ## Deploy
 
-Copy `docker-compose.yml` and `.env.example` to your server. Name your local copy of the environment file `.env`, set the password, image tag, and public URL, then run:
+Copy `docker-compose.yml` and `.env.example` to your server. Name your local copy of the environment file `.env`, set the password and public URL, then run:
 
 ```sh
 docker compose up -d
@@ -12,7 +12,7 @@ docker compose up -d
 
 Compose runs two services. Aviarium handles its schema upgrades, puzzle jobs, and scheduled backups internally. PostgreSQL runs in its own container. Both services have health checks.
 
-The default image comes from the private GitHub Container Registry. Sign in to that registry on the host once before pulling it. Acceptance and production can share the same Compose file with separate directories, project names, and image tags. PostgreSQL and backups are stored in `./data/postgres` and `./data/backups` beside the Compose file. See [deployment](docs/deployment.md) and [Pocket ID setup](docs/deployment.md#connect-pocket-id).
+Compose pulls `ghcr.io/trustadz/aviarium:latest`, which tracks the latest versioned release in the private GitHub Container Registry. Sign in to that registry on the host once before pulling it. Acceptance and production can share the same Compose file with separate directories, project names, and ports. PostgreSQL and backups are stored in `./data/postgres` and `./data/backups` beside the Compose file. See [deployment](docs/deployment.md) and [Pocket ID setup](docs/deployment.md#connect-pocket-id).
 
 ## Run from the source checkout
 

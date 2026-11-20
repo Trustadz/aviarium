@@ -7,11 +7,10 @@ Put each environment in its own directory. Copy `docker-compose.yml` and `.env.e
 | Setting | Acceptance example | Production example |
 |---|---|---|
 | `COMPOSE_PROJECT_NAME` | `aviarium-accept` | `aviarium-prod` |
-| `AVIARIUM_IMAGE` | `ghcr.io/trustadz/aviarium:acceptance` | `ghcr.io/trustadz/aviarium:v0.1.3` |
 | `APP_PORT` | `4183` | `4173` |
 | `PUBLIC_ORIGIN` | `https://puzzles-accept.example.org` | `https://puzzles.example.org` |
 
-Compose starts Aviarium and PostgreSQL. Both have health checks. Aviarium runs schema migrations at startup and handles puzzle jobs and backups in the app container.
+Compose starts Aviarium and PostgreSQL. The app uses `ghcr.io/trustadz/aviarium:latest`, which is updated when a versioned release is published. To test an unreleased build in acceptance, change the app image to `ghcr.io/trustadz/aviarium:acceptance` in that environment’s Compose file. Both have health checks. Aviarium runs schema migrations at startup and handles puzzle jobs and backups in the app container.
 
 Set a strong `POSTGRES_PASSWORD`. Compose maps two directories on the host, relative to `docker-compose.yml`.
 

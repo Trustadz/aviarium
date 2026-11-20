@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react'
+import { starterCatalog } from '../../../packages/sudoku/src/catalog.js'
 import { bit, box, cells, column, row } from '../../../packages/sudoku/src/rules.js'
 
 interface GridProps {
@@ -6,6 +7,24 @@ interface GridProps {
   selected: number; select: (cell: number) => void; enter: (digit: number) => void
   errors?: ReadonlySet<number>; disabled?: boolean; related?: boolean
 }
+function cellClasses(cell: number, selected: number, given: boolean, related = true, wrong = false) {
+  return ['cell', given ? 'given' : 'entry', wrong && 'wrong',
+    selected === cell ? 'selected' : related && (row(cell) === row(selected) || column(cell) === column(selected) || box(cell) === box(selected)) && 'related',
+    column(cell) % 3 === 2 && column(cell) !== 8 && 'box-end',
+    row(cell) % 3 === 2 && row(cell) !== 8 && 'box-bottom',
+  ].filter(Boolean).join(' ')
+}
+
+const previewGivens = Array.from(starterCatalog[0].grid, Number)
+const previewSelection = previewGivens.indexOf(0)
+
+export function SudokuPreview() {
+  return <div className="board" aria-hidden="true">
+    {previewGivens.map((value, cell) =>
+      <span key={cell} className={cellClasses(cell, previewSelection, Boolean(value))}>{value || ''}</span>)}
+  </div>
+}
+
 export function Grid({ entries, givens, notes, selected, select, enter, errors, disabled, related = true }: GridProps) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   function key(event: KeyboardEvent<HTMLButtonElement>, cell: number) {
@@ -23,12 +42,7 @@ export function Grid({ entries, givens, notes, selected, select, enter, errors, 
   return <div className="board" aria-label="Sudoku board">
     {cells.map(cell => {
       const value = entries[cell], mask = notes?.[cell] ?? 0
-      const classes = ['cell', givens?.[cell] ? 'given' : 'entry', errors?.has(cell) && 'wrong',
-        selected === cell ? 'selected' : related && (row(cell) === row(selected) || column(cell) === column(selected) || box(cell) === box(selected)) && 'related',
-        column(cell) % 3 === 2 && column(cell) !== 8 && 'box-end',
-        row(cell) % 3 === 2 && row(cell) !== 8 && 'box-bottom',
-      ].filter(Boolean).join(' ')
-      return <button key={cell} type="button" className={classes} ref={element => { buttons.current[cell] = element }}
+      return <button key={cell} type="button" className={cellClasses(cell, selected, Boolean(givens?.[cell]), related, errors?.has(cell))} ref={element => { buttons.current[cell] = element }}
         tabIndex={selected === cell ? 0 : -1} aria-pressed={selected === cell} disabled={disabled}
         aria-label={`Row ${row(cell) + 1}, column ${column(cell) + 1}, ${value || 'empty'}${givens?.[cell] ? ', given' : ''}`}
         onFocus={() => select(cell)} onClick={() => select(cell)} onKeyDown={event => key(event, cell)}>
