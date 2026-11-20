@@ -1,0 +1,41 @@
+const cacheName = 'aviarium-__VERSION__'
+const optionalAssets = __PLAYER_ASSETS__
+const shellAssets = __SHELL_ASSETS__
+const routes = new Set(['/', '/games/sudoku', '/studio', '/admin'])
+
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(cacheName).then(cache => cache.addAll([
+    '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', ...shellAssets,
+  ])))
+})
+self.addEventListener('activate', event => {
+  event.waitUntil(self.clients.claim())
+})
+self.addEventListener('message', event => {
+  if (event.data === 'activate') self.skipWaiting()
+  if (event.data === 'download-player' && event.ports[0]) {
+    event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(optionalAssets)).then(
+      () => event.ports[0].postMessage({ ok: true, version: cacheName }),
+      () => event.ports[0].postMessage({ ok: false }),
+    ))
+  }
+  if (event.data === 'player-ready' && event.ports[0]) {
+    event.waitUntil(caches.open(cacheName).then(cache => Promise.all(optionalAssets.map(asset => cache.match(asset))))
+      .then(entries => event.ports[0].postMessage({ ok: entries.every(Boolean), version: cacheName })))
+  }
+})
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url)
+  if (url.origin !== self.location.origin || event.request.method !== 'GET') return
+  if (event.request.mode === 'navigate' && routes.has(url.pathname.replace(/\/$/, '') || '/')) {
+    event.respondWith(caches.open(cacheName).then(cache => cache.match('/index.html')).then(hit => hit || fetch(event.request)))
+  } else if (url.pathname.startsWith('/assets/') || url.pathname.endsWith('.png') || url.pathname === '/manifest.webmanifest') {
+    event.respondWith(caches.open(cacheName).then(async cache => {
+      const hit = await cache.match(event.request)
+      if (hit) return hit
+      const response = await fetch(event.request)
+      if (response.ok) await cache.put(event.request, response.clone()).catch(() => {})
+      return response
+    }))
+  }
+})

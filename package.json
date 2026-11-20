@@ -1,0 +1,47 @@
+{
+  "name": "aviarium",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "vite --config apps/web/vite.config.ts",
+    "build": "vite build --config apps/web/vite.config.ts && tsc -p tsconfig.server.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-isolation=none packages/sudoku/src/*.test.ts apps/server/src/*.test.ts",
+    "start": "node dist/apps/server/src/app.js",
+    "worker": "node dist/apps/server/src/worker.js",
+    "migrate": "node dist/apps/server/src/migrate.js",
+    "test:smoke": "node tests/smoke.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/static": "^10.1.12",
+    "croner": "^9.1.0",
+    "dexie": "^4.0.11",
+    "fastify": "^5.4.0",
+    "lucide-react": "^0.468.0",
+    "openid-client": "^6.6.0",
+    "pg": "^8.16.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "playwright": "^1.65.1",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.0",
+    "vite": "^7.1.0"
+  }
+}
