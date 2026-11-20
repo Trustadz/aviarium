@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Grid3X3, Heart, LogIn, LogOut,
   Search, Settings2, Shield, Trash2, Users, WifiOff, Wrench } from 'lucide-react'
@@ -17,6 +17,25 @@ const Player = lazy(featuredGame.player)
 const Studio = lazy(() => import('./Studio.js'))
 const Admin = lazy(() => import('./Admin.js'))
 
+type ColorScheme = 'light' | 'dark'
+type ThemePreference = 'auto' | ColorScheme
+
+const themeKey = 'aviarium:theme'
+const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
+
+function themePreference(value: string | null): ThemePreference {
+  return value === 'light' || value === 'dark' ? value : 'auto'
+}
+
+function readSystemTheme(): ColorScheme {
+  return systemTheme.matches ? 'dark' : 'light'
+}
+
+function subscribeToSystemTheme(change: () => void) {
+  systemTheme.addEventListener('change', change)
+  return () => systemTheme.removeEventListener('change', change)
+}
+
 function AppleInstallHelp() {
   const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
@@ -34,6 +53,9 @@ function AppleInstallHelp() {
 
 function App() {
   const { account, localPlay, checking, online, signIn, refresh, forget } = useSession()
+  const [preference, setPreference] = useState(() => themePreference(localStorage.getItem(themeKey)))
+  const system = useSyncExternalStore(subscribeToSystemTheme, readSystemTheme)
+  const theme = preference === 'auto' ? system : preference
   useGameDownloads(undefined, online, !checking && !account && !localPlay)
   const [activate, setActivate] = useState<() => void>()
   useEffect(() => { void registerOffline(handler => setActivate(() => handler)).catch(() => undefined) }, [])
@@ -42,9 +64,11 @@ function App() {
   }, [account, activate, checking, localPlay, online])
 
   if (account || localPlay) return <Library key={account?.id ?? localProfile} account={account} online={online} activate={activate}
-    refreshSession={refresh} signOut={forget}/>
+    refreshSession={refresh} signOut={forget} theme={theme} preference={preference} onThemeChange={value => {
+      localStorage.setItem(themeKey, value)
+      setPreference(value)
+    }}/>
 
-  const theme = localStorage.getItem('aviarium:theme') === 'dark' ? 'dark' : 'light'
   return <main className="app login-page" data-theme={theme}>
     <section className="panel login-panel" aria-labelledby="login-title">
       <img src="/aviarium.svg" alt="" width="64" height="64"/>
@@ -65,9 +89,12 @@ interface LibraryProps {
   activate?: () => void
   refreshSession: () => Promise<void>
   signOut: () => void
+  theme: ColorScheme
+  preference: ThemePreference
+  onThemeChange: (value: ThemePreference) => void
 }
 
-function Library({ account, online, activate, refreshSession, signOut }: LibraryProps) {
+function Library({ account, online, activate, refreshSession, signOut, theme, preference, onThemeChange }: LibraryProps) {
   const accountId = account?.id
   const profile = accountId ?? localProfile
   const catalogKey = 'aviarium:catalog:' + profile
@@ -82,7 +109,6 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   const [completions, setCompletions] = useState<string[]>([])
   const [prefs, setPrefs] = useState(defaults)
   const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
-  const [theme, setTheme] = useState(() => localStorage.getItem('aviarium:theme') === 'dark' ? 'dark' : 'light')
   const [active, setActive] = useState<{ session: LocalSession; level: PublishedLevel; head: LocalSession }>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
@@ -322,10 +348,10 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
           {dialog === 'display' ? 'Display settings' : dialog === 'sudoku' ? 'Sudoku settings' : 'Account'}
         </h2><button autoFocus className="secondary" onClick={() => showDialog(undefined)}>Close</button></div>
         {dialog === 'display' && <>
-          <label className="setting-row">Theme<select value={theme} onChange={event => {
-            const value = event.target.value === 'dark' ? 'dark' : 'light'
-            localStorage.setItem('aviarium:theme', value); setTheme(value)
-          }}><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <label className="setting-row">Theme<select value={preference}
+            onChange={event => onThemeChange(themePreference(event.target.value))}>
+            <option value="auto">Auto</option><option value="light">Light</option><option value="dark">Dark</option>
+          </select></label>
           <label className="setting-row">E-reader mode<input type="checkbox" checked={reader} onChange={event => {
             localStorage.setItem('aviarium:reader', event.target.checked ? 'on' : 'off'); setReader(event.target.checked)
           }}/></label>
