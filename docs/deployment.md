@@ -50,6 +50,10 @@ On iPhone or iPad, open that HTTPS URL in Safari. Use **Share → Add to Home Sc
 
 To grant the first Aviarium admin role, set `OIDC_ADMIN_SUBJECT` to that user's Pocket ID subject before they sign in. Once someone signs in, they appear in **Admin → Users**. New accounts are **User** and can see and play every game. Saves and game preferences sync with the signed-in account. Enable **Sudoku editor** to let that person create, test, and publish Sudoku puzzles. **Admin** grants platform administration and editing access to every game.
 
+## Test without Pocket ID
+
+Set `LOGIN_ENABLED=false` in the test environment's `.env`, then run `docker compose up -d` to apply it. The library opens directly. Saves, completions, and game preferences stay in that browser, and account and editor features require login. Test progress stays separate when login is enabled again. Login defaults to `true`.
+
 ## Scheduled backup
 
 The default is `0 3 * * *` UTC with three successful archives retained. The admin page can choose a subfolder within `/backup`, set the five-field UTC schedule, set retention, or request an immediate run. The runner creates valid subfolders on the first run. It never traverses symlinks inside the configured mount. A failed run leaves earlier archives intact. When the folder changes, older archives stay in the old folder.

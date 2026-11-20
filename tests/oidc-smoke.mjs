@@ -70,21 +70,33 @@ const provider = createServer({ key: await readFile(key), cert: await readFile(c
   return send(res, { error: 'not_found' }, 404)
 })
 let app, browser
+async function stopApp() {
+  if (!app || app.exitCode != null) return
+  const exited = new Promise(resolve => app.once('exit', resolve))
+  app.kill('SIGTERM')
+  await exited
+}
+
+async function startApp(env) {
+  await stopApp()
+  app = spawn(process.execPath, ['dist/apps/server/src/app.js'], { env, stdio: 'inherit' })
+  for (let i = 0; i < 60; i++) {
+    const response = await fetch(origin + '/health/ready').catch(error => error)
+    if (response?.ok) return
+    if (app.exitCode != null || i === 59)
+      throw new Error('Test application did not start: ' + (response?.status ?? response?.cause ?? response))
+    await delay(200)
+  }
+}
 try {
   await new Promise(resolve => provider.listen(0, '127.0.0.1', resolve))
   issuer = 'https://127.0.0.1:' + provider.address().port
   const env = { ...process.env, NODE_EXTRA_CA_CERTS: cert, PORT: port, HOST: '127.0.0.1',
     PUBLIC_ORIGIN: origin, DATABASE_URL: database, OIDC_ISSUER: issuer, OIDC_CLIENT_ID: clientId,
     OIDC_CLIENT_SECRET: 'aviarium-fixture', OIDC_ADMIN_SUBJECT: first.id, OIDC_CALLBACK_URL: '' }
+  delete env.LOGIN_ENABLED
   execFileSync(process.execPath, ['dist/apps/server/src/migrate.js'], { env, stdio: 'inherit' })
-  app = spawn(process.execPath, ['dist/apps/server/src/app.js'], { env, stdio: 'inherit' })
-  for (let i = 0; i < 60; i++) {
-    const response = await fetch(origin + '/health/ready').catch(error => error)
-    if (response?.ok) break
-    if (app.exitCode != null || i === 59)
-      throw new Error('OIDC test application did not start: ' + (response?.status ?? response?.cause ?? response))
-    await delay(200)
-  }
+  await startApp(env)
   browser = await chromium.launch({ executablePath: process.env.AVIARIUM_CHROMIUM, args: ['--no-sandbox'] })
   const context = await browser.newContext({ ignoreHTTPSErrors: true })
   const page = await context.newPage()
@@ -122,13 +134,66 @@ try {
   assert.equal(await page.evaluate(() => localStorage.getItem('aviarium:session')), null)
   assert.equal((await context.request.get(origin + '/api/catalog')).status(), 401)
   console.info('OIDC smoke passed: real callback and PKCE, role bootstrap, account selection, isolated preferences, device display, logout.')
+  await otherTab.close()
+  await page.getByRole('link', { name: 'Login with Pocket ID', exact: true }).click()
+  await page.getByRole('button', { name: second.name }).waitFor()
+  await startApp({ ...env, LOGIN_ENABLED: 'false', OIDC_ISSUER: '', OIDC_CLIENT_ID: '', OIDC_CLIENT_SECRET: '' })
+
+  const me = await (await context.request.get(origin + '/api/me')).json()
+  assert.deepEqual(me, { user: null, signIn: false, loginEnabled: false })
+  const catalog = await (await context.request.get(origin + '/api/catalog')).json()
+  const level = catalog.find(level => level.id === 'first-light')
+  assert.ok(level)
+  assert.equal((await context.request.get(origin + '/api/auth/login')).status(), 404)
+  for (const path of ['/api/progress', '/api/drafts', '/api/admin/backup']) {
+    assert.equal((await context.request.get(origin + path)).status(), 401, path)
+  }
+  assert.equal((await context.request.post(origin + '/api/progress', {
+    headers: { Origin: origin }, data: {},
+  })).status(), 401)
+  assert.equal((await context.request.patch(origin + '/api/preferences', {
+    headers: { Origin: origin }, data: { timer: false },
+  })).status(), 401)
+
+  const syncRequests = []
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname
+    if (['/api/progress', '/api/preferences'].includes(path)) syncRequests.push(path)
+  })
+  await page.goto(origin)
+  await page.getByText('Local play', { exact: true }).waitFor()
+  assert.equal(await page.getByRole('button', { name: second.name }).count(), 0)
+  await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
+  await page.getByRole('button', { name: 'Explore Sudoku' }).click()
+  await page.getByRole('button', { name: 'Play First Light' }).click()
+  const blank = level.grid.indexOf('0')
+  const cell = cellValue => page.getByRole('button', {
+    name: `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, ${cellValue}`, exact: true,
+  })
+  await cell('empty').click()
+  await page.getByRole('button', { name: '1', exact: true }).click()
+  await cell('1').waitFor()
+  await page.getByRole('button', { name: 'Game menu' }).click()
+  await page.getByRole('button', { name: 'Exit to library' }).click()
+  await page.reload()
+  await page.getByText('Local play', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Remove Sudoku from favorites' }).waitFor()
+  await page.getByRole('button', { name: 'Explore Sudoku' }).click()
+  await page.getByRole('button', { name: 'Resume', exact: true }).first().click()
+  await cell('1').waitFor()
+  assert.deepEqual(syncRequests, [])
+
+  await startApp(env)
+  await page.goto(origin)
+  await page.getByRole('button', { name: second.name }).waitFor()
+  await page.getByRole('button', { name: 'Add Sudoku to favorites' }).waitFor()
+  const progress = await (await context.request.get(origin + '/api/progress')).json()
+  assert.deepEqual(progress.sessions, [])
+  assert.equal(await page.evaluate(() => localStorage.getItem('aviarium:local-play')), null)
+  console.info('Local play smoke passed: stale sessions rejected, browser saves persist, no sync requests, and account data stays separate.')
 } finally {
   if (browser) await browser.close()
-  if (app && app.exitCode == null) {
-    const exited = new Promise(resolve => app.once('exit', resolve))
-    app.kill('SIGTERM')
-    await exited
-  }
+  await stopApp()
   await new Promise(resolve => provider.close(resolve))
   await rm(directory, { recursive: true, force: true })
 }

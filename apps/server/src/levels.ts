@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { generationSchema, gridSchema } from '../../../packages/sudoku/src/contracts.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import { HttpError, requireGameEditor, requireUser } from './auth.js'
-import { pool, transaction } from './config.js'
+import { loginEnabled, pool, transaction } from './config.js'
 
 interface Draft { id: string; owner_id: string; title: string; grid: string; version: number; seed: string | null }
 const draftInput = z.object({ title: z.string().trim().min(1).max(100), grid: gridSchema, generationJob: z.uuid().optional() })
@@ -13,7 +13,7 @@ const jobColumns = 'id, kind, status, result, draft_id AS "draftId", draft_versi
 
 export function registerLevels(app: FastifyInstance) {
   app.get('/api/catalog', async request => {
-    await requireUser(request)
+    if (loginEnabled) await requireUser(request)
     const result = await pool.query(`SELECT id,revision,ruleset,title,grid,difficulty,source FROM
       ${latestLevels} latest WHERE NOT EXISTS (SELECT 1 FROM hidden_levels h WHERE h.level_id=latest.id)
       ORDER BY CASE id WHEN 'first-light' THEN 0 WHEN 'quiet-current' THEN 1 WHEN 'afterglow' THEN 2 ELSE 3 END,

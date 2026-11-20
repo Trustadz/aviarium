@@ -3,6 +3,8 @@ import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import { api, json } from './api.js'
 
+export const localProfile = 'local-play'
+
 export type LocalSession = StoredSession & { profile: string; updated: number; dirty: boolean; sent?: Mutation }
 interface LocalPrefs { profile: string; data: Preferences; pending: Partial<Preferences> }
 interface StoredLevel { key: string; level: PublishedLevel }
@@ -30,7 +32,7 @@ export async function saveLocal(session: LocalSession) {
     if (stored && stored.profile !== session.profile) throw new Error('This save belongs to another profile.')
     if (stored && (stored.revision !== session.revision || stored.updated > session.updated))
       throw new Error('This attempt changed in another tab. Reopen it before continuing.')
-    await db.sessions.put({ ...session, sent: stored?.sent, dirty: true })
+    await db.sessions.put({ ...session, sent: stored?.sent, dirty: session.profile !== localProfile })
   })
 }
 
@@ -40,10 +42,11 @@ export function writeAttempt(expected: LocalSession, data: LocalSession['data'])
     const current = await db.sessions.get(expected.id)
     const concurrent = current && (current.profile !== expected.profile ||
       current.revision !== expected.revision || current.updated !== expected.updated || current.archived)
+    const dirty = expected.profile !== localProfile
     const next: LocalSession = concurrent
       ? { ...expected, id: crypto.randomUUID(), parentId: expected.id, revision: 0, sent: undefined,
-          updated: Date.now(), data, dirty: true, archived: false }
-      : { ...expected, sent: current?.sent, updated: Math.max(Date.now(), expected.updated + 1), data, dirty: true }
+          updated: Date.now(), data, dirty, archived: false }
+      : { ...expected, sent: current?.sent, updated: Math.max(Date.now(), expected.updated + 1), data, dirty }
     await db.sessions.put(next)
     return next
   })
@@ -53,7 +56,7 @@ export async function updatePreferences(profile: string, patch: Partial<Preferen
   return db.transaction('rw', db.prefs, async () => {
     const current = await db.prefs.get(profile)
     const data = { ...defaults, ...current?.data, ...patch }
-    await db.prefs.put({ profile, data, pending: { ...current?.pending, ...patch } })
+    await db.prefs.put({ profile, data, pending: profile === localProfile ? {} : { ...current?.pending, ...patch } })
     return data
   })
 }
@@ -66,6 +69,7 @@ interface Progress {
 }
 const synchronizing = new Map<string, Promise<void>>()
 export function sync(profile: string) {
+  if (profile === localProfile) return Promise.resolve()
   const current = synchronizing.get(profile)
   if (current) return current
   const pending = synchronize(profile).finally(() => synchronizing.delete(profile))

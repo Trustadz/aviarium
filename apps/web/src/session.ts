@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type SessionAccount } from './api.js'
 
 const sessionKey = 'aviarium:session'
+const localPlayKey = 'aviarium:local-play'
+
+function canPlayLocally() { return localStorage.getItem(localPlayKey) === 'true' }
 const validUntil = (account: SessionAccount) => Date.parse(account.expiresAt)
 
 function cachedSession(): SessionAccount | undefined {
@@ -15,6 +18,7 @@ function cachedSession(): SessionAccount | undefined {
 
 export function useSession() {
   const [account, setAccount] = useState<SessionAccount>()
+  const [localPlay, setLocalPlay] = useState(false)
   const [checking, setChecking] = useState(true)
   const [online, setOnline] = useState(navigator.onLine)
   const [signIn, setSignIn] = useState<boolean>()
@@ -33,20 +37,30 @@ export function useSession() {
     request.current = pending
     setOnline(navigator.onLine)
     if (!navigator.onLine) {
-      setAccount(cachedSession())
+      const local = canPlayLocally()
+      setLocalPlay(local)
+      setAccount(local ? undefined : cachedSession())
       setChecking(false)
       return
     }
     try {
-      const result = await api<{ user: SessionAccount | null; signIn: boolean }>('/me', { signal: pending.signal })
+      const result = await api<{ user: SessionAccount | null; signIn: boolean; loginEnabled?: boolean }>('/me', { signal: pending.signal })
       if (pending.signal.aborted) return
       setSignIn(result.signIn)
-      const verified = result.user && validUntil(result.user) > Date.now() ? result.user : undefined
+      const local = result.loginEnabled === false
+      setLocalPlay(local)
+      if (local) localStorage.setItem(localPlayKey, 'true')
+      else localStorage.removeItem(localPlayKey)
+      const verified = !local && result.user && validUntil(result.user) > Date.now() ? result.user : undefined
       if (verified) localStorage.setItem(sessionKey, JSON.stringify(verified))
       else localStorage.removeItem(sessionKey)
       setAccount(verified)
     } catch {
-      if (!pending.signal.aborted) setAccount(navigator.onLine ? undefined : cachedSession())
+      if (!pending.signal.aborted) {
+        const local = !navigator.onLine && canPlayLocally()
+        setLocalPlay(local)
+        setAccount(navigator.onLine || local ? undefined : cachedSession())
+      }
     } finally {
       if (!pending.signal.aborted) setChecking(false)
     }
@@ -56,8 +70,9 @@ export function useSession() {
     const connectivityChanged = () => { void refresh() }
     const visibilityChanged = () => { if (!document.hidden) void refresh() }
     const identityChanged = (event: StorageEvent) => {
-      if (event.key !== sessionKey && event.key !== null) return
+      if (event.key !== sessionKey && event.key !== localPlayKey && event.key !== null) return
       setAccount(undefined)
+      setLocalPlay(false)
       void refresh()
     }
     window.addEventListener('online', connectivityChanged)
@@ -80,5 +95,5 @@ export function useSession() {
     return () => clearTimeout(expiry)
   }, [account, forget])
 
-  return { account, checking, online, signIn, refresh, forget }
+  return { account, localPlay, checking, online, signIn, refresh, forget }
 }

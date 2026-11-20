@@ -8,7 +8,7 @@ import { api, ApiError, errorMessage, type SessionAccount } from './api.js'
 import { offlineRequest, registerOffline } from './offline.js'
 import { games } from './registry.js'
 import { useSession } from './session.js'
-import { cacheLevels, db, levelKey, listSessions, saveLocal,
+import { cacheLevels, db, levelKey, listSessions, localProfile, saveLocal,
   sync, updatePreferences, writeAttempt, type LocalSession } from './storage.js'
 import './styles.css'
 
@@ -33,14 +33,14 @@ function AppleInstallHelp() {
 }
 
 function App() {
-  const { account, checking, online, signIn, refresh, forget } = useSession()
+  const { account, localPlay, checking, online, signIn, refresh, forget } = useSession()
   const [activate, setActivate] = useState<() => void>()
   useEffect(() => { void registerOffline(handler => setActivate(() => handler)).catch(() => undefined) }, [])
   useEffect(() => {
-    if (activate && online && !checking && !account) activate()
-  }, [account, activate, checking, online])
+    if (activate && online && !checking && !account && !localPlay) activate()
+  }, [account, activate, checking, localPlay, online])
 
-  if (account) return <Library key={account.id} account={account} online={online} activate={activate}
+  if (account || localPlay) return <Library key={account?.id ?? localProfile} account={account} online={online} activate={activate}
     refreshSession={refresh} signOut={forget}/>
 
   const theme = localStorage.getItem('aviarium:theme') === 'dark' ? 'dark' : 'light'
@@ -59,7 +59,7 @@ function App() {
 }
 
 interface LibraryProps {
-  account: SessionAccount
+  account?: SessionAccount
   online: boolean
   activate?: () => void
   refreshSession: () => Promise<void>
@@ -67,7 +67,8 @@ interface LibraryProps {
 }
 
 function Library({ account, online, activate, refreshSession, signOut }: LibraryProps) {
-  const profile = account.id
+  const accountId = account?.id
+  const profile = accountId ?? localProfile
   const catalogKey = 'aviarium:catalog:' + profile
   const [path, setPath] = useState(location.pathname.replace(/\/$/, '') || '/')
   const [catalog, setCatalog] = useState<PublishedLevel[]>(() => {
@@ -94,7 +95,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   const saves = useRef<Promise<void>>(Promise.resolve())
   const refreshCatalog = useCallback(async () => {
     try {
-      const levels = await api<PublishedLevel[]>('/catalog', undefined, profile)
+      const levels = await api<PublishedLevel[]>('/catalog', undefined, accountId)
       await cacheLevels(levels)
       localStorage.setItem(catalogKey, JSON.stringify(levels))
       setCatalog(levels)
@@ -103,7 +104,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
       if (error instanceof ApiError && [401, 409].includes(error.status)) void refreshSession()
       return undefined
     }
-  }, [catalogKey, profile, refreshSession])
+  }, [accountId, catalogKey, refreshSession])
   const refreshLocal = useCallback(async () => {
     const [items, settings, completed] = await Promise.all([
       listSessions(profile), db.prefs.get(profile), db.completions.where('profile').equals(profile).toArray(),
@@ -129,7 +130,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   useEffect(() => { if (online) void refreshCatalog() }, [refreshCatalog, online])
   useEffect(() => { void refreshLocal().catch(error => setNotice(errorMessage(error))) }, [refreshLocal, active])
   useEffect(() => {
-    if (!online || active) return
+    if (!accountId || !online || active) return
     let current = true
     const run = () => {
       if (document.hidden) return
@@ -145,7 +146,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
     const interval = setInterval(run, 20_000)
     document.addEventListener('visibilitychange', run)
     return () => { current = false; clearInterval(interval); document.removeEventListener('visibilitychange', run) }
-  }, [active, online, profile, refreshLocal, refreshSession])
+  }, [accountId, active, online, profile, refreshLocal, refreshSession])
 
   function go(next: string, keepActive = false) {
     if (!keepActive) setActive(undefined)
@@ -190,7 +191,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
     perform(async () => {
       try { await updatePreferences(profile, patch) }
       catch (error) { await refreshLocal().catch(() => undefined); throw error }
-      if (!active && online) await sync(profile)
+      if (account && !active && online) await sync(profile)
     })
   }
   const matches = useMemo(() => games.filter(game => (!reader || game.eReader) &&
@@ -207,7 +208,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   const recent = sessions.find(session => !session.archived)
   const levelTitle = (session: LocalSession) => catalog.find(level => level.id === session.data.level)?.title ?? 'Published puzzle'
 
-  const canEditSudoku = online && (account.role === 'admin' || account.editorGames.includes(featuredGame.id))
+  const canEditSudoku = online && account && (account.role === 'admin' || account.editorGames.includes(featuredGame.id))
   const preview = catalog.find(level => level.id === 'first-light') ?? catalog[0]
   const inLibrary = path === '/'
   const inGame = games.some(game => game.url === path)
@@ -219,12 +220,13 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
       <nav aria-label="Main navigation" className="main-nav">
         <a href="/" className="nav-selected" aria-current="page" onClick={event => link(event, '/')}><Grid3X3 size={16}/> Library</a>
         {canEditSudoku && <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>}
-        {online && account.role === 'admin' && <a href="/admin" onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
+        {online && account?.role === 'admin' && <a href="/admin" onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
       </nav>
       <div className="header-actions">
         {!online && <span className="offline-tag"><WifiOff size={16}/> Offline</span>}
         <button className="icon-button" title="Display settings" aria-label="Display settings" onClick={() => showDialog('display')}><Settings2 size={19}/></button>
-        <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>
+        {account ? <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>
+          : <span className="offline-tag" title="Progress stays on this device">Local play</span>}
       </div>
     </div></header>}
     <main className={(inGame ? 'game-frame' : 'frame main-frame') + (surface === 'sudoku' ? ' sudoku-theme' : '')}>
@@ -311,7 +313,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
         <button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
         <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
       </>
-      : path === '/admin' && online && account.role === 'admin' ? <>
+      : path === '/admin' && online && account?.role === 'admin' ? <>
         <button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
         <Admin key={account.id} account={account} onCatalogChange={() => { void refreshCatalog() }}/>
       </>
@@ -337,7 +339,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
         {dialog === 'sudoku' && ([['mistakes', 'Highlight conflicts'], ['timer', 'Show timer'], ['hints', 'Enable hints']] as const)
           .map(([key, label]) => <label className="setting-row" key={key}>{label}<input type="checkbox" checked={prefs[key]}
             onChange={event => changePrefs({ [key]: event.target.checked })}/></label>)}
-        {dialog === 'account' && <>
+        {dialog === 'account' && account && <>
           <h3>{account.name}</h3>
           <p className="muted">Your progress syncs when you’re online.</p>
           {online ? <div className="button-bar settings-actions">

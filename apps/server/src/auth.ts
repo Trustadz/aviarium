@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import * as openid from 'openid-client'
-import { callback, oidc, origin, pool, transaction } from './config.js'
+import { callback, loginEnabled, oidc, origin, pool, transaction } from './config.js'
 
 export interface User { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
 interface SessionUser extends User { expiresAt: Date }
@@ -18,7 +18,7 @@ const cookies = { path: '/', httpOnly: true, secure, sameSite: 'lax' as const }
 
 export async function currentUser(request: FastifyRequest): Promise<SessionUser | undefined> {
   const cookie = request.cookies[sessionCookie]
-  if (!cookie) return undefined
+  if (!loginEnabled || !cookie) return undefined
   const result = await pool.query<SessionUser>(`SELECT ${userFields}, s.expires_at AS "expiresAt" FROM users u JOIN auth_sessions s
     ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()`, [digest(cookie)])
   return result.rows[0]
@@ -53,7 +53,10 @@ function provider() {
 }
 
 export function registerAuth(app: FastifyInstance) {
-  app.get('/api/me', async request => ({ user: await currentUser(request) ?? null, signIn: Boolean(oidc) }))
+  app.get('/api/me', async request => ({
+    user: await currentUser(request) ?? null, signIn: Boolean(oidc), loginEnabled,
+  }))
+  if (!loginEnabled) return
   app.get('/api/auth/login', async (request, reply) => {
     const config = await provider()
     const selectAccount = (request.query as { switch?: string }).switch === '1'
