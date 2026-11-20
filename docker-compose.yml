@@ -19,7 +19,7 @@ services:
       OIDC_CALLBACK_URL: "${OIDC_CALLBACK_URL:-}"
       OIDC_ADMIN_SUBJECT: "${OIDC_ADMIN_SUBJECT:-}"
     volumes:
-      - "${BACKUP_STORAGE:-backups}:/backup"
+      - "${BACKUP_STORAGE:-./data/backups}:/backup"
     depends_on:
       db:
         condition: service_healthy
@@ -38,13 +38,9 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-aviarium-local}"
       POSTGRES_DB: aviarium
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - "${POSTGRES_STORAGE:-./data/postgres}:/var/lib/postgresql/data"
     healthcheck:
       test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "aviarium", "-d", "aviarium"]
       interval: 3s
       timeout: 3s
       retries: 15
-
-volumes:
-  pgdata:
-  backups:

@@ -5,3 +5,4 @@ backup/
 *.log
 test-results/
 playwright-report/
+/data/

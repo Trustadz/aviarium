@@ -2,49 +2,61 @@
 
 ## Acceptance and production
 
-Use the same `docker-compose.yml` in both environments. Copy `.env.example` as `.env` and set the variables for that environment.
+Put each environment in its own directory. Copy `docker-compose.yml` and `.env.example` there, rename the environment file to `.env`, and set the variables below.
 
 | Setting | Acceptance example | Production example |
 |---|---|---|
 | `COMPOSE_PROJECT_NAME` | `aviarium-accept` | `aviarium-prod` |
-| `AVIARIUM_IMAGE` | `ghcr.io/trustadz/aviarium:acceptance` | `ghcr.io/trustadz/aviarium:v0.1.2` |
+| `AVIARIUM_IMAGE` | `ghcr.io/trustadz/aviarium:acceptance` | `ghcr.io/trustadz/aviarium:v0.1.3` |
 | `APP_PORT` | `4183` | `4173` |
 | `PUBLIC_ORIGIN` | `https://puzzles-accept.example.org` | `https://puzzles.example.org` |
 
 Compose starts Aviarium and PostgreSQL. Both have health checks. Aviarium runs schema migrations at startup and handles puzzle jobs and backups in the app container.
 
-Set a strong `POSTGRES_PASSWORD`. A named backup volume is created automatically. To store backups in a host directory instead, set `BACKUP_STORAGE` to an existing absolute path writable by UID 1000. `DATABASE_URL` is optional for an externally managed PostgreSQL database.
+Set a strong `POSTGRES_PASSWORD`. Compose maps two directories on the host, relative to `docker-compose.yml`.
+
+| Host directory | Content | Optional override |
+|---|---|---|
+| `./data/postgres` | PostgreSQL's live database files | `POSTGRES_STORAGE` |
+| `./data/backups` | Aviarium's backup archives | `BACKUP_STORAGE` |
+
+The containers initialize missing directories on first start. Use dedicated directories for both mounts. If you select an existing backup directory, make it writable by the app's UID 1000. Use the generated archives for database backups. `DATABASE_URL` is optional for an externally managed PostgreSQL database.
 
 GHCR requires a one-time host sign-in for the private image. Use a GitHub token with `read:packages` and access to the Aviarium package. Once Docker has the credential, normal startup and updates use Compose.
 
 ```sh
 docker login ghcr.io
-docker compose up -d --wait
+docker compose up -d
 ```
 
-For updates on a moving tag, run `docker compose pull` followed by `docker compose up -d --wait`. Main publishes the moving `acceptance` tag and a `sha-<commit>` tag. Production can pin the accepted SHA or a version tag. A Git version tag promotes the already published image for that commit.
+Use `docker compose ps` to see when both services are healthy.
 
-If your existing stack has separate migration, worker, and backup services, use `docker compose up -d --wait --remove-orphans` on the first upgrade. Keep the same project name and backup storage setting to retain the existing database and archives. Use the matching image and Compose file from the same release.
+## Custom URL
 
-## Custom URL and Pocket ID
+Point your existing reverse proxy at the application's loopback port and configure HTTPS on the proxy. Set `PUBLIC_ORIGIN` to the external origin without a path, for example `https://puzzles.example.org`. If the proxy runs on another host, set `APP_BIND` to an interface it can reach.
 
-Point your existing reverse proxy at the application's loopback port, and configure HTTPS on the proxy. Set `PUBLIC_ORIGIN` to the external origin with no path. If the proxy runs on another host, set `APP_BIND` to an interface it can reach. The default loopback bind keeps the app behind a host proxy and PostgreSQL remains internal.
+## Connect Pocket ID
 
-Register a confidential client in your existing Pocket ID instance and enable PKCE. Register its exact callback, such as `https://puzzles.example.org/api/auth/callback`. Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Aviarium derives the callback from `PUBLIC_ORIGIN`. Acceptance and production can have separate Pocket ID clients. The container must be able to reach the issuer over HTTPS.
+1. In Pocket ID, go to **Administration → OIDC Clients → Add OIDC Client**. Name it **Aviarium**, select **Confidential**, and enter your Aviarium URL followed by `/api/auth/callback` as the callback. For example, register `https://puzzles.example.org/api/auth/callback`. Enable PKCE if your Pocket ID version exposes that option.
+2. In the client's **Access** tab, allow the appropriate groups or select All Users. Copy the client ID and secret into Aviarium's `.env` file. [Pocket ID client setup](https://pocket-id.org/docs/setup/connect-an-app)
+3. Set Aviarium's public URL and the base HTTPS URL of Pocket ID in the same `.env` file.
 
-Set `OIDC_ADMIN_SUBJECT` to the subject of the initial administrator before their first sign-in, or promote an existing account from the Docker host:
+   ```dotenv
+   PUBLIC_ORIGIN=https://puzzles.example.org
+   OIDC_ISSUER=https://id.example.org
+   OIDC_CLIENT_ID=your-client-id
+   OIDC_CLIENT_SECRET=your-client-secret
+   ```
 
-```sh
-docker compose exec app node dist/apps/server/src/admin.js 'https://id.example.org' 'POCKET_ID_SUBJECT'
-```
+4. Run `docker compose up -d`. Open Aviarium and choose **Sign in → Sign in with Pocket ID**.
 
-Sign in to grant other users access through **Admin**. Each Pocket ID identity has a separate account, roles, and progress. **Switch account** requests Pocket ID's account chooser. **Sign out** ends the Aviarium session on that browser. Device display settings stay in the browser across account changes.
+To grant the first Aviarium admin role, set `OIDC_ADMIN_SUBJECT` to that user's Pocket ID subject before they sign in. Use the **Admin** page to assign roles to other users after they sign in.
 
 ## Scheduled backup
 
 The default is `0 3 * * *` UTC with three successful archives retained. The admin page can choose a subfolder within `/backup`, set the five-field UTC schedule, set retention, or request an immediate run. The runner creates valid subfolders on the first run. It never traverses symlinks inside the configured mount. A failed run leaves earlier archives intact. When the folder changes, older archives stay in the old folder.
 
-With the default backup volume, copy an archive to the host with `docker compose cp app:/backup/ARCHIVE.dump ./ARCHIVE.dump`. Include the configured subfolder in the source path if you use one.
+Find archives on the host in `./data/backups` or the directory set by `BACKUP_STORAGE`. A subfolder selected in Aviarium is relative to that directory.
 
 The archive contains Aviarium's PostgreSQL database. Pocket ID passkeys and data still need their own backups. Compose configuration, credentials, and the application image are also separate. Keep a copy of the release source and configuration with the backup policy. Backups on the same physical disk share its failure risk.
 
