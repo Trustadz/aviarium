@@ -98,7 +98,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; min-height: 40px;
   font-weight: 650; font-size: .88rem; color: var(--muted); border: 0; background: transparent; border-radius: 9px;
 }
-.main-nav a:hover, .nav-selected, .account-button:hover { background: var(--tint); color: var(--accent-strong) !important; }
+.main-nav a:hover, .account-button:hover { background: var(--tint); color: var(--accent-strong) !important; }
 .account-button span { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .main-frame { flex: 1; padding-block: 34px 48px; }
 .game-frame {
@@ -162,6 +162,10 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .card-footer, .row-actions, .button-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card-footer { margin-top: 12px; }
 .card-footer > a { margin-left: auto; }
+.game-download { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.game-download span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: .8rem; }
+.game-download button { font-size: .8rem; }
 .badge, .eyebrow { font-size: .73rem; font-weight: 730; }
 .badge { display: inline-flex; gap: 5px; align-items: center; border-radius: 99px; padding: 6px 9px; background: var(--tint); color: var(--accent-strong); }
 .e-ink { background: var(--tint); color: var(--muted); }

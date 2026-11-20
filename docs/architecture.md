@@ -16,7 +16,7 @@ The Sudoku save envelope identifies game, level ID and revision, ruleset, and sa
 
 Foreground sync runs when an authenticated player visits the library, returns to the foreground, or reconnects. Active play checkpoints locally until returning to the library or puzzle list. Account identity is checked on authorization-sensitive sync requests. Synced preferences merge field updates. Theme and e-reader mode are device-local. Games use the device's light or dark mode with their own palettes. Sudoku's timer, hints, and conflict highlighting are controlled from the Sudoku menu. The library and catalog endpoint require an account. Saves and the synchronization queue are keyed by account ID.
 
-The production service worker caches the shell and downloadable player assets. The catalog stores exact puzzles with the versioned save reference. Download Sudoku from the puzzle list for offline startup. While offline, the browser can reopen downloaded puzzles until its last verified session expires. Signing out clears the cached session. API and authentication traffic stay network-only.
+The production service worker caches the library shell and installs game assets when a game opens. The library card can remove a game download while preserving saves and their versioned puzzle references. Downloads are specific to the browser and are removed after 30 days of inactivity once the server is reachable. While offline, the browser can reopen downloaded games until its last verified session expires. Signing out clears the cached session. API and authentication traffic stay network-only.
 
 ## Current scope
 

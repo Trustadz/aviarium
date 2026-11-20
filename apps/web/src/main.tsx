@@ -1,11 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CloudDownload, Grid3X3, Heart, LogIn, LogOut,
-  Search, Settings2, Shield, Users, WifiOff, Wrench } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Grid3X3, Heart, LogIn, LogOut,
+  Search, Settings2, Shield, Trash2, Users, WifiOff, Wrench } from 'lucide-react'
 import type { Difficulty, PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, type Preferences, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { api, ApiError, errorMessage, type SessionAccount } from './api.js'
-import { offlineRequest, registerOffline } from './offline.js'
+import { registerOffline, useGameDownloads } from './offline.js'
 import { games } from './registry.js'
 import { useSession } from './session.js'
 import { cacheLevels, db, levelKey, listSessions, localProfile, saveLocal,
@@ -34,6 +34,7 @@ function AppleInstallHelp() {
 
 function App() {
   const { account, localPlay, checking, online, signIn, refresh, forget } = useSession()
+  useGameDownloads(undefined, online, !checking && !account && !localPlay)
   const [activate, setActivate] = useState<() => void>()
   useEffect(() => { void registerOffline(handler => setActivate(() => handler)).catch(() => undefined) }, [])
   useEffect(() => {
@@ -90,8 +91,9 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   const [dialog, showDialog] = useState<'display' | 'sudoku' | 'account'>()
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
-  const [offline, setOffline] = useState(false)
-  const [downloading, setDownloading] = useState(false)
+  const openGame = games.find(game => game.url === path)
+  const { installed, remove } = useGameDownloads(openGame?.id, online)
+  const canPlay = online || installed.includes(featuredGame.id)
   const saves = useRef<Promise<void>>(Promise.resolve())
   const refreshCatalog = useCallback(async () => {
     try {
@@ -116,15 +118,11 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   useEffect(() => {
     const locationChanged = () => { setActive(undefined); setPath(location.pathname.replace(/\/$/, '') || '/') }
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') showDialog(undefined) }
-    const check = () => void offlineRequest('player-ready').then(setOffline)
     window.addEventListener('popstate', locationChanged)
     window.addEventListener('keydown', closeOnEscape)
-    navigator.serviceWorker?.addEventListener('controllerchange', check)
-    check()
     return () => {
       window.removeEventListener('popstate', locationChanged)
       window.removeEventListener('keydown', closeOnEscape)
-      navigator.serviceWorker?.removeEventListener('controllerchange', check)
     }
   }, [])
   useEffect(() => { if (online) void refreshCatalog() }, [refreshCatalog, online])
@@ -167,7 +165,8 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
     return result
   }
   async function open(level: PublishedLevel, existing?: LocalSession) {
-    const { createSave } = await games[0].player()
+    if (!canPlay) throw new Error('Connect to install Sudoku on this device.')
+    const { createSave } = await featuredGame.player()
     const session = existing ?? { id: crypto.randomUUID(), revision: 0, data: createSave(level),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
@@ -211,28 +210,26 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
   const canEditSudoku = online && account && (account.role === 'admin' || account.editorGames.includes(featuredGame.id))
   const preview = catalog.find(level => level.id === 'first-light') ?? catalog[0]
   const inLibrary = path === '/'
-  const inGame = games.some(game => game.url === path)
+  const inGame = Boolean(openGame)
   const surface = path === '/games/sudoku' || path === '/studio' ? 'sudoku' : 'library'
 
   return <div className={reader ? 'app reader' : 'app'} data-theme={theme} data-surface={surface}>
     {inLibrary && <header className="site-header"><div className="frame header-frame">
       <a className="brand" href="/" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/><span>Aviarium</span></a>
-      <nav aria-label="Main navigation" className="main-nav">
-        <a href="/" className="nav-selected" aria-current="page" onClick={event => link(event, '/')}><Grid3X3 size={16}/> Library</a>
+      {(canEditSudoku || online && account?.role === 'admin') && <nav aria-label="Main navigation" className="main-nav">
         {canEditSudoku && <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>}
         {online && account?.role === 'admin' && <a href="/admin" onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
-      </nav>
+      </nav>}
       <div className="header-actions">
         {!online && <span className="offline-tag"><WifiOff size={16}/> Offline</span>}
-        <button className="icon-button" title="Display settings" aria-label="Display settings" onClick={() => showDialog('display')}><Settings2 size={19}/></button>
-        {account ? <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>
-          : <span className="offline-tag" title="Progress stays on this device">Local play</span>}
+        <button className="secondary" onClick={() => showDialog('display')}><Settings2 size={17}/> Settings</button>
+        {account && <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>}
       </div>
     </div></header>}
     <main className={(inGame ? 'game-frame' : 'frame main-frame') + (surface === 'sudoku' ? ' sudoku-theme' : '')}>
       {notice && <div className="notice" role="alert">{notice}<button onClick={() => setNotice('')}>Dismiss</button></div>}
       {inLibrary && networkNotice && <p role="status" className="network-notice">Sync delayed. {networkNotice}</p>}
-      {inLibrary && activate && <div className="notice">An Aviarium update is ready.<button onClick={activate}>Reload</button></div>}
+      {inLibrary && online && activate && <div className="notice">An Aviarium update is ready.<button onClick={activate}>Reload</button></div>}
       <Suspense fallback={<p role="status">Loading…</p>}>
       {path === '/' ? <>
         <section className="hero">
@@ -269,6 +266,11 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
               <p>{game.description}</p>
               <div className="card-footer"><span className="badge">Logic</span><span className="badge e-ink"><BookOpen size={13}/> E-reader</span>
                 <a className="text-button" href={game.url} onClick={event => link(event, game.url)}>Play <ArrowRight size={16}/></a></div>
+              {installed.includes(game.id) && <div className="game-download">
+                <span><Check size={15}/> Installed on this device</span>
+                <button className="secondary" aria-label={'Remove ' + game.title + ' download'}
+                  onClick={() => perform(() => remove(game.id))}><Trash2 size={15}/> Remove download</button>
+              </div>}
             </div>
           </article>)}</div>
           {!matches.length && <p className="empty">No games match this view.</p>}
@@ -284,20 +286,12 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
         </div>
         <div className="button-bar">
           <button className="secondary" onClick={() => showDialog('sudoku')}><Settings2 size={17}/> Sudoku settings</button>
-          <button className="secondary" disabled={offline || downloading} onClick={() => perform(async () => {
-            setDownloading(true)
-            try {
-              const fresh = await refreshCatalog()
-              if (!fresh && !online) throw new Error('Connect to download Sudoku.')
-              if (!await offlineRequest('download-player')) throw new Error('Offline download needs the installed production site. Reload and try again.')
-              setOffline(true); setNotice('Sudoku and the downloaded puzzle catalog are ready for offline play.')
-            } finally { setDownloading(false) }
-          })}>{offline ? <Check size={18}/> : <CloudDownload size={18}/>} {offline ? 'Available offline' : downloading ? 'Downloading…' : 'Download for offline'}</button>
         </div>
+        {!canPlay && <p className="notice">Connect to install Sudoku on this device.</p>}
         {current.length > 0 && <div className="panel attempts"><h2>Saved attempts</h2>{[reviewSession, ...otherSessions].filter(Boolean).map(item =>
           <div className="level-row" key={item.id}><div><strong>{levelTitle(item)}</strong><p>{item.parentId ? 'Conflict copy · ' : ''}{new Date(item.updated).toLocaleString()}</p></div>
           <div className="row-actions"><button className="text-button" onClick={() => perform(() => archive(item))}>Archive</button>
-          <button className="secondary" onClick={() => perform(() => resume(item))}>Resume</button></div></div>)}</div>}
+          <button className="secondary" disabled={!canPlay} onClick={() => perform(() => resume(item))}>Resume</button></div></div>)}</div>}
         <div className="catalog-filters"><div className="tabs" aria-label="Difficulty">{(['All', 'Easy', 'Medium', 'Hard'] as const).map(value =>
           <button key={value} aria-pressed={value === grade} onClick={() => setGrade(value)}>{value}</button>)}</div>
           <select aria-label="Puzzle source" value={source} onChange={event => setSource(event.target.value)}>
@@ -306,7 +300,7 @@ function Library({ account, online, activate, refreshSession, signOut }: Library
           <div className="level-name"><span className="mini-board"><Grid3X3 size={19}/></span><div><strong>{level.title}</strong><p>{level.source} · Revision {level.revision}</p></div></div>
           <div className="row-actions"><span className={'badge ' + level.difficulty.toLowerCase()}>{level.difficulty}</span>
           {completed.has(levelKey(level.id, level.revision)) && <span className="badge easy"><Check size={14}/> Solved</span>}
-          <button className="icon-button" aria-label={'Play ' + level.title} onClick={() => perform(() => open(level))}><ChevronRight size={22}/></button></div>
+          <button className="icon-button" disabled={!canPlay} aria-label={'Play ' + level.title} onClick={() => perform(() => open(level))}><ChevronRight size={22}/></button></div>
         </div>)}{!difficultyCounts.length && <p className="empty">No published puzzles match these filters.</p>}</div>
       </section>
       : path === '/studio' && canEditSudoku ? <>

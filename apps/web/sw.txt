@@ -1,41 +1,149 @@
-const cacheName = 'aviarium-__VERSION__'
-const optionalAssets = __PLAYER_ASSETS__
+const version = '__VERSION__'
+const shellCache = 'aviarium-' + version
+const gameAssets = __GAME_ASSETS__
 const shellAssets = __SHELL_ASSETS__
 const routes = new Set(['/', '/games/sudoku', '/studio', '/admin'])
+const lastPlayedKey = '/__aviarium/last-played'
+const maxIdle = 30 * 24 * 60 * 60 * 1000
+const gameCache = game => 'aviarium-game-' + game
+const retiredShell = name => name !== shellCache && /^aviarium-[a-f0-9]{12}$/.test(name)
+const legacyPlayer = request => /\/assets\/Player-[^/]+\.js$/.test(new URL(request.url).pathname)
+let operations = Promise.resolve()
+
+async function lastPlayed(cache) {
+  const entry = await cache.match(lastPlayedKey)
+  return entry ? Number(await entry.text()) : undefined
+}
+
+async function installGame(game, playedAt) {
+  const cache = await caches.open(gameCache(game))
+  const assets = gameAssets[game]
+  try {
+    await cache.addAll(assets.map(url => new Request(url, { cache: 'no-store' })))
+    await cache.put(lastPlayedKey, new Response(String(playedAt)))
+  } catch (error) {
+    if (await lastPlayed(cache) === undefined) await caches.delete(gameCache(game))
+    throw error
+  }
+  for (const entry of await cache.keys()) {
+    const path = new URL(entry.url).pathname
+    if (path !== lastPlayedKey && !assets.includes(path)) await cache.delete(entry)
+  }
+}
+
+async function gameIsCurrent(game) {
+  const assets = await Promise.all(gameAssets[game].map(asset => caches.match(asset, { cacheName: gameCache(game) })))
+  return assets.every(Boolean)
+}
+
+async function installedGames() {
+  const names = await caches.keys()
+  const installed = {}
+  for (const game of Object.keys(gameAssets)) {
+    if (!names.includes(gameCache(game))) continue
+    const playedAt = await lastPlayed(await caches.open(gameCache(game)))
+    if (playedAt !== undefined) installed[game] = playedAt
+  }
+  return installed
+}
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(cacheName).then(cache => cache.addAll([
+  event.waitUntil(caches.open(shellCache).then(cache => cache.addAll([
     '/index.html', '/manifest.webmanifest', '/aviarium.svg', '/icon-192.png', '/icon-512.png', ...shellAssets,
   ])))
 })
+
 self.addEventListener('activate', event => {
   event.waitUntil(self.clients.claim())
 })
+
+async function retireShells(names, installed) {
+  let migrateSudoku = !Object.hasOwn(installed, 'sudoku')
+  for (const name of names) {
+    if (migrateSudoku) {
+      const oldCache = await caches.open(name)
+      const entries = await oldCache.keys()
+      if (entries.some(legacyPlayer)) {
+        try {
+          // Legacy downloads have no last-played timestamp.
+          await installGame('sudoku', Date.now())
+          migrateSudoku = false
+        } catch {
+          continue
+        }
+      }
+    }
+    await caches.delete(name)
+  }
+}
+
+async function manageDownloads({ operation, game }) {
+  const installed = await installedGames()
+  if (operation === 'open') {
+    if (!Object.hasOwn(gameAssets, game)) throw new Error('Unknown game')
+    if (Object.hasOwn(installed, game) && await gameIsCurrent(game)) {
+      await (await caches.open(gameCache(game))).put(lastPlayedKey, new Response(String(Date.now())))
+    } else {
+      await installGame(game, Date.now())
+    }
+  } else if (operation === 'remove' && Object.hasOwn(gameAssets, game)) {
+    await caches.delete(gameCache(game))
+    if (game === 'sudoku') {
+      for (const name of (await caches.keys()).filter(retiredShell)) {
+        const cache = await caches.open(name)
+        for (const entry of await cache.keys()) {
+          if (legacyPlayer(entry)) await cache.delete(entry)
+        }
+      }
+    }
+  } else if (operation === 'check') {
+    const expired = Object.keys(installed).filter(id => Date.now() - installed[id] >= maxIdle)
+    const updates = []
+    for (const id of Object.keys(installed)) {
+      if (!expired.includes(id) && !await gameIsCurrent(id)) updates.push(id)
+    }
+    const retired = (await caches.keys()).filter(retiredShell)
+    if (expired.length || updates.length || retired.length) {
+      const live = await fetch('/health/ready', { cache: 'no-store', signal: AbortSignal.timeout(5000) }).catch(() => undefined)
+      if (live?.ok && (await live.json().catch(() => undefined))?.status === 'ok') {
+        await retireShells(retired, installed)
+        await Promise.all(expired.map(id => caches.delete(gameCache(id))))
+        await Promise.allSettled(updates.map(id => installGame(id, installed[id])))
+      }
+    }
+  }
+  return Object.keys(await installedGames())
+}
+
 self.addEventListener('message', event => {
-  if (event.data === 'activate') self.skipWaiting()
-  if (event.data === 'download-player' && event.ports[0]) {
-    event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(optionalAssets)).then(
-      () => event.ports[0].postMessage({ ok: true, version: cacheName }),
-      () => event.ports[0].postMessage({ ok: false }),
+  if (event.data === 'activate') {
+    event.waitUntil(self.skipWaiting())
+  } else if (event.ports[0] && ['open', 'remove', 'check', 'list'].includes(event.data?.operation)) {
+    const result = operations.then(() => manageDownloads(event.data))
+    operations = result.catch(() => {})
+    event.waitUntil(result.then(
+      games => event.ports[0].postMessage({ games }),
+      () => event.ports[0].postMessage({ error: true }),
     ))
   }
-  if (event.data === 'player-ready' && event.ports[0]) {
-    event.waitUntil(caches.open(cacheName).then(cache => Promise.all(optionalAssets.map(asset => cache.match(asset))))
-      .then(entries => event.ports[0].postMessage({ ok: entries.every(Boolean), version: cacheName })))
-  }
 })
+
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url)
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return
   if (event.request.mode === 'navigate' && routes.has(url.pathname.replace(/\/$/, '') || '/')) {
-    event.respondWith(caches.open(cacheName).then(cache => cache.match('/index.html')).then(hit => hit || fetch(event.request)))
+    event.respondWith(caches.open(shellCache).then(cache => cache.match('/index.html')).then(hit => hit || fetch(event.request)))
   } else if (url.pathname.startsWith('/assets/') || url.pathname.endsWith('.png') || url.pathname === '/aviarium.svg' || url.pathname === '/manifest.webmanifest') {
-    event.respondWith(caches.open(cacheName).then(async cache => {
-      const hit = await cache.match(event.request)
-      if (hit) return hit
-      const response = await fetch(event.request)
-      if (response.ok) await cache.put(event.request, response.clone()).catch(() => {})
-      return response
-    }))
+    event.respondWith((async () => {
+      const shell = await (await caches.open(shellCache)).match(event.request)
+      if (shell) return shell
+      for (const [game, assets] of Object.entries(gameAssets)) {
+        if (assets.includes(url.pathname)) {
+          const hit = await caches.match(event.request, { cacheName: gameCache(game) })
+          if (hit) return hit
+        }
+      }
+      return fetch(event.request, { cache: 'no-store' })
+    })())
   }
 })
