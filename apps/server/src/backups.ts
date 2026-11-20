@@ -83,13 +83,20 @@ export async function backupTick() {
       const path = resolve(directory, filename)
       const temporary = path + '.part'
       try {
-        const database = new URL(process.env.DATABASE_URL!)
-        const password = database.searchParams.get('password') ?? decodeURIComponent(database.password)
-        database.password = ''
-        database.searchParams.delete('password')
-        await run('pg_dump', ['--dbname', database.href, '--format=custom', '--no-owner', '--no-acl',
-          '--lock-wait-timeout=30s', '--file', temporary],
-        { env: { PATH: process.env.PATH, PGPASSWORD: password, LC_ALL: 'C' }, timeout: 15 * 60_000 })
+        const database = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : undefined
+        const env = {
+          PATH: process.env.PATH, LC_ALL: 'C', PGHOST: process.env.PGHOST, PGPORT: process.env.PGPORT,
+          PGUSER: process.env.PGUSER, PGDATABASE: process.env.PGDATABASE, PGPASSWORD: process.env.PGPASSWORD,
+        }
+        const connection: string[] = []
+        if (database) {
+          env.PGPASSWORD = database.searchParams.get('password') ?? decodeURIComponent(database.password)
+          database.password = ''
+          database.searchParams.delete('password')
+          connection.push('--dbname', database.href)
+        }
+        await run('pg_dump', [...connection, '--format=custom', '--no-owner', '--no-acl',
+          '--lock-wait-timeout=30s', '--file', temporary], { env, timeout: 15 * 60_000 })
         await run('pg_restore', ['--list', temporary], { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })
         await rename(temporary, path)
       } finally {

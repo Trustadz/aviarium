@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowRight, BookOpen, Check, ChevronRight, CloudDownload, Grid3X3, Heart, LogIn, LogOut,
-  Plus, Search, Settings2, Shield, SlidersHorizontal, WifiOff, Wrench } from 'lucide-react'
+  Plus, Search, Settings2, Shield, Users, WifiOff, Wrench } from 'lucide-react'
 import type { Difficulty, PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { starterCatalog } from '../../../packages/sudoku/src/catalog.js'
 import { defaults, type Preferences, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
@@ -27,26 +27,26 @@ function App() {
   const [path, setPath] = useState(location.pathname.replace(/\/$/, '') || '/')
   const [profile, setProfile] = useState(profileAtStart)
   const [account, setAccount] = useState<Account>()
-  const [signIn, setSignIn] = useState(false)
+  const [signIn, setSignIn] = useState<boolean>()
   const [online, setOnline] = useState(navigator.onLine)
   const [catalog, setCatalog] = useState(startCatalog)
   const [sessions, setSessions] = useState<LocalSession[]>([])
   const [completions, setCompletions] = useState<string[]>([])
   const [prefs, setPrefs] = useState(defaults)
-  const [override, setOverride] = useState(() => localStorage.getItem('aviarium:reader') ?? 'account')
+  const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
+  const [theme, setTheme] = useState(() => localStorage.getItem('aviarium:theme') === 'dark' ? 'dark' : 'light')
   const [active, setActive] = useState<{ session: LocalSession; level: PublishedLevel; head: LocalSession }>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
   const [grade, setGrade] = useState<Difficulty | 'All'>('All')
   const [source, setSource] = useState('All sources')
-  const [dialog, showSettings] = useState(false)
+  const [dialog, showDialog] = useState<'display' | 'sudoku' | 'account'>()
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
   const [offline, setOffline] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [activate, setActivate] = useState<() => void>()
   const saves = useRef<Promise<void>>(Promise.resolve())
-  const reader = override === 'account' ? prefs.reader : override === 'on'
   const refreshCatalog = useCallback(async () => {
     try {
       const levels = await api<PublishedLevel[]>('/catalog')
@@ -56,10 +56,17 @@ function App() {
       return levels
     } catch { return undefined }
   }, [])
+  const profileRef = useRef(profile)
+  const updateProfile = useCallback((next: string) => {
+    if (next === profileRef.current) return
+    profileRef.current = next
+    setActive(undefined); setSessions([]); setCompletions([]); setPrefs(defaults); setProfile(next)
+  }, [])
   const refreshLocal = useCallback(async () => {
     const [items, settings, completed] = await Promise.all([
       listSessions(profile), db.prefs.get(profile), db.completions.where('profile').equals(profile).toArray(),
     ])
+    if (profileRef.current !== profile) return
     setSessions(items)
     setPrefs(settings?.data ?? defaults)
     setCompletions(completed.map(item => levelKey(item.level, item.revision)))
@@ -69,15 +76,25 @@ function App() {
       const { user, signIn } = await api<{ user: Account | null; signIn: boolean }>('/me')
       setSignIn(signIn)
       setAccount(user ?? undefined)
-      if (user) { localStorage.setItem(knownAccount, user.id); setProfile(user.id) }
-    } catch { setAccount(undefined) }
-  }, [])
+      if (user) localStorage.setItem(knownAccount, user.id)
+      else localStorage.removeItem(knownAccount)
+      updateProfile(user?.id ?? 'guest')
+    } catch { setSignIn(undefined) }
+  }, [updateProfile])
   useEffect(() => {
     const locationChanged = () => { setActive(undefined); setPath(location.pathname.replace(/\/$/, '') || '/') }
     const connection = () => { setOnline(navigator.onLine); if (navigator.onLine) void discover() }
     window.addEventListener('popstate', locationChanged)
     window.addEventListener('online', connection)
     window.addEventListener('offline', connection)
+    const identityChanged = (event: StorageEvent) => {
+      if (event.key !== knownAccount) return
+      setAccount(undefined); updateProfile(event.newValue ?? 'guest')
+      void discover()
+    }
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') showDialog(undefined) }
+    window.addEventListener('storage', identityChanged)
+    window.addEventListener('keydown', closeOnEscape)
     void discover()
     const check = () => void offlineRequest('player-ready').then(setOffline)
     navigator.serviceWorker?.addEventListener('controllerchange', check)
@@ -86,9 +103,11 @@ function App() {
       window.removeEventListener('popstate', locationChanged)
       window.removeEventListener('online', connection)
       window.removeEventListener('offline', connection)
+      window.removeEventListener('storage', identityChanged)
+      window.removeEventListener('keydown', closeOnEscape)
       navigator.serviceWorker?.removeEventListener('controllerchange', check)
     }
-  }, [discover])
+  }, [discover, updateProfile])
   useEffect(() => { void cacheLevels(starterCatalog).then(refreshCatalog).catch(error => setNotice(errorMessage(error))) }, [refreshCatalog, online])
   useEffect(() => { void refreshLocal().catch(error => setNotice(errorMessage(error))) }, [refreshLocal, active])
   useEffect(() => {
@@ -145,7 +164,12 @@ function App() {
   }
   function perform(task: () => Promise<unknown>) { void task().catch(error => setNotice(errorMessage(error))) }
   function changePrefs(patch: Partial<Preferences>) {
-    perform(async () => { setPrefs(await updatePreferences(profile, patch)); if (account && !active && online) await sync(profile) })
+    setPrefs(current => ({ ...current, ...patch }))
+    perform(async () => {
+      try { await updatePreferences(profile, patch) }
+      catch (error) { await refreshLocal().catch(() => undefined); throw error }
+      if (account && !active && online) await sync(profile)
+    })
   }
   const matches = useMemo(() => games.filter(game => (!reader || game.eReader) &&
     (category !== 'Favorites' || prefs.favorite) &&
@@ -161,9 +185,9 @@ function App() {
   const recent = sessions.find(session => !session.archived)
   const levelTitle = (session: LocalSession) => catalog.find(level => level.id === session.data.level)?.title ?? 'Published puzzle'
 
-  return <div className={reader ? 'app reader' : 'app'}>
+  return <div className={reader ? 'app reader' : 'app'} data-theme={theme} data-surface={path === '/games/sudoku' || path === '/studio' ? 'sudoku' : 'library'}>
     <header className="site-header"><div className="frame header-frame">
-      <a className="brand" href="/" onClick={event => link(event, '/')}><img src="/icon-192.png" alt=""/><span>Aviarium</span></a>
+      <a className="brand" href="/" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/><span>Aviarium</span></a>
       <nav aria-label="Main navigation" className="main-nav">
         <a href="/" className={path === '/' ? 'nav-selected' : ''} onClick={event => link(event, '/')}><Grid3X3 size={16}/> Library</a>
         {account && account.role !== 'player' && <a href="/studio" className={path === '/studio' ? 'nav-selected' : ''}
@@ -173,15 +197,12 @@ function App() {
       </nav>
       <div className="header-actions">
         {!online && <span className="offline-tag"><WifiOff size={16}/> Offline</span>}
-        <button className="icon-button" title="Settings" aria-label="Settings" onClick={() => showSettings(true)}><Settings2 size={19}/></button>
-        {account ? <button className="account-button" onClick={() => perform(async () => {
-          await api('/auth/logout', { method: 'POST' }); setActive(undefined); setAccount(undefined)
-          localStorage.removeItem(knownAccount); setProfile('guest'); go('/')
-        })}><LogOut size={16}/><span>{account.name}</span></button>
-        : signIn && <a href="/api/auth/login" className="account-button"><LogIn size={16}/> Sign in</a>}
+        <button className="icon-button" title="Display settings" aria-label="Display settings" onClick={() => showDialog('display')}><Settings2 size={19}/></button>
+        {account ? <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>
+          : <button className="account-button" onClick={() => showDialog('account')}><LogIn size={16}/><span>{profile === 'guest' ? 'Sign in' : 'Account'}</span></button>}
       </div>
     </div></header>
-    <main className="frame main-frame">
+    <main className={'frame main-frame' + (path === '/games/sudoku' || path === '/studio' ? ' sudoku-theme' : '')}>
       {notice && <div className="notice" role="alert">{notice}<button onClick={() => setNotice('')}>Dismiss</button></div>}
       {networkNotice && <p role="status" className="network-notice">Sync delayed. {networkNotice}</p>}
       {activate && !active && <div className="notice">An Aviarium update is ready.<button onClick={activate}>Reload</button></div>}
@@ -232,6 +253,8 @@ function App() {
         <button className="text-button back" onClick={() => go('/')}>← Game library</button>
         <div className="section-heading"><div><div className="eyebrow">LOGIC · NUMBERS</div><h1>Sudoku</h1>
           <p>Choose a published puzzle and play at your own pace.</p></div>
+          <div className="button-bar">
+          <button className="secondary" onClick={() => showDialog('sudoku')}><Settings2 size={17}/> Sudoku settings</button>
           <button className="secondary" disabled={offline || downloading} onClick={() => perform(async () => {
             setDownloading(true)
             try {
@@ -240,7 +263,7 @@ function App() {
               if (!await offlineRequest('download-player')) throw new Error('Offline download needs the installed production site. Reload and try again.')
               setOffline(true); setNotice('Sudoku and the downloaded puzzle catalog are ready for offline play.')
             } finally { setDownloading(false) }
-          })}>{offline ? <Check size={18}/> : <CloudDownload size={18}/>} {offline ? 'Available offline' : downloading ? 'Downloading…' : 'Download for offline'}</button>
+          })}>{offline ? <Check size={18}/> : <CloudDownload size={18}/>} {offline ? 'Available offline' : downloading ? 'Downloading…' : 'Download for offline'}</button></div>
         </div>
         {current.length > 0 && <div className="panel attempts"><h2>Saved attempts</h2>{[reviewSession, ...otherSessions].filter(Boolean).map(item =>
           <div className="level-row" key={item.id}><div><strong>{levelTitle(item)}</strong><p>{item.parentId ? 'Conflict copy · ' : ''}{new Date(item.updated).toLocaleString()}</p></div>
@@ -262,27 +285,64 @@ function App() {
       : <section className="panel"><h1>Access required</h1><p>Sign in with an authorized account.</p><button className="secondary" onClick={() => go('/')}>Return to library</button></section>}
       </Suspense>
     </main>
-    {dialog && <div className="settings-overlay" onClick={() => showSettings(false)}>
-      <section className="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" onClick={event => event.stopPropagation()}>
-        <div className="section-heading"><h2><SlidersHorizontal size={20}/> Settings</h2><button className="secondary" onClick={() => showSettings(false)}>Close</button></div>
-        <h3>Display</h3>
-        <label className="setting-row">E-reader on this device
-          <select value={override} onChange={event => { localStorage.setItem('aviarium:reader', event.target.value); setOverride(event.target.value) }}>
-            <option value="account">Use default</option><option value="on">On</option><option value="off">Off</option></select></label>
-        <label className="setting-row">Default e-reader mode<input type="checkbox" checked={prefs.reader} onChange={event => changePrefs({ reader: event.target.checked })}/></label>
-        <h3>Sudoku</h3>
-        {([['mistakes', 'Highlight conflicts'], ['timer', 'Show timer'], ['hints', 'Enable hints']] as const).map(([key, label]) =>
-          <label className="setting-row" key={key}>{label}<input type="checkbox" checked={prefs[key]} onChange={event => changePrefs({ [key]: event.target.checked })}/></label>)}
-        <h3>Progress</h3>
-        <p className="muted">{account ? 'Syncs with your account when online.' : 'Playing on this device. Sign in to sync account progress.'}</p>
-        <div className="row-actions settings-actions"><button className="secondary" onClick={() => perform(() => exportProfile(profile))}>Export saves</button>
-          <label className="secondary file-label"><Plus size={16}/> Import saves<input type="file" accept=".json,application/json" onChange={event => {
-            const file = event.target.files?.[0]; event.target.value = ''
-            if (file && confirm('Import saved attempts as additional copies?')) perform(async () => {
-              const amount = await importProfile(profile, file); await refreshLocal(); setNotice('Imported ' + amount + ' attempts.'); showSettings(false)
-            })
+    {dialog && <div className="settings-overlay" onClick={() => showDialog(undefined)}>
+      <section className={'settings-panel' + (dialog === 'sudoku' ? ' sudoku-theme' : '')}
+        role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={event => event.stopPropagation()}>
+        <div className="section-heading"><h2 id="settings-title">
+          {dialog === 'display' ? 'Display settings' : dialog === 'sudoku' ? 'Sudoku settings' : 'Account'}
+        </h2><button autoFocus className="secondary" onClick={() => showDialog(undefined)}>Close</button></div>
+        {dialog === 'display' && <>
+          <label className="setting-row">Theme<select value={theme} onChange={event => {
+            const value = event.target.value === 'dark' ? 'dark' : 'light'
+            localStorage.setItem('aviarium:theme', value); setTheme(value)
+          }}><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <label className="setting-row">E-reader mode<input type="checkbox" checked={reader} onChange={event => {
+            localStorage.setItem('aviarium:reader', event.target.checked ? 'on' : 'off'); setReader(event.target.checked)
           }}/></label>
-        </div>
+          <p className="muted">These settings apply to this device.</p>
+        </>}
+        {dialog === 'sudoku' && ([['mistakes', 'Highlight conflicts'], ['timer', 'Show timer'], ['hints', 'Enable hints']] as const)
+          .map(([key, label]) => <label className="setting-row" key={key}>{label}<input type="checkbox" checked={prefs[key]}
+            onChange={event => changePrefs({ [key]: event.target.checked })}/></label>)}
+        {dialog === 'account' && <>
+          {account ? <>
+            <h3>{account.name}</h3>
+            <p className="muted">Your progress syncs when you’re online.</p>
+            <div className="button-bar settings-actions">
+              <a className="primary" href="/api/auth/login?switch=1" onClick={event => {
+                event.preventDefault()
+                perform(async () => {
+                  await saves.current
+                  if (online) await sync(profile).catch(() => undefined)
+                  location.assign('/api/auth/login?switch=1')
+                })
+              }}><Users size={17}/> Switch account</a>
+              <button className="secondary" onClick={() => perform(async () => {
+                await saves.current
+                if (online) await sync(profile).catch(() => undefined)
+                await api('/auth/logout', { method: 'POST' }, account.id)
+                setAccount(undefined); localStorage.removeItem(knownAccount); updateProfile('guest'); showDialog(undefined); go('/')
+              })}><LogOut size={16}/> Sign out</button>
+            </div>
+          </> : <>
+            <h3>{profile === 'guest' ? 'Guest' : 'Offline account'}</h3>
+            {signIn === true && online ? <a className="primary" href="/api/auth/login"><LogIn size={17}/> Sign in with Pocket ID</a>
+              : <p className="muted">{signIn === false ? 'Pocket ID is not configured on this server. Ask the server administrator to configure sign-in.'
+                : online ? 'Sign-in is unavailable. Try again after reconnecting to the server.' : 'Connect to the internet to sign in.'}</p>}
+            {profile !== 'guest' && <button className="secondary settings-actions" onClick={() => {
+              localStorage.removeItem(knownAccount); updateProfile('guest'); go('/')
+            }}>Play as guest</button>}
+          </>}
+          <h3>Saved progress</h3>
+          <div className="row-actions settings-actions"><button className="secondary" onClick={() => perform(() => exportProfile(profile))}>Export saves</button>
+            <label className="secondary file-label"><Plus size={16}/> Import saves<input type="file" accept=".json,application/json" onChange={event => {
+              const file = event.target.files?.[0]; event.target.value = ''
+              if (file && confirm('Import saved attempts as additional copies?')) perform(async () => {
+                const amount = await importProfile(profile, file); await refreshLocal(); setNotice('Imported ' + amount + ' attempts.'); showDialog(undefined)
+              })
+            }}/></label>
+          </div>
+        </>}
       </section>
     </div>}
     <footer className="frame footer"><span>Aviarium</span><span>Play at your own pace.</span></footer>

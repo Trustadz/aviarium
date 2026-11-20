@@ -44,8 +44,9 @@ function provider() {
 
 export function registerAuth(app: FastifyInstance) {
   app.get('/api/me', async request => ({ user: await currentUser(request) ?? null, signIn: Boolean(oidc) }))
-  app.get('/api/auth/login', async (_request, reply) => {
+  app.get('/api/auth/login', async (request, reply) => {
     const config = await provider()
+    const selectAccount = (request.query as { switch?: string }).switch === '1'
     const verifier = openid.randomPKCECodeVerifier()
     const state = openid.randomState()
     const nonce = openid.randomNonce()
@@ -56,6 +57,7 @@ export function registerAuth(app: FastifyInstance) {
     reply.setCookie('aviarium-login', attempt, { ...cookies, maxAge: 600 })
     return reply.redirect(openid.buildAuthorizationUrl(config, {
       redirect_uri: callback.href, scope: 'openid profile', state, nonce,
+      ...(selectAccount ? { prompt: 'select_account' } : {}),
       code_challenge: await openid.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256',
     }).href)
   })
@@ -76,10 +78,12 @@ export function registerAuth(app: FastifyInstance) {
     if (!claims?.sub) throw new HttpError(400, 'Pocket ID returned no user identity.')
     const name = [claims.name, claims.preferred_username].find(value => typeof value === 'string')
     const session = token()
+    const initialRole = claims.sub === process.env.OIDC_ADMIN_SUBJECT ? 'admin' : 'player'
     await transaction(async db => {
-      const { rows: [user] } = await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name) VALUES($1,$2,$3)
-        ON CONFLICT (issuer,subject) DO UPDATE SET name=excluded.name RETURNING id`,
-      [claims.iss, claims.sub, typeof name === 'string' ? name.slice(0, 120) : 'Player'])
+      const { rows: [user] } = await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role) VALUES($1,$2,$3,$4)
+        ON CONFLICT (issuer,subject) DO UPDATE SET name=excluded.name,
+          role=CASE WHEN excluded.role='admin' THEN 'admin' ELSE users.role END RETURNING id`,
+      [claims.iss, claims.sub, typeof name === 'string' ? name.slice(0, 120) : 'Player', initialRole])
       await db.query('DELETE FROM auth_sessions WHERE expires_at<=now() OR token_hash=$1', [digest(request.cookies[sessionCookie] ?? '')])
       await db.query(`INSERT INTO auth_sessions(token_hash,user_id,expires_at)
         VALUES($1,$2,now()+interval '14 days')`, [digest(session), user.id])
@@ -88,6 +92,7 @@ export function registerAuth(app: FastifyInstance) {
     return reply.redirect('/')
   })
   app.post('/api/auth/logout', async (request, reply) => {
+    if (request.headers['x-aviarium-account']) await requireUser(request)
     const cookie = request.cookies[sessionCookie]
     if (cookie) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1', [digest(cookie)])
     return reply.clearCookie(sessionCookie, cookies).code(204).send()

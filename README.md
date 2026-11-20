@@ -2,17 +2,23 @@
 
 A self-hosted, installable puzzle library. Sudoku is the only game in the first release. Everyone plays the same published catalog with the same difficulty grades. Creators can generate drafts and test them on the server before publishing.
 
-## Run locally
+## Deploy
 
-Requires Docker with Compose. The application binds to loopback by default.
+Copy `docker-compose.yml` and `.env.example` to your server. Name your local copy of the environment file `.env`, set the password, image tag, and public URL, then run:
 
 ```sh
-cp .env.example .env
-mkdir -p backup
-docker compose up -d --build --wait
+docker compose up -d --wait
 ```
 
-Open [http://localhost:4173](http://localhost:4173). Play locally as a guest, or configure the existing Pocket ID server to test accounts, publishing, sync, and backups. The backup directory must be writable by the container user (UID 1000). See [deployment and restore](docs/deployment.md).
+The default image comes from the private GitHub Container Registry. Sign in to that registry on the host once before pulling it. Acceptance and production can share the same Compose file with separate project names, volumes, and image tags. See [deployment and Pocket ID setup](docs/deployment.md).
+
+## Run from the source checkout
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
+```
+
+Open [http://localhost:4173](http://localhost:4173). Open **Sign in** to view account options. A guest can play immediately on a preview with no Pocket ID credentials.
 
 ## Develop and verify
 

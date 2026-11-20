@@ -17,6 +17,7 @@ COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/dist dist
 COPY --from=build /app/apps/server/migrations apps/server/migrations
 COPY package.json ./
+RUN install -d -m 0700 -o node -g node /backup
 USER node
 EXPOSE 4173
 CMD ["node", "dist/apps/server/src/app.js"]

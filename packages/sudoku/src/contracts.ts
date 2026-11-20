@@ -20,10 +20,10 @@ export const saveSchema = z.object({
 })
 export type SudokuSave = z.infer<typeof saveSchema>
 export const preferenceSchema = z.object({
-  favorite: z.boolean(), mistakes: z.boolean(), timer: z.boolean(), hints: z.boolean(), reader: z.boolean(),
+  favorite: z.boolean(), mistakes: z.boolean(), timer: z.boolean(), hints: z.boolean(),
 })
 export type Preferences = z.infer<typeof preferenceSchema>
-export const defaults: Preferences = { favorite: false, mistakes: true, timer: true, hints: true, reader: false }
+export const defaults: Preferences = { favorite: false, mistakes: true, timer: true, hints: true }
 
 export const mutationSchema = z.object({
   mutationId: z.uuid(), sessionId: z.uuid(), baseRevision: z.number().int().nonnegative(),

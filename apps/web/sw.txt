@@ -5,7 +5,7 @@ const routes = new Set(['/', '/games/sudoku', '/studio', '/admin'])
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(cacheName).then(cache => cache.addAll([
-    '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', ...shellAssets,
+    '/index.html', '/manifest.webmanifest', '/aviarium.svg', '/icon-192.png', '/icon-512.png', ...shellAssets,
   ])))
 })
 self.addEventListener('activate', event => {
@@ -29,7 +29,7 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return
   if (event.request.mode === 'navigate' && routes.has(url.pathname.replace(/\/$/, '') || '/')) {
     event.respondWith(caches.open(cacheName).then(cache => cache.match('/index.html')).then(hit => hit || fetch(event.request)))
-  } else if (url.pathname.startsWith('/assets/') || url.pathname.endsWith('.png') || url.pathname === '/manifest.webmanifest') {
+  } else if (url.pathname.startsWith('/assets/') || url.pathname.endsWith('.png') || url.pathname === '/aviarium.svg' || url.pathname === '/manifest.webmanifest') {
     event.respondWith(caches.open(cacheName).then(async cache => {
       const hit = await cache.match(event.request)
       if (hit) return hit

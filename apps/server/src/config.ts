@@ -1,7 +1,7 @@
 import pg from 'pg'
 
 const { DATABASE_URL, PUBLIC_ORIGIN, OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_CALLBACK_URL } = process.env
-export const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 8, application_name: 'aviarium' })
+export const pool = new pg.Pool({ connectionString: DATABASE_URL || undefined, max: 8, application_name: 'aviarium' })
 const publicUrl = new URL(PUBLIC_ORIGIN || 'http://localhost:4173')
 if (publicUrl.protocol !== 'https:' && !(publicUrl.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(publicUrl.hostname)))
   throw new Error('PUBLIC_ORIGIN must use HTTPS except on the loopback host')

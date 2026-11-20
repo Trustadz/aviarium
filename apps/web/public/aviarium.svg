@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <title>Aviarium</title>
+  <rect width="192" height="192" rx="42" fill="#3d405b"/>
+  <path fill="#81b29a" d="M67 37c-18 0-33 14-33 32 0 21 17 38 38 38h12l-15-16a20 20 0 0 0 14-19h13c0-9-5-17-13-20a20 20 0 0 0-16-15Z"/>
+  <path fill="#f2cc8f" d="M125 37c18 0 33 14 33 32 0 21-17 38-38 38h-12l15-16a20 20 0 0 1-14-19H96c0-9 5-17 13-20a20 20 0 0 1 16-15Z"/>
+  <path fill="#e07a5f" d="M96 76c-20 0-34 16-34 35 0 25 14 42 34 52 19-10 30-25 31-45 8-2 13-9 13-17h-14c-3-14-16-25-30-25Z" stroke="#3d405b" stroke-width="5" stroke-linejoin="round"/>
+  <path fill="none" stroke="#f4f1de" stroke-opacity=".86" stroke-width="4" stroke-linecap="round" d="M80 118c1 11 7 22 16 30"/>
+  <g fill="#3d405b"><circle cx="76" cy="60" r="3.8"/><circle cx="116" cy="60" r="3.8"/><circle cx="112" cy="95" r="4"/></g>
+</svg>

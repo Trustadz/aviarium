@@ -1,19 +1,40 @@
 # Deployment and recovery
 
-## Production configuration
+## Acceptance and production
 
-1. Copy `.env.example` to `.env`. Choose a strong PostgreSQL password and set the same password in `DATABASE_URL` with URL encoding. Keep the file private.
-2. Set `PUBLIC_ORIGIN` to the public HTTPS origin. Point your external reverse proxy to the loopback published port on the Docker host. For a containerized proxy, attach the application to the proxy's internal network and route to its port 4173. Keep PostgreSQL internal.
-3. In the existing Pocket ID instance, create a confidential client with the exact callback `https://your-host/api/auth/callback` and enable PKCE. Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and `OIDC_CALLBACK_URL`. The app container must resolve and reach the provider's HTTPS URL.
-4. Make the host directory selected by `BACKUP_HOST_DIR` available and writable by UID 1000. Compose mounts it at `/backup` in the backup service.
-5. Run `docker compose up -d --build --wait`. Check `/health/ready` through the proxy. Sign in through Pocket ID as the initial administrator.
-6. Assign the role from the Docker host using the exact issuer and subject. The subject can be taken from your Pocket ID account configuration. Then reload Aviarium and use **Admin** to grant Creator roles.
+Use the same `docker-compose.yml` in both environments. Copy `.env.example` as `.env` and set the variables for that environment.
+
+| Setting | Acceptance example | Production example |
+|---|---|---|
+| `COMPOSE_PROJECT_NAME` | `aviarium-accept` | `aviarium-prod` |
+| `AVIARIUM_IMAGE` | `ghcr.io/trustadz/aviarium:acceptance` | `ghcr.io/trustadz/aviarium:v0.1.1` |
+| `APP_PORT` | `4183` | `4173` |
+| `PUBLIC_ORIGIN` | `https://puzzles-accept.example.org` | `https://puzzles.example.org` |
+
+Set a strong `POSTGRES_PASSWORD`. A named backup volume is created automatically. To store backups in a host directory instead, set `BACKUP_STORAGE` to an existing absolute path writable by UID 1000. `DATABASE_URL` is optional for an externally managed PostgreSQL database.
+
+GHCR requires a one-time host sign-in for the private image. Use a GitHub token with `read:packages` and access to the Aviarium package. Once Docker has the credential, normal startup and updates use Compose.
+
+```sh
+docker login ghcr.io
+docker compose up -d --wait
+```
+
+For updates on a moving tag, run `docker compose pull` followed by `docker compose up -d --wait`. Main publishes the moving `acceptance` tag and a `sha-<commit>` tag. Production can pin the accepted SHA or a version tag. A Git version tag promotes the already published image for that commit.
+
+## Custom URL and Pocket ID
+
+Point your existing reverse proxy at the application's loopback port, and configure HTTPS on the proxy. Set `PUBLIC_ORIGIN` to the external origin with no path. If the proxy runs on another host, set `APP_BIND` to an interface it can reach. The default loopback bind keeps the app behind a host proxy and PostgreSQL remains internal.
+
+Register a confidential client in your existing Pocket ID instance and enable PKCE. Register its exact callback, such as `https://puzzles.example.org/api/auth/callback`. Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`. Aviarium derives the callback from `PUBLIC_ORIGIN`. Acceptance and production can have separate Pocket ID clients. The container must be able to reach the issuer over HTTPS.
+
+Set `OIDC_ADMIN_SUBJECT` to the subject of the initial administrator before their first sign-in, or promote an existing account from the Docker host:
 
 ```sh
 docker compose exec app node dist/apps/server/src/admin.js 'https://id.example.org' 'POCKET_ID_SUBJECT'
 ```
 
-Admin can open the Studio too. Guest progress is stored under a separate local profile. Export it before signing in and import into the authenticated profile if you want to transfer it.
+Sign in to grant other users access through **Admin**. Each Pocket ID identity has a separate account, roles, and progress. **Switch account** requests Pocket ID's account chooser. **Sign out** ends the Aviarium session on that browser. Device display settings stay in the browser across account changes.
 
 ## Scheduled backup
 

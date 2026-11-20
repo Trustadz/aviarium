@@ -1,13 +1,18 @@
 x-app: &app
-  image: aviarium:local
-  build: .
+  image: "${AVIARIUM_IMAGE:-ghcr.io/trustadz/aviarium:acceptance}"
   environment:
-    DATABASE_URL: "${DATABASE_URL:-postgresql://aviarium:aviarium-local@db:5432/aviarium}"
+    DATABASE_URL: "${DATABASE_URL:-}"
+    PGHOST: db
+    PGPORT: "5432"
+    PGUSER: aviarium
+    PGPASSWORD: "${POSTGRES_PASSWORD:-aviarium-local}"
+    PGDATABASE: aviarium
     PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://localhost:4173}"
     OIDC_ISSUER: "${OIDC_ISSUER:-}"
     OIDC_CLIENT_ID: "${OIDC_CLIENT_ID:-}"
     OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET:-}"
     OIDC_CALLBACK_URL: "${OIDC_CALLBACK_URL:-}"
+    OIDC_ADMIN_SUBJECT: "${OIDC_ADMIN_SUBJECT:-}"
   init: true
 services:
   db:
@@ -33,7 +38,7 @@ services:
   app:
     <<: *app
     ports:
-      - "127.0.0.1:${APP_PORT:-4173}:4173"
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-4173}:4173"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -59,11 +64,8 @@ services:
       migrate:
         condition: service_completed_successfully
     volumes:
-      - type: bind
-        source: "${BACKUP_HOST_DIR:-./backup}"
-        target: /backup
-        bind:
-          create_host_path: false
+      - "${BACKUP_STORAGE:-backups}:/backup"
     restart: unless-stopped
 volumes:
   pgdata:
+  backups:
