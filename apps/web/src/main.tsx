@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowRight, BookOpen, Check, ChevronRight, CloudDownload, Grid3X3, Heart, LogIn, LogOut,
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, CloudDownload, Grid3X3, Heart, LogIn, LogOut,
   Plus, Search, Settings2, Shield, Users, WifiOff, Wrench } from 'lucide-react'
 import type { Difficulty, PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { starterCatalog } from '../../../packages/sudoku/src/catalog.js'
@@ -149,7 +149,7 @@ function App() {
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     if (!existing) await saveLocal(session)
-    setActive({ session, level, head: session }); go('/games/sudoku', true)
+    setNotice(''); setActive({ session, level, head: session }); go('/games/sudoku', true)
   }
   async function resume(session: LocalSession) {
     const stored = await db.levels.get(levelKey(session.data.level, session.data.levelRevision))
@@ -185,15 +185,17 @@ function App() {
   const recent = sessions.find(session => !session.archived)
   const levelTitle = (session: LocalSession) => catalog.find(level => level.id === session.data.level)?.title ?? 'Published puzzle'
 
-  return <div className={reader ? 'app reader' : 'app'} data-theme={theme} data-surface={path === '/games/sudoku' || path === '/studio' ? 'sudoku' : 'library'}>
-    <header className="site-header"><div className="frame header-frame">
+  const inLibrary = path === '/'
+  const inGame = games.some(game => game.url === path)
+  const surface = path === '/games/sudoku' || path === '/studio' ? 'sudoku' : 'library'
+
+  return <div className={reader ? 'app reader' : 'app'} data-theme={theme} data-surface={surface}>
+    {inLibrary && <header className="site-header"><div className="frame header-frame">
       <a className="brand" href="/" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/><span>Aviarium</span></a>
       <nav aria-label="Main navigation" className="main-nav">
-        <a href="/" className={path === '/' ? 'nav-selected' : ''} onClick={event => link(event, '/')}><Grid3X3 size={16}/> Library</a>
-        {account && account.role !== 'player' && <a href="/studio" className={path === '/studio' ? 'nav-selected' : ''}
-          onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>}
-        {account?.role === 'admin' && <a href="/admin" className={path === '/admin' ? 'nav-selected' : ''}
-          onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
+        <a href="/" className="nav-selected" aria-current="page" onClick={event => link(event, '/')}><Grid3X3 size={16}/> Library</a>
+        {account && account.role !== 'player' && <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>}
+        {account?.role === 'admin' && <a href="/admin" onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
       </nav>
       <div className="header-actions">
         {!online && <span className="offline-tag"><WifiOff size={16}/> Offline</span>}
@@ -201,11 +203,11 @@ function App() {
         {account ? <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>
           : <button className="account-button" onClick={() => showDialog('account')}><LogIn size={16}/><span>{profile === 'guest' ? 'Sign in' : 'Account'}</span></button>}
       </div>
-    </div></header>
-    <main className={'frame main-frame' + (path === '/games/sudoku' || path === '/studio' ? ' sudoku-theme' : '')}>
+    </div></header>}
+    <main className={(inGame ? 'game-frame' : 'frame main-frame') + (surface === 'sudoku' ? ' sudoku-theme' : '')}>
       {notice && <div className="notice" role="alert">{notice}<button onClick={() => setNotice('')}>Dismiss</button></div>}
-      {networkNotice && <p role="status" className="network-notice">Sync delayed. {networkNotice}</p>}
-      {activate && !active && <div className="notice">An Aviarium update is ready.<button onClick={activate}>Reload</button></div>}
+      {inLibrary && networkNotice && <p role="status" className="network-notice">Sync delayed. {networkNotice}</p>}
+      {inLibrary && activate && <div className="notice">An Aviarium update is ready.<button onClick={activate}>Reload</button></div>}
       <Suspense fallback={<p role="status">Loading…</p>}>
       {path === '/' ? <>
         <section className="hero">
@@ -247,13 +249,14 @@ function App() {
         </section></>
       : path === '/games/sudoku' && active ? <Player key={active.session.id} session={active.session} level={active.level} preferences={prefs}
         reader={reader} persist={data => record(active, data)}
-        leave={() => { setActive(undefined); void refreshLocal() }}
+        leave={() => { go('/games/sudoku'); void refreshLocal() }}
         reset={() => perform(async () => { await archive(active.head); await open(active.level) })}/>
-      : path === '/games/sudoku' ? <section className="catalog">
-        <button className="text-button back" onClick={() => go('/')}>← Game library</button>
-        <div className="section-heading"><div><div className="eyebrow">LOGIC · NUMBERS</div><h1>Sudoku</h1>
-          <p>Choose a published puzzle and play at your own pace.</p></div>
-          <div className="button-bar">
+      : path === '/games/sudoku' ? <section className="catalog" aria-labelledby="game-menu-title">
+        <div className="game-menu-heading">
+          <h1 id="game-menu-title">Sudoku</h1>
+          <button className="secondary" onClick={() => go('/')}><LogOut size={17}/> Exit to library</button>
+        </div>
+        <div className="button-bar">
           <button className="secondary" onClick={() => showDialog('sudoku')}><Settings2 size={17}/> Sudoku settings</button>
           <button className="secondary" disabled={offline || downloading} onClick={() => perform(async () => {
             setDownloading(true)
@@ -263,7 +266,7 @@ function App() {
               if (!await offlineRequest('download-player')) throw new Error('Offline download needs the installed production site. Reload and try again.')
               setOffline(true); setNotice('Sudoku and the downloaded puzzle catalog are ready for offline play.')
             } finally { setDownloading(false) }
-          })}>{offline ? <Check size={18}/> : <CloudDownload size={18}/>} {offline ? 'Available offline' : downloading ? 'Downloading…' : 'Download for offline'}</button></div>
+          })}>{offline ? <Check size={18}/> : <CloudDownload size={18}/>} {offline ? 'Available offline' : downloading ? 'Downloading…' : 'Download for offline'}</button>
         </div>
         {current.length > 0 && <div className="panel attempts"><h2>Saved attempts</h2>{[reviewSession, ...otherSessions].filter(Boolean).map(item =>
           <div className="level-row" key={item.id}><div><strong>{levelTitle(item)}</strong><p>{item.parentId ? 'Conflict copy · ' : ''}{new Date(item.updated).toLocaleString()}</p></div>
@@ -280,8 +283,14 @@ function App() {
           <button className="icon-button" aria-label={'Play ' + level.title} onClick={() => perform(() => open(level))}><ChevronRight size={22}/></button></div>
         </div>)}{!difficultyCounts.length && <p className="empty">No published puzzles match these filters.</p>}</div>
       </section>
-      : path === '/studio' && account && account.role !== 'player' ? <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
-      : path === '/admin' && account?.role === 'admin' ? <Admin key={account.id} account={account} onCatalogChange={() => { void refreshCatalog() }}/>
+      : path === '/studio' && account && account.role !== 'player' ? <>
+        <button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
+        <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
+      </>
+      : path === '/admin' && account?.role === 'admin' ? <>
+        <button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
+        <Admin key={account.id} account={account} onCatalogChange={() => { void refreshCatalog() }}/>
+      </>
       : <section className="panel"><h1>Access required</h1><p>Sign in with an authorized account.</p><button className="secondary" onClick={() => go('/')}>Return to library</button></section>}
       </Suspense>
     </main>
@@ -345,7 +354,7 @@ function App() {
         </>}
       </section>
     </div>}
-    <footer className="frame footer"><span>Aviarium</span><span>Play at your own pace.</span></footer>
+    {inLibrary && <footer className="frame footer"><span>Aviarium</span><span>Play at your own pace.</span></footer>}
   </div>
 }
 

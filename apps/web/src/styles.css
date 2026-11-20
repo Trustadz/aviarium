@@ -86,6 +86,14 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .main-nav a:hover, .nav-selected, .account-button:hover { background: var(--tint); color: var(--accent-strong) !important; }
 .account-button span { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .main-frame { flex: 1; padding-block: 34px 48px; }
+.game-frame {
+  flex: 1;
+  min-height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.game-frame > .notice, .catalog { max-width: 960px; margin-inline: auto; }
+.game-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
 .primary, .secondary, .icon-button, .text-button {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 42px; padding: 9px 14px; border: 1px solid transparent; border-radius: 10px;
@@ -172,7 +180,14 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .play-meta { display: flex; align-items: center; gap: 10px; }
 .clock { display: flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; font-weight: 650; }
 .play-layout, .studio-layout, .admin-layout { display: grid; grid-template-columns: minmax(0,550px) minmax(0,1fr); gap: 22px; margin-top: 24px; align-items: start; }
-.play-layout { grid-template-columns: minmax(0,540px) minmax(210px,400px); justify-content: center; }
+.play-page {
+  --board-size: clamp(300px, calc(100dvh - 152px), 700px);
+  max-width: calc(var(--board-size) + 402px);
+  margin-inline: auto;
+}
+.play-page .back { margin-bottom: 4px; }
+.play-heading h1 { font-size: clamp(1.9rem, 4vw, 3rem); }
+.play-layout { grid-template-columns: minmax(0,var(--board-size)) minmax(210px,1fr); margin-top: 16px; }
 .board-wrap { width: 100%; }
 .board {
   display: grid; grid-template: repeat(9,1fr)/repeat(9,1fr);
@@ -258,8 +273,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   .header-frame { gap: 18px; }
   .hero-art { right: 0; top: 55px; }
   .play-layout, .studio-layout, .admin-layout { grid-template-columns: minmax(0,1fr); }
-  .play-layout, .studio-layout { max-width: 540px; margin-inline: auto; }
-  .play-heading { max-width: 540px; margin-inline: auto; }
+  .play-page, .studio-layout { max-width: 540px; margin-inline: auto; }
 }
 @media (max-width: 530px) {
   .frame { width: calc(100% - 26px); }
@@ -284,4 +298,9 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   .level-name .mini-board { width: 33px; height: 33px; }
   .play-layout { gap: 12px; }
   .play-meta { gap: 4px; }
+}
+
+@media (orientation: landscape) and (min-width: 620px) and (max-height: 540px) {
+  .play-page { --board-size: max(200px, calc(100dvh - 132px)); }
+  .play-layout { grid-template-columns: minmax(0,var(--board-size)) minmax(210px,1fr); margin-top: 8px; }
 }

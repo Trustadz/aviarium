@@ -109,7 +109,7 @@ export default function Player({ session, level, preferences, reader, persist, l
   }
   const seconds = Math.floor(display / 1000)
   return <div className="play-page">
-    <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/> Puzzle list</button>
+    <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/> Game menu</button>
     <div className="play-heading"><div><div className="eyebrow">SUDOKU</div><h1>{level.title}</h1></div>
       <div className="play-meta"><span className={'badge ' + level.difficulty.toLowerCase()}>{level.difficulty}</span>
         {preferences.timer && !reader && <span className="clock"><Timer size={17}/>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}
