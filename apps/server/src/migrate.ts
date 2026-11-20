@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { pool, transaction } from './config.js'
 import { starterCatalog } from '../../../packages/sudoku/src/catalog.js'
+import { seedPacks } from './packs.js'
 
 export async function migrate() {
   await transaction(async db => {
@@ -20,6 +21,7 @@ export async function migrate() {
         VALUES ($1,$2,$3,$4,$5,$6,$7,'unique') ON CONFLICT DO NOTHING`,
       [level.id, level.revision, level.ruleset, level.title, level.grid, level.difficulty, level.source])
     }
+    await seedPacks(db)
   })
 }
 

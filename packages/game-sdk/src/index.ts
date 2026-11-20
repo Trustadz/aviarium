@@ -22,7 +22,8 @@ export type Validation<Solution> =
   | { kind: 'unique'; solution: Solution }
   | { kind: 'multiple'; solution: Solution }
 
-export type Difficulty = 'Easy' | 'Medium' | 'Hard'
+export const difficulties = ['Easy', 'Medium', 'Hard', 'Extreme', 'Genius'] as const
+export type Difficulty = typeof difficulties[number]
 export interface PublishedLevel {
   id: string
   revision: number
@@ -31,6 +32,9 @@ export interface PublishedLevel {
   grid: string
   difficulty: Difficulty
   source: 'Built-in' | 'Generated' | 'Creator'
+  seed?: string | null
+  generatorVersion?: number | null
+  pack?: { id: string; revision: number; stop: number }
 }
 
 export interface SaveEnvelope {

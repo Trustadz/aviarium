@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { starterCatalog } from './catalog.js'
+import { difficulties } from '../../game-sdk/src/index.js'
+import { gradePuzzle } from './logic.js'
+import { generateQuickPuzzle } from './quick-play.js'
+import { quickPlayGrids } from './quick-play-grids.js'
+import { formatSeedCode, parseSeedCode } from './seed-code.js'
 import { bit, candidateMasks, FULL, parseGrid, rules } from './rules.js'
 import { analyze, generate, validate } from './solver.js'
 
@@ -75,4 +80,30 @@ test('supports optional uniqueness and common text imports', () => {
   assert.ok(puzzle)
   assert.ok(['unique', 'multiple'].includes(validate(puzzle).kind))
   assert.equal(parseGrid('hello'), undefined)
+})
+
+test('Quick Play pools and seeded boards have unique solutions and match all five logical grades', () => {
+  for (const difficulty of difficulties) {
+    const seed = 'local-budgie-trail'
+    const generated = generateQuickPuzzle(seed, difficulty)
+    assert.equal(generateQuickPuzzle(seed, difficulty), generated)
+    for (const grid of [...quickPlayGrids[difficulty], generated]) {
+      const values = Array.from(grid, Number)
+      assert.equal(validate(values).kind, 'unique')
+      const grade = gradePuzzle(values)
+      assert.equal(grade.difficulty, difficulty, grid)
+      assert.ok(grade.steps.every(step => step.id !== 'nishio'))
+      if (difficulty === 'Genius') assert.ok(grade.extremeFamilies.length >= 3)
+    }
+  }
+  assert.equal(gradePuzzle(Array<number>(81).fill(0)).difficulty, undefined)
+})
+
+test('seed codes preserve the original seed, grade and version as plain text', () => {
+  for (const difficulty of difficulties) {
+    const seed = 'Budgies – Eucalyptus & 2'
+    assert.deepEqual(parseSeedCode(formatSeedCode(seed, difficulty, 2)), { seed, difficulty, version: 2 })
+  }
+  assert.equal(parseSeedCode('https://example.org/sudoku?seed=budgies'), undefined)
+  assert.equal(parseSeedCode('AV2-Z-budgies'), undefined)
 })

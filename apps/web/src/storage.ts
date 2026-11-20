@@ -1,6 +1,7 @@
 import { Dexie, type EntityTable } from 'dexie'
 import { savedGameLimit, type PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
+import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { api, json } from './api.js'
 
 export const localProfile = 'local-play'
@@ -11,14 +12,17 @@ export type LocalSession = StoredSession & {
 interface LocalPrefs { profile: string; data: Preferences; pending: Partial<Preferences> }
 interface StoredLevel { key: string; level: PublishedLevel }
 interface Completion { key: string; profile: string; level: string; revision: number }
+interface StoredPack { key: string; pack: PublishedPack }
 
 export const db = new Dexie('aviarium') as Dexie & {
   sessions: EntityTable<LocalSession, 'id'>
   prefs: EntityTable<LocalPrefs, 'profile'>
   levels: EntityTable<StoredLevel, 'key'>
   completions: EntityTable<Completion, 'key'>
+  packs: EntityTable<StoredPack, 'key'>
 }
 db.version(1).stores({ sessions: 'id,profile', prefs: 'profile', levels: 'key', completions: 'key,profile' })
+db.version(2).stores({ packs: 'key' })
 
 export const levelKey = (level: string, revision: number) => level + ':' + revision
 export async function cacheLevels(levels: PublishedLevel[]) {
@@ -28,7 +32,7 @@ export async function cacheLevels(levels: PublishedLevel[]) {
 async function trimSavedGames(profile: string) {
   const sessions = (await db.sessions.where('profile').equals(profile).toArray())
     .sort((a, b) => b.updated - a.updated || b.revision - a.revision || b.id.localeCompare(a.id))
-  const expired = sessions.filter(session => !session.archived && !session.data.completed).slice(savedGameLimit)
+  const expired = sessions.filter(isResumable).slice(savedGameLimit)
   for (const session of expired) {
     session.archived = true
     session.dirty = profile !== localProfile
@@ -37,6 +41,9 @@ async function trimSavedGames(profile: string) {
   if (expired.length) await db.sessions.bulkPut(expired)
   return sessions
 }
+
+export const isResumable = (session: LocalSession) =>
+  !session.archived && !session.data.completed && session.data.lives !== 0
 
 export function listSessions(profile: string) {
   return db.transaction('rw', db.sessions, () => trimSavedGames(profile))
@@ -104,7 +111,8 @@ export function sync(profile: string) {
 }
 
 async function synchronize(profile: string) {
-  const dirty = (await listSessions(profile)).filter(session => session.dirty || session.sent)
+  // Earlier completions unlock later stops in an ordered pack.
+  const dirty = (await listSessions(profile)).filter(session => session.dirty || session.sent).reverse()
   for (const pending of dirty) {
     const mutation = await db.transaction('rw', db.sessions, async () => {
       const current = await db.sessions.get(pending.id)

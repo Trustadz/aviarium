@@ -4,7 +4,7 @@ import { bit, box, cells, column, row } from '../../../packages/sudoku/src/rules
 interface GridProps {
   entries: readonly number[]; givens?: readonly number[]; notes?: readonly number[]
   selected: number; select: (cell: number) => void; enter: (digit: number) => void
-  activate?: (cell: number) => void; highlightedDigit?: number; hintCell?: number
+  activate?: (cell: number) => void; highlightedDigit?: number; hintCell?: number; hintCells?: ReadonlySet<number>
   errors?: ReadonlySet<number>; disabled?: boolean; related?: boolean
 }
 function cellClasses(cell: number, selected: number, given: boolean, related = true, wrong = false) {
@@ -25,7 +25,7 @@ export function SudokuPreview({ grid, entries }: { grid?: string; entries?: read
 }
 
 export function Grid({ entries, givens, notes, selected, select, enter, activate = select, highlightedDigit,
-  hintCell, errors, disabled, related = true }: GridProps) {
+  hintCell, hintCells, errors, disabled, related = true }: GridProps) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   function key(event: KeyboardEvent<HTMLButtonElement>, cell: number) {
     if (event.ctrlKey || event.metaKey || event.altKey) return
@@ -43,7 +43,7 @@ export function Grid({ entries, givens, notes, selected, select, enter, activate
     {cells.map(cell => {
       const value = entries[cell], mask = notes?.[cell] ?? 0
       const matching = Boolean(value && value === highlightedDigit)
-      const hinted = cell === hintCell
+      const hinted = cell === hintCell || hintCells?.has(cell)
       const classes = cellClasses(cell, selected, Boolean(givens?.[cell]), related, errors?.has(cell))
       return <button key={cell} type="button" className={classes + (matching ? ' matching' : '') + (hinted ? ' hinted' : '')} ref={element => { buttons.current[cell] = element }}
         tabIndex={selected === cell ? 0 : -1} aria-pressed={selected === cell} disabled={disabled}

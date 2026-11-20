@@ -6,8 +6,9 @@ import { ZodError } from 'zod'
 import { HttpError, registerAuth } from './auth.js'
 import { runBackups } from './backup-runner.js'
 import { registerBackups } from './backups.js'
-import { origin, pool } from './config.js'
+import { listenHost, origin, pool } from './config.js'
 import { registerLevels } from './levels.js'
+import { registerPacks } from './packs.js'
 import { registerProgress } from './progress.js'
 import { migrate } from './migrate.js'
 import { runPuzzleJobs } from './worker.js'
@@ -47,6 +48,7 @@ export async function makeApp() {
   })
   registerAuth(app)
   registerLevels(app)
+  registerPacks(app)
   registerProgress(app)
   registerBackups(app)
   await app.register(staticFiles, {
@@ -56,7 +58,7 @@ export async function makeApp() {
     },
   })
   app.setNotFoundHandler((request, reply) => {
-    if (request.method === 'GET' && /^\/(?:games\/sudoku|studio|admin)?\/?$/.test(request.url.split('?')[0]))
+    if (request.method === 'GET' && /^\/(?:games\/sudoku(?:\/history|\/packs\/[a-z0-9-]+\/\d+)?|studio(?:\/packs)?|admin)?\/?$/.test(request.url.split('?')[0]))
       return reply.sendFile('index.html')
     return reply.code(404).send({ error: 'Not found.' })
   })
@@ -70,7 +72,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   await migrate()
   const app = await makeApp()
   try {
-    await app.listen({ host: process.env.HOST || '0.0.0.0', port: Number(process.env.PORT || 4173) })
+    await app.listen({ host: listenHost, port: Number(process.env.PORT || 4173) })
     const jobs = runPuzzleJobs(stop.signal)
     const backups = runBackups(stop.signal)
     try { await Promise.all([jobs, backups]) }

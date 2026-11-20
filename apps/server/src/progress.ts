@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { savedGameLimit } from '../../../packages/game-sdk/src/index.js'
 import { mutationSchema, preferenceSchema, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import { rules } from '../../../packages/sudoku/src/rules.js'
+import { packLevelId, type PackRules } from '../../../packages/sudoku/src/packs.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import { digest, HttpError, requireUser, userFields, type User } from './auth.js'
 import { pool, transaction } from './config.js'
@@ -17,9 +18,10 @@ export function registerProgress(app: FastifyInstance) {
       pool.query<StoredSession>(`SELECT ${fields} FROM saves WHERE owner_id=$1 ORDER BY ${continueOrder}`, [user.id]),
       pool.query('SELECT level_id AS level,level_revision AS revision FROM completions WHERE owner_id=$1', [user.id]),
       pool.query('SELECT revision,data FROM preferences WHERE owner_id=$1', [user.id]),
-      pool.query(`SELECT DISTINCT l.id,l.revision,l.ruleset,l.title,l.grid,l.difficulty,l.source
+      pool.query(`SELECT DISTINCT l.id,l.revision,l.ruleset,l.title,l.grid,l.difficulty,l.source,l.pack,
+        l.seed,l.generator_version AS "generatorVersion"
         FROM saves s JOIN published_levels l ON l.id=s.data->>'level' AND l.revision=(s.data->>'levelRevision')::int
-        WHERE s.owner_id=$1 AND NOT s.archived`, [user.id]),
+        WHERE s.owner_id=$1 AND (NOT s.archived OR s.data->>'completed'='true')`, [user.id]),
     ])
     return { sessions: saves.rows, completions: completions.rows, prefs: prefs.rows[0] ?? { revision: 0, data: {} }, levels: levels.rows }
   })
@@ -35,9 +37,21 @@ export function registerProgress(app: FastifyInstance) {
         if (receipt.fingerprint !== fingerprint) throw new HttpError(409, 'This mutation ID was already used.')
         return receipt.result as StoredSession
       }
-      const level = (await db.query<{grid: string; ruleset: number}>(`SELECT grid,ruleset FROM published_levels
-        WHERE id=$1 AND revision=$2`, [mutation.data.level, mutation.data.levelRevision])).rows[0]
+      const level = (await db.query<{grid: string; ruleset: number; pack: { id: string; stop: number } | null; packRules: PackRules | null}>(
+        `SELECT l.grid,l.ruleset,l.pack,p.data->'rules' AS "packRules" FROM published_levels l
+        LEFT JOIN sudoku_pack_revisions p ON p.pack_id=l.pack->>'id' AND p.revision=l.revision
+        WHERE l.id=$1 AND l.revision=$2`, [mutation.data.level, mutation.data.levelRevision])).rows[0]
       if (!level || level.ruleset !== mutation.data.ruleset) throw new HttpError(422, 'That level version is unavailable.')
+      if (level.pack && level.packRules?.inOrder && level.pack.stop > 1) {
+        const previous = packLevelId(level.pack.id, level.pack.stop - 1)
+        const unlocked = (await db.query(`SELECT 1 FROM completions
+          WHERE owner_id=$1 AND level_id=$2 AND level_revision=$3`, [user.id, previous, mutation.data.levelRevision])).rowCount
+        if (!unlocked) throw new HttpError(422, 'Solve the previous stop in this pack first.')
+      }
+      const limit = level.packRules?.lives
+      const lives = mutation.data.lives
+      if (limit ? lives === undefined || lives > limit || (lives === 0 && mutation.data.completed) : lives !== undefined)
+        throw new HttpError(422, 'The number of lives does not match this puzzle’s rules.')
       const givens = Array.from(level.grid, Number)
       for (const board of [mutation.data.board, ...mutation.data.undo, ...mutation.data.redo]) {
         if (givens.some((given, cell) => given && board.entries[cell] !== given))
@@ -49,6 +63,9 @@ export function registerProgress(app: FastifyInstance) {
         [mutation.sessionId, user.id])).rows[0]
       if (existing && (existing.data.level !== mutation.data.level || existing.data.levelRevision !== mutation.data.levelRevision))
         throw new HttpError(422, 'A saved attempt is bound to one level revision.')
+      if (existing?.revision === mutation.baseRevision && existing.data.lives !== undefined &&
+          lives !== undefined && lives > existing.data.lives)
+        throw new HttpError(422, 'Start a new attempt to reset lives.')
       let saved: StoredSession
       const now = Date.now()
       const updatedAt = new Date(Math.min(mutation.updatedAt ?? now, now))
@@ -67,9 +84,10 @@ export function registerProgress(app: FastifyInstance) {
         [existing ? null : mutation.sessionId, user.id, mutation.data, existing?.id, mutation.archived, updatedAt])).rows[0]
         if (!saved) throw new HttpError(409, 'The session ID is already in use.')
       }
-      if (!saved.archived && !saved.data.completed) {
+      if (!saved.archived && !saved.data.completed && saved.data.lives !== 0) {
         const expired = await db.query<StoredSession>(`UPDATE saves SET archived=true,revision=revision+1
           WHERE id IN (SELECT id FROM saves WHERE owner_id=$1 AND NOT archived AND data->>'completed' = 'false'
+            AND COALESCE(data->>'lives','1') <> '0'
             ORDER BY ${continueOrder} OFFSET $2) RETURNING ${fields}`, [user.id, savedGameLimit])
         saved = expired.rows.find(item => item.id === saved.id) ?? saved
       }

@@ -5,6 +5,11 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "share_target": {
+    "action": "/games/sudoku",
+    "method": "GET",
+    "params": { "text": "sharedSeed" }
+  },
   "background_color": "#f4f1de",
   "theme_color": "#f4f1de",
   "icons": [

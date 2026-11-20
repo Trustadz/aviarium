@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, Cloud, Download, FlaskConical, Plus, Save, Sparkles, Upload } from 'lucide-react'
-import type { Difficulty } from '../../../packages/game-sdk/src/index.js'
+import { difficulties, type Difficulty } from '../../../packages/game-sdk/src/index.js'
 import { conflicts, parseGrid } from '../../../packages/sudoku/src/rules.js'
-import type { Step } from '../../../packages/sudoku/src/solver.js'
+import type { LogicalStep } from '../../../packages/sudoku/src/logic.js'
 import { api, errorMessage, json, type Account } from './api.js'
 import { Grid } from './Grid.js'
 import { downloadFile } from './storage.js'
@@ -10,7 +10,8 @@ import { downloadFile } from './storage.js'
 interface Draft { id: string; title: string; grid: string; version: number }
 interface Job {
   id: string; kind: 'validate' | 'generate'; status: string; draftId: string | null; draftVersion: number | null
-  result?: { kind?: string; error?: string; reason?: string; grid?: string; solution?: number[]; difficulty?: Difficulty; steps?: Step[] }
+  result?: { kind?: string; error?: string; reason?: string; grid?: string; solution?: number[]; difficulty?: Difficulty; steps?: LogicalStep[];
+    extremeFamilies?: string[] }
 }
 const blank = '0'.repeat(81)
 const statuses: Record<string, string> = { unique: 'Valid · unique solution', multiple: 'Valid · multiple solutions',
@@ -28,7 +29,6 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
   const [generation, setGeneration] = useState<string>()
   const [seed, setSeed] = useState('aviarium-' + new Date().toISOString().slice(0, 10))
   const [difficulty, setDifficulty] = useState<Difficulty>('Medium')
-  const [unique, setUnique] = useState(true)
   const [playback, setPlayback] = useState<number>()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -60,10 +60,11 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
   const validateJob = exact ? jobs.find(job => job.kind === 'validate' && job.draftId === draft?.id && job.draftVersion === draft?.version) : undefined
   const shown = jobs.find(job => job.id === selectedJob) ?? validateJob
   const result = validateJob?.result
-  const allowPublish = result?.kind === 'unique' || result?.kind === 'multiple'
+  const solvable = result?.kind === 'unique' || result?.kind === 'multiple'
+  const allowPublish = solvable && Boolean(result?.difficulty)
   const board = Array.from(grid, Number)
   if (playback !== undefined && result?.steps) for (const step of result.steps.slice(0, playback))
-    board[step.cell] = step.digit
+    for (const change of step.updates) if (change.filledValue) board[change.index] = change.filledValue
 
   function doTask(task: () => Promise<void>) {
     if (busy) return
@@ -138,9 +139,11 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
             })}><FlaskConical size={16}/> Test on server</button>
           </div>
           {validateJob && <p className="feedback" role="status">{result?.kind ? statuses[result.kind] : validateJob.status}
-            {result?.difficulty ? ' · ' + result.difficulty : ''}{result?.reason ? ' · ' + result.reason : ''}</p>}
+            {result?.difficulty ? ' · ' + result.difficulty : solvable ? ' · Needs review' : ''}
+            {result?.reason ? ' · ' + result.reason : ''}</p>}
+          {Boolean(result?.extremeFamilies?.length) && <p>Extreme techniques · {result?.extremeFamilies?.join(', ')}</p>}
           {allowPublish && <div className="button-bar">
-            <button className="secondary" onClick={() => setPlayback(result.steps?.length ?? 0)}>Show solution</button>
+            <button className="secondary" onClick={() => setPlayback(result?.steps?.length ?? 0)}>Show solution</button>
             <button className="secondary" onClick={() => setPlayback(0)}>Step through</button>
             <button className="primary" disabled={busy} onClick={() => doTask(async () => {
               const published = await api<{revision: number}>('/drafts/' + draft!.id + '/publish', json('POST', { jobId: validateJob!.id }), account.id)
@@ -149,7 +152,7 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
           </div>}
           {playback !== undefined && result?.steps && <div className="playback">
             <button className="icon-button" aria-label="Previous step" disabled={!playback} onClick={() => setPlayback(playback - 1)}><ChevronLeft size={18}/></button>
-            <span>{playback} / {result.steps.length}{playback > 0 ? ' · ' + result.steps[playback - 1].technique : ''}</span>
+            <span>{playback} / {result.steps.length}{playback > 0 ? ' · ' + result.steps[playback - 1].label : ''}</span>
             <button className="icon-button" aria-label="Next step" disabled={playback >= result.steps.length} onClick={() => setPlayback(playback + 1)}><ChevronRight size={18}/></button>
             <button className="text-button" onClick={() => setPlayback(undefined)}>Edit grid</button>
           </div>}
@@ -157,9 +160,8 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
         <section className="panel padded"><h2>Generate a puzzle</h2>
           <div className="form-row"><label>Seed<input value={seed} maxLength={100} onChange={event => setSeed(event.target.value)}/></label>
             <label>Difficulty<select value={difficulty} onChange={event => setDifficulty(event.target.value as Difficulty)}>
-              {['Easy', 'Medium', 'Hard'].map(value => <option key={value}>{value}</option>)}</select></label></div>
-          <label className="setting-row">Require a unique solution<input type="checkbox" checked={unique} onChange={event => setUnique(event.target.checked)}/></label>
-          <button className="secondary" disabled={busy || !seed.trim()} onClick={() => doTask(() => submit({ kind: 'generate', options: { seed, difficulty, unique } }))}><Sparkles size={16}/> Generate on server</button>
+              {difficulties.map(value => <option key={value}>{value}</option>)}</select></label></div>
+          <button className="secondary" disabled={busy || !seed.trim()} onClick={() => doTask(() => submit({ kind: 'generate', options: { seed, difficulty, unique: true } }))}><Sparkles size={16}/> Generate on server</button>
         </section>
         <section className="panel padded"><h2><Cloud size={19}/> Server jobs</h2>
           {jobs.length ? <select aria-label="Server jobs" value={shown?.id ?? ''} onChange={event => setJob(event.target.value)}>

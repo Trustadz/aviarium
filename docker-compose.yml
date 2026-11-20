@@ -7,7 +7,10 @@ services:
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-4173}:4173"
     environment:
+      HOST: "0.0.0.0"
+      APP_BIND: "${APP_BIND:-127.0.0.1}"
       LOGIN_ENABLED: "${LOGIN_ENABLED:-true}"
+      TEST_ENVIRONMENT: "${TEST_ENVIRONMENT:-false}"
       DATABASE_URL: "${DATABASE_URL:-}"
       PGHOST: db
       PGPORT: "5432"

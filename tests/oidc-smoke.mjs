@@ -95,6 +95,7 @@ try {
     PUBLIC_ORIGIN: origin, DATABASE_URL: database, OIDC_ISSUER: issuer, OIDC_CLIENT_ID: clientId,
     OIDC_CLIENT_SECRET: 'aviarium-fixture', OIDC_ADMIN_SUBJECT: first.id, OIDC_CALLBACK_URL: '' }
   delete env.LOGIN_ENABLED
+  delete env.TEST_ENVIRONMENT
   execFileSync(process.execPath, ['dist/apps/server/src/migrate.js'], { env, stdio: 'inherit' })
   await startApp(env)
   browser = await chromium.launch({ executablePath: process.env.AVIARIUM_CHROMIUM, args: ['--no-sandbox'] })
@@ -107,6 +108,9 @@ try {
   const who = async () => (await (await context.request.get(origin + '/api/me')).json()).user
   const alpha = await who()
   assert.equal(alpha.role, 'admin')
+  const adminExport = await context.request.get(origin + '/api/packs/budgies/1/export')
+  assert.equal(adminExport.status(), 200)
+  const packArchive = await adminExport.body()
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   const theme = page.getByLabel('Theme')
   assert.equal(await theme.inputValue(), 'auto')
@@ -151,9 +155,11 @@ try {
   await startApp(localEnv)
 
   const me = await (await context.request.get(origin + '/api/me')).json()
-  assert.deepEqual(me, { user: null, signIn: false, loginEnabled: false })
+  assert.deepEqual(me, { user: null, signIn: false, loginEnabled: false, testEnvironment: false })
   const catalog = await (await context.request.get(origin + '/api/catalog')).json()
-  const level = catalog.find(level => level.id === 'first-light')
+  assert.ok(catalog.some(level => level.id === 'first-light'))
+  const packs = await (await context.request.get(origin + '/api/packs')).json()
+  const level = packs.find(pack => pack.id === 'budgies')?.data.puzzles[0]
   assert.ok(level)
   assert.equal((await context.request.get(origin + '/api/auth/login')).status(), 404)
   for (const path of ['/api/progress', '/api/drafts', '/api/admin/backup']) {
@@ -176,15 +182,19 @@ try {
   assert.equal(await page.getByRole('button', { name: second.name }).count(), 0)
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
   await page.getByRole('button', { name: 'Explore Sudoku' }).click()
-  await page.getByRole('button', { name: 'Play First Light' }).click()
+  await page.getByRole('button', { name: /^Budgies/ }).click()
+  await page.getByRole('button', { name: 'Play ' + level.title }).click()
   const blank = level.grid.indexOf('0')
   const cell = cellValue => page.getByRole('button', {
     name: `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, ${cellValue}`, exact: true,
   })
-  await cell('empty').click()
+  await cell('empty').click({ timeout: 5000 }).catch(async error => {
+    throw new Error('Could not open the pack puzzle. ' + (await page.locator('main').innerText()).slice(0, 500), { cause: error })
+  })
   await page.getByRole('button', { name: '1', exact: true }).click()
   await cell('1').waitFor()
   await page.getByRole('button', { name: 'Game menu' }).click()
+  await page.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
   await page.getByRole('button', { name: 'Exit to library' }).click()
   await page.reload()
   await page.getByRole('heading', { name: 'Game library' }).waitFor()
@@ -196,6 +206,7 @@ try {
 
   const toLibrary = async () => {
     await page.getByRole('button', { name: 'Game menu' }).click()
+    await page.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
     await page.getByRole('button', { name: 'Exit to library' }).click()
   }
   await toLibrary()
@@ -273,6 +284,81 @@ try {
   assert.deepEqual(progress.sessions, [])
   assert.equal(await page.evaluate(() => localStorage.getItem('aviarium:local-play')), null)
   console.info('Local play smoke passed: stale sessions rejected, browser saves persist, no sync requests, and account data stays separate.')
+
+  const testRoleRequest = (client, role, from = origin) => client.post(origin + '/api/auth/test-role', {
+    headers: { Origin: from }, data: { role },
+  })
+  assert.equal((await testRoleRequest(context.request, 'admin')).status(), 404)
+  await startApp({ ...localEnv, TEST_ENVIRONMENT: 'true' })
+  assert.equal(await who(), null)
+  assert.equal((await testRoleRequest(context.request, 'admin', 'http://unrelated.invalid')).status(), 403)
+  await page.reload()
+  await page.getByRole('heading', { name: 'Game library' }).waitFor()
+  const testUser = await who()
+  assert.notEqual(testUser.id, beta.id)
+  assert.equal(testUser.testRole, 'user')
+  const get = path => context.request.get(origin + path)
+  assert.equal((await get('/api/drafts')).status(), 403)
+  assert.equal((await get('/api/admin/users')).status(), 403)
+  assert.equal((await get('/api/packs/budgies/1/export')).status(), 403)
+  const importPack = () => context.request.post(origin + '/api/pack-drafts/import', {
+    headers: { Origin: origin }, data: { content: packArchive.toString('base64') },
+  })
+  assert.equal((await importPack()).status(), 403)
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  const testRole = page.getByLabel('Test user role')
+  assert.equal(await testRole.inputValue(), 'user')
+  await testRole.selectOption('editor')
+  const studio = page.getByRole('link', { name: 'Studio', exact: true })
+  await studio.waitFor()
+  const testEditor = await who()
+  assert.equal(testEditor.id, testUser.id)
+  assert.deepEqual(testEditor.editorGames, ['sudoku'])
+  assert.equal((await get('/api/drafts')).status(), 200)
+  assert.equal((await get('/api/admin/users')).status(), 403)
+  assert.equal((await get('/api/packs/budgies/1/export')).status(), 403)
+  const imported = await importPack()
+  assert.equal(imported.status(), 200)
+  const packDraft = await imported.json()
+  assert.equal(packDraft.data.title, 'Budgies')
+  assert.equal(packDraft.data.puzzles.length, 3)
+  assert.equal(packDraft.published, null)
+  const publishedPack = await context.request.post(origin + '/api/pack-drafts/' + packDraft.id + '/publish', {
+    headers: { Origin: origin }, data: { version: packDraft.version },
+  })
+  assert.equal(publishedPack.status(), 200)
+  const ownedExport = '/api/packs/' + packDraft.id + '/1/export'
+  assert.equal((await get(ownedExport)).status(), 200)
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await studio.click()
+  await page.getByRole('heading', { name: 'Creator studio', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Back to library', exact: true }).click()
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await testRole.selectOption('admin')
+  const admin = page.getByRole('link', { name: 'Admin', exact: true })
+  await admin.waitFor()
+  assert.equal((await get('/api/admin/users')).status(), 200)
+  await page.reload()
+  await admin.waitFor()
+  assert.equal((await who()).id, testUser.id)
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await testRole.selectOption('user')
+  await admin.waitFor({ state: 'hidden' })
+  await studio.waitFor({ state: 'hidden' })
+  assert.equal((await get('/api/drafts')).status(), 403)
+  assert.equal((await get(ownedExport)).status(), 403)
+  const testCookie = (await context.cookies()).find(cookie => cookie.name === 'aviarium-test')
+  assert.ok(testCookie?.httpOnly)
+
+  await startApp(env)
+  await page.reload()
+  await page.getByRole('button', { name: second.name }).waitFor()
+  assert.equal((await who()).id, beta.id)
+  const replay = await fetch(origin + '/api/me', { headers: { Cookie: 'aviarium=' + testCookie.value } })
+  assert.equal((await replay.json()).user, null)
+  assert.equal((await testRoleRequest(context.request, 'admin')).status(), 404)
+  console.info('Test environment smoke passed: server-side role changes, reload persistence, and separation from normal sign-in.')
 } finally {
   if (browser) await browser.close()
   await stopApp()

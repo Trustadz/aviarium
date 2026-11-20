@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import { generateQuickPuzzle } from '../dist/packages/sudoku/src/quick-play.js'
 import { validate } from '../dist/packages/sudoku/src/solver.js'
 import { rules } from '../dist/packages/sudoku/src/rules.js'
 
@@ -72,7 +73,7 @@ if (adminToken && playerToken) {
     return current?.status === 'complete' && current.result
   }, 'server puzzle job')
   const generated = await jobResult(job.id)
-  assert.equal(generated.grid, selected.grid)
+  assert.equal(generated.grid, generateQuickPuzzle('aviarium-v1:first-light', 'Easy'))
   const draft = await request('/api/drafts', { method: 'POST', headers: adminHeaders,
     body: { grid: generated.grid, title: updatedTitle, generationJob: job.id } })
   const verifyDraft = draft => request('/api/jobs', { method: 'POST', headers: adminHeaders,
@@ -80,7 +81,8 @@ if (adminToken && playerToken) {
   const validation = await verifyDraft(draft)
   const verified = await jobResult(validation.id)
   assert.equal(verified.kind, 'unique')
-  assert.equal(verified.steps.length, level.filter(value => !value).length)
+  assert.equal(verified.steps.flatMap(step => step.updates).filter(update => update.filledValue).length,
+    Array.from(generated.grid).filter(value => value === '0').length)
   const published = await request('/api/drafts/' + draft.id + '/publish', {
     method: 'POST', headers: adminHeaders, body: { jobId: validation.id },
   })
@@ -198,13 +200,15 @@ try {
   assert.equal(await page.getByRole('banner').count(), 0)
   assert.equal(await page.getByRole('contentinfo').count(), 0)
   await page.getByRole('button', { name: 'Exit to library' }).waitFor()
+  assert.equal(await page.getByRole('heading', { name: 'Browse puzzles' }).count(), 0)
+  await page.goto(`${origin}/games/sudoku?puzzle=${selected.id}&revision=${selected.revision}`)
   await page.getByRole('button', { name: 'Sudoku settings' }).click()
   await page.getByLabel('Show timer').uncheck()
   assert.equal(await page.getByLabel('Theme').count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
   assert.equal(await page.getByRole('button', { name: /download/i }).count(), 0)
-  await page.getByRole('button', { name: 'Play First Light' }).click()
+  await page.getByRole('button', { name: 'Play shared puzzle' }).click()
   await page.getByRole('button', { name: 'Game menu' }).waitFor()
   assert.equal(await page.getByRole('banner').count(), 0)
   assert.equal(await page.getByRole('contentinfo').count(), 0)
@@ -226,8 +230,9 @@ try {
   await page.getByRole('button', { name: 'Game menu' }).tap()
   await page.getByRole('button', { name: 'Exit to library' }).tap()
   await page.getByRole('banner').waitFor()
+  await page.waitForFunction(() => caches.has('aviarium-game-sudoku'))
   await page.getByRole('button', { name: 'Remove Sudoku download' }).waitFor()
-  await page.getByRole('button', { name: 'Settings', exact: true }).tap()
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByLabel('E-reader mode').check()
   await page.getByRole('button', { name: 'Close' }).tap()
   await page.getByRole('button', { name: 'Explore Sudoku' }).tap()
@@ -261,9 +266,15 @@ try {
     await adminPage.getByLabel('Draft title').fill('Browser check')
     await adminPage.getByRole('button', { name: 'Test on server' }).click()
     await adminPage.getByRole('status').filter({ hasText: 'Valid · multiple solutions' }).waitFor()
+    assert.equal(await adminPage.getByRole('button', { name: 'Publish', exact: true }).count(), 0)
+    await adminPage.locator('input[type=file]').setInputFiles({
+      name: 'first-light.txt', mimeType: 'text/plain', buffer: Buffer.from(selected.grid),
+    })
+    await adminPage.getByRole('button', { name: 'Test on server' }).click()
+    await adminPage.getByRole('status').filter({ hasText: 'Valid · unique solution' }).waitFor()
     await adminPage.getByRole('button', { name: 'Step through' }).click()
     await adminPage.getByRole('button', { name: 'Next step' }).click()
-    await adminPage.getByText('1 / 81').waitFor()
+    await adminPage.getByText(/^1 \/ \d+/).waitFor()
     if (process.env.AVIARIUM_SCREENSHOTS) await adminPage.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/studio-desktop.png', fullPage: true })
     assert.equal(await adminPage.getByRole('banner').count(), 0)
     await adminPage.getByRole('button', { name: 'Back to library' }).click()
@@ -306,8 +317,8 @@ try {
     const deviceA = await first.newPage()
     await deviceA.goto(origin)
     await deviceA.getByRole('button', { name: 'Test Player' }).waitFor()
-    await deviceA.getByRole('button', { name: 'Explore Sudoku' }).click()
-    await deviceA.getByRole('button', { name: 'Play Quiet Current' }).click()
+    await deviceA.goto(`${origin}/games/sudoku?puzzle=${quiet.id}&revision=${quiet.revision}`)
+    await deviceA.getByRole('button', { name: 'Play shared puzzle' }).click()
     const label = `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, `
     await deviceA.getByRole('button', { name: label + 'empty', exact: true }).press(String(digit))
     await deviceA.getByRole('button', { name: 'Game menu' }).click()
@@ -326,6 +337,8 @@ try {
     const savedRow = deviceB.getByRole('region', { name: 'Continue' }).getByRole('listitem').filter({ hasText: 'Quiet Current' })
     const savedCell = savedRow.first().locator('.saved-board .cell').nth(blank)
     await savedCell.filter({ hasText: String(digit) }).waitFor()
+    assert.deepEqual(await deviceB.locator('.sudoku-menu > section').evaluateAll(sections =>
+      sections.map(section => section.querySelector('h2')?.textContent)), ['Continue', 'Quick Play', 'Packs'])
     assert.match(await savedCell.getAttribute('class'), /entry/)
     await savedRow.getByRole('button', { name: 'Resume' }).first().click()
     await deviceB.getByRole('button', { name: label + digit, exact: true }).waitFor()

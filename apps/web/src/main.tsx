@@ -1,21 +1,24 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Grid3X3, Heart, LogIn, LogOut,
+import { ArrowLeft, ArrowRight, BookOpen, Check, Heart, History, LogIn, LogOut,
   Search, Settings2, Shield, Trash2, Users, WifiOff, Wrench } from 'lucide-react'
-import type { Difficulty, PublishedLevel } from '../../../packages/game-sdk/src/index.js'
+import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, type Preferences, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
-import { api, ApiError, errorMessage, type SessionAccount } from './api.js'
+import { packLevelId, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
 import { ContinueGames } from './ContinueGames.js'
 import { registerOffline, useGameDownloads } from './offline.js'
 import { games } from './registry.js'
 import { useSession } from './session.js'
-import { cacheLevels, db, deleteSavedGame, levelKey, listSessions, localProfile, saveLocal,
+import { PackCards, PackRoadmap, QuickPlay, SudokuHistory, packPath } from './SudokuMenu.js'
+import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, localProfile, saveLocal,
   sync, updatePreferences, writeAttempt, type LocalSession } from './storage.js'
 import './styles.css'
 
 const featuredGame = games[0]
 const Player = lazy(featuredGame.player)
 const Studio = lazy(() => import('./Studio.js'))
+const PackStudio = lazy(() => import('./PackStudio.js'))
 const Admin = lazy(() => import('./Admin.js'))
 
 type ColorScheme = 'light' | 'dark'
@@ -99,6 +102,7 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
   const accountId = account?.id
   const profile = accountId ?? localProfile
   const catalogKey = 'aviarium:catalog:' + profile
+  const packIndexKey = 'aviarium:pack-index:' + profile
   const [path, setPath] = useState(location.pathname.replace(/\/$/, '') || '/')
   const [catalog, setCatalog] = useState<PublishedLevel[]>(() => {
     try {
@@ -108,18 +112,20 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
   })
   const [sessions, setSessions] = useState<LocalSession[]>([])
   const [savedLevels, setSavedLevels] = useState<ReadonlyMap<string, PublishedLevel>>(new Map())
+  const [packs, setPacks] = useState<PublishedPack[]>([])
+  const [viewedPack, setViewedPack] = useState<PublishedPack>()
+  const [packProblem, setPackProblem] = useState('')
   const [completions, setCompletions] = useState<string[]>([])
   const [prefs, setPrefs] = useState(defaults)
   const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
-  const [active, setActive] = useState<{ session: LocalSession; level: PublishedLevel; head: LocalSession }>()
+  const [active, setActive] = useState<{ session: LocalSession; level: PublishedLevel; head: LocalSession; pack?: PublishedPack }>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
-  const [grade, setGrade] = useState<Difficulty | 'All'>('All')
-  const [source, setSource] = useState('All sources')
   const [dialog, showDialog] = useState<'display' | 'sudoku' | 'account'>()
+  const [changingRole, setChangingRole] = useState(false)
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
-  const openGame = games.find(game => game.url === path)
+  const openGame = games.find(game => path === game.url || path.startsWith(game.url + '/'))
   const { installed, remove, recordActivity } = useGameDownloads(openGame?.id, online)
   const canPlay = online || installed.includes(featuredGame.id)
   const saves = useRef<Promise<void>>(Promise.resolve())
@@ -135,11 +141,32 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
       return undefined
     }
   }, [accountId, catalogKey, refreshSession])
+  const refreshPacks = useCallback(async () => {
+    const published = await api<PublishedPack[]>('/packs', undefined, accountId)
+    const records = published.map(pack => ({ key: levelKey(pack.id, pack.revision), pack }))
+    await db.packs.bulkPut(records)
+    localStorage.setItem(packIndexKey, JSON.stringify(records.map(record => record.key)))
+    setPacks(published)
+  }, [accountId, packIndexKey])
+  const findPack = useCallback(async (id: string, revision: number, review = false) => {
+    const key = levelKey(id, revision)
+    const cached = await db.packs.get(key)
+    if (cached && (!review || !online)) return cached.pack
+    if (!online) throw new Error('Connect to open this pack for the first time.')
+    try {
+      const { ownedByViewer, ...pack } = await api<PublishedPack>(`/packs/${id}/${revision}`, undefined, accountId)
+      await db.packs.put({ key, pack })
+      return { ...pack, ownedByViewer }
+    } catch (error) {
+      if (cached) return cached.pack
+      throw error
+    }
+  }, [accountId, online])
   const refreshLocal = useCallback(async () => {
     const [items, settings, completed] = await Promise.all([
       listSessions(profile), db.prefs.get(profile), db.completions.where('profile').equals(profile).toArray(),
     ])
-    const levelKeys = [...new Set(items.filter(item => !item.archived && !item.data.completed)
+    const levelKeys = [...new Set(items.filter(item => isResumable(item) || item.data.completed)
       .map(item => levelKey(item.data.level, item.data.levelRevision)))]
     const levels = await db.levels.bulkGet(levelKeys)
     setSavedLevels(new Map(levels.flatMap(item => item ? [[item.key, item.level]] : [])))
@@ -158,6 +185,30 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
     }
   }, [])
   useEffect(() => { if (online) void refreshCatalog() }, [refreshCatalog, online])
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (online) {
+        try { await refreshPacks(); return } catch { /* Use the last available catalog. */ }
+      }
+      const index: unknown = JSON.parse(localStorage.getItem(packIndexKey) ?? '[]')
+      if (!Array.isArray(index) || !index.every(key => typeof key === 'string')) return
+      const cached = await db.packs.bulkGet(index)
+      if (!cancelled) setPacks(cached.flatMap(record => record ? [record.pack] : []))
+    }
+    void load().catch(() => undefined)
+    return () => { cancelled = true }
+  }, [online, packIndexKey, refreshPacks])
+  useEffect(() => {
+    const match = /^\/games\/sudoku\/packs\/([a-z0-9-]+)\/(\d+)$/.exec(path)
+    if (!match) return
+    let cancelled = false
+    setViewedPack(undefined); setPackProblem('')
+    void findPack(match[1], Number(match[2]), true).then(pack => {
+      if (!cancelled) setViewedPack(pack)
+    }, error => { if (!cancelled) setPackProblem(errorMessage(error)) })
+    return () => { cancelled = true }
+  }, [path, findPack])
   useEffect(() => { void refreshLocal().catch(error => setNotice(errorMessage(error))) }, [refreshLocal, active])
   useEffect(() => {
     if (!accountId || !online || active) return
@@ -197,18 +248,22 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
     saves.current = result
     return result
   }
-  async function open(level: PublishedLevel, existing?: LocalSession) {
+  async function open(level: PublishedLevel, existing?: LocalSession, suppliedPack?: PublishedPack) {
     if (!canPlay) throw new Error('Connect to install Sudoku on this device.')
+    const pack = suppliedPack ?? (level.pack && await findPack(level.pack.id, level.pack.revision))
+    if (pack?.data.rules.inOrder && level.pack && level.pack.stop > 1 &&
+        !completed.has(levelKey(packLevelId(pack.id, level.pack.stop - 1), pack.revision)))
+      throw new Error('Solve the previous stop in this pack first.')
     const { createSave } = await featuredGame.player()
-    const session = existing ?? { id: crypto.randomUUID(), revision: 0, data: createSave(level),
+    const session = existing ?? { id: crypto.randomUUID(), revision: 0, data: createSave(level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     if (!existing) await saveLocal(session)
-    setNotice(''); setActive({ session, level, head: session }); go('/games/sudoku', true)
+    setNotice(''); setActive({ session, level, head: session, pack }); go('/games/sudoku', true)
   }
   async function resume(id: string) {
     const session = await db.sessions.get(id)
-    if (!session || session.profile !== profile || session.archived) throw new Error('This saved game was deleted.')
+    if (!session || session.profile !== profile || !isResumable(session)) throw new Error('This saved game is unavailable.')
     const stored = await db.levels.get(levelKey(session.data.level, session.data.levelRevision))
     if (!stored) throw new Error('This level revision is not downloaded yet.')
     await open(stored.level, session)
@@ -226,13 +281,28 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
       if (account && !active && online) await sync(profile)
     })
   }
+  function changeTestRole(role: TestRole) {
+    if (!account?.testRole || !online || changingRole) return
+    setChangingRole(true)
+    perform(async () => {
+      try {
+        await api('/auth/test-role', json('POST', { role }), account.id)
+        await refreshSession()
+      } catch (error) {
+        showDialog(undefined)
+        throw error
+      } finally {
+        setChangingRole(false)
+      }
+    })
+  }
   const matches = useMemo(() => games.filter(game => (!reader || game.eReader) &&
     (category !== 'Favorites' || prefs.favorite) &&
     (category !== 'Logic' || game.tags.includes('Logic')) &&
     (game.title + ' ' + game.tags.join(' ')).toLowerCase().includes(query.trim().toLowerCase())),
   [reader, prefs.favorite, category, query])
   const continueCards = sessions.flatMap(session => {
-    if (session.archived || session.data.completed) return []
+    if (!isResumable(session)) return []
     const game = games.find(game => game.id === session.data.game)
     if (!game || (reader && !game.eReader)) return []
     const level = savedLevels.get(levelKey(session.data.level, session.data.levelRevision))
@@ -264,26 +334,27 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
   }
   const completed = new Set([...completions, ...sessions.filter(item => item.data.completed)
     .map(item => levelKey(item.data.level, item.data.levelRevision))])
-  const difficultyCounts = catalog.filter(level => grade === 'All' || level.difficulty === grade)
-    .filter(level => source === 'All sources' || level.source === source)
 
   const canEditSudoku = online && account && (account.role === 'admin' || account.editorGames.includes(featuredGame.id))
   const preview = catalog.find(level => level.id === 'first-light') ?? catalog[0]
   const inLibrary = path === '/'
   const inGame = Boolean(openGame)
-  const surface = path === '/games/sudoku' || path === '/studio' ? 'sudoku' : 'library'
+  const surface = inGame || path === '/studio' || path === '/studio/packs' ? 'sudoku' : 'library'
+  const sharedPuzzle = new URLSearchParams(location.search)
+  const sharedId = sharedPuzzle.get('puzzle')
+  const sharedRevision = sharedPuzzle.get('revision')
 
   return <div className={reader ? 'app reader' : 'app'} data-theme={theme} data-surface={surface}>
     {inLibrary && <header className="site-header"><div className="frame header-frame">
       <a className="brand" href="/" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/><span>Aviarium</span></a>
       {canEditSudoku && <nav aria-label="Main navigation" className="main-nav">
-        {canEditSudoku && <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>}
+        <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>
         {online && account?.role === 'admin' && <a href="/admin" onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
       </nav>}
       <div className="header-actions">
         {!online && <span className="offline-tag"><WifiOff size={16}/> Offline</span>}
-        <button className="secondary" onClick={() => showDialog('display')}><Settings2 size={17}/> Settings</button>
-        {account && <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>}
+        <button className="icon-button" aria-label="Settings" title="Display settings" onClick={() => showDialog('display')}><Settings2 size={19}/></button>
+        {account && !account.testRole && <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>}
       </div>
     </div></header>}
     <main className={(inGame ? 'game-frame' : 'frame main-frame') + (surface === 'sudoku' ? ' sudoku-theme' : '')}>
@@ -326,34 +397,57 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
           </article>)}</div>
           {!matches.length && <p className="empty">No games match this view.</p>}
         </section></>
-      : path === '/games/sudoku' && active ? <Player key={active.session.id} session={active.session} level={active.level} preferences={prefs}
+      : path === '/games/sudoku' && active ? <Player key={active.session.id} session={active.session} level={active.level} pack={active.pack} preferences={prefs}
         reader={reader} persist={data => record(active, data)} openSettings={() => showDialog('sudoku')}
-        leave={() => { go('/games/sudoku'); void refreshLocal() }}
-        reset={() => perform(async () => { await deleteAttempt(active.head.id); await open(active.level) })}/>
-      : path === '/games/sudoku' ? <section className="catalog" aria-labelledby="game-menu-title">
+        leave={() => perform(async () => {
+          await saves.current.catch(() => undefined)
+          try { await refreshLocal() }
+          finally { go(active.pack ? packPath(active.pack) : '/games/sudoku') }
+        })}
+        reset={() => perform(async () => { await deleteAttempt(active.head.id); await open(active.level, undefined, active.pack) })}/>
+      : path === '/games/sudoku/history' ? <SudokuHistory sessions={sessions} levels={savedLevels} packs={packs}
+        leave={() => go('/games/sudoku')} replay={level => perform(() => open(level))} canPlay={canPlay}/>
+      : path.startsWith('/games/sudoku/packs/') ? viewedPack && packPath(viewedPack) === path
+        ? <PackRoadmap pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay}
+          canExport={Boolean(canEditSudoku && (account?.role === 'admin' || viewedPack.ownedByViewer))}
+          leave={() => go('/games/sudoku')} play={level => perform(() => {
+            const existing = sessions.find(item => isResumable(item) && item.data.level === level.id && item.data.levelRevision === level.revision)
+            return existing ? resume(existing.id) : open(level, undefined, viewedPack)
+          })}/>
+        : <section className="catalog"><button className="text-button" onClick={() => go('/games/sudoku')}>Sudoku menu</button>
+          <p role={packProblem ? 'alert' : 'status'}>{packProblem || 'Loading pack…'}</p></section>
+      : path === '/games/sudoku' ? <section className="catalog sudoku-menu" aria-labelledby="game-menu-title">
         <div className="game-menu-heading">
           <div className="game-navigation">
             <button className="text-button back" aria-label="Exit to library" onClick={() => go('/')}><ArrowLeft size={17}/> Library</button>
-            <button className="icon-button" aria-label="Sudoku settings" title="Sudoku settings" onClick={() => showDialog('sudoku')}><Settings2 size={18}/></button>
+            <div className="sudoku-nav-tools">
+              <button className="text-button" onClick={() => go('/games/sudoku/history')}><History size={17}/> History</button>
+              <button className="icon-button" aria-label="Sudoku settings" title="Sudoku settings" onClick={() => showDialog('sudoku')}><Settings2 size={18}/></button>
+            </div>
           </div>
           <h1 id="game-menu-title">Sudoku</h1>
         </div>
-        {!canPlay && <p className="notice">Connect to install Sudoku on this device.</p>}
         {continueRow(featuredGame.id)}
-        <div className="catalog-filters"><div className="tabs" aria-label="Difficulty">{(['All', 'Easy', 'Medium', 'Hard'] as const).map(value =>
-          <button key={value} aria-pressed={value === grade} onClick={() => setGrade(value)}>{value}</button>)}</div>
-          <select aria-label="Puzzle source" value={source} onChange={event => setSource(event.target.value)}>
-          {['All sources', 'Built-in', 'Generated', 'Creator'].map(value => <option key={value}>{value}</option>)}</select></div>
-        <div className="panel">{difficultyCounts.map(level => <div key={levelKey(level.id, level.revision)} className="level-row">
-          <div className="level-name"><span className="mini-board"><Grid3X3 size={19}/></span><div><strong>{level.title}</strong><p>{level.source} · Revision {level.revision}</p></div></div>
-          <div className="row-actions"><span className={'badge ' + level.difficulty.toLowerCase()}>{level.difficulty}</span>
-          {completed.has(levelKey(level.id, level.revision)) && <span className="badge easy"><Check size={14}/> Solved</span>}
-          <button className="icon-button" disabled={!canPlay} aria-label={'Play ' + level.title} onClick={() => perform(() => open(level))}><ChevronRight size={22}/></button></div>
-        </div>)}{!difficultyCounts.length && <p className="empty">No published puzzles match these filters.</p>}</div>
+        {!canPlay && <p className="notice">Connect to install Sudoku on this device.</p>}
+        {sharedId && sharedRevision && <button className="secondary" disabled={!online} onClick={() => perform(async () => {
+          const level = await api<PublishedLevel>(`/sudoku/level/${encodeURIComponent(sharedId)}/${encodeURIComponent(sharedRevision)}`, undefined, accountId)
+          await open(level)
+        })}>Play shared puzzle</button>}
+        <QuickPlay online={online} profile={profile} generate={async (difficulty, seed, version) => {
+          const level = await api<PublishedLevel>('/sudoku/quick-play', json('POST', { difficulty, seed, version }), accountId)
+          await open(level)
+        }}/>
+        <PackCards packs={packs} completed={completed} open={pack => go(packPath(pack))}/>
       </section>
-      : path === '/studio' && canEditSudoku ? <>
-        <button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
-        <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
+      : (path === '/studio' || path === '/studio/packs') && canEditSudoku ? <>
+        <div className="game-navigation"><button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
+          <div className="tabs" aria-label="Studio sections">
+            <button aria-pressed={path === '/studio'} onClick={() => go('/studio')}>Puzzles</button>
+            <button aria-pressed={path === '/studio/packs'} onClick={() => go('/studio/packs')}>Packs</button>
+          </div></div>
+        {path === '/studio' ? <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
+          : <PackStudio key={account.id} account={account} levels={catalog}
+            onPublish={() => perform(() => refreshPacks())}/>}
       </>
       : path === '/admin' && online && account?.role === 'admin' ? <>
         <button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
@@ -377,6 +471,13 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
             localStorage.setItem('aviarium:reader', event.target.checked ? 'on' : 'off'); setReader(event.target.checked)
           }}/></label>
           <p className="muted">These settings apply to this device.</p>
+          {account?.testRole && <>
+            <h3>Test environment</h3>
+            <label className="setting-row">Test user role<select value={account.testRole} disabled={!online || changingRole}
+              onChange={event => changeTestRole(event.target.value as TestRole)}>
+              <option value="user">User</option><option value="editor">Sudoku Editor</option><option value="admin">Admin</option>
+            </select></label>
+          </>}
         </>}
         {dialog === 'sudoku' && ([['mistakes', 'Highlight conflicts'], ['timer', 'Show timer'], ['hints', 'Enable hints'],
           ['autoNotes', 'Show Auto notes button'], ['autoNoteDeletion', 'Automatically remove conflicting notes']] as const)

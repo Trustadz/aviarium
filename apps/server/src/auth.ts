@@ -1,10 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import * as openid from 'openid-client'
-import { callback, loginEnabled, oidc, origin, pool, transaction } from './config.js'
+import { z } from 'zod'
+import { sudoku } from '../../../packages/sudoku/src/metadata.js'
+import { callback, loginEnabled, oidc, origin, pool, testEnvironment, transaction } from './config.js'
 
 export interface User { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
-interface SessionUser extends User { expiresAt: Date }
+const testRoleSchema = z.enum(['user', 'editor', 'admin'])
+interface SessionUser extends User { expiresAt: Date; testRole?: z.infer<typeof testRoleSchema> }
 export const userFields = `u.id,u.name,u.role,
   ARRAY(SELECT game_id FROM game_editors WHERE user_id=u.id ORDER BY game_id) AS "editorGames"`
 export class HttpError extends Error {
@@ -13,15 +16,20 @@ export class HttpError extends Error {
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex')
 const token = () => randomBytes(32).toString('base64url')
 const secure = origin.startsWith('https:')
-const sessionCookie = secure ? '__Host-aviarium' : 'aviarium'
+const testIssuer = 'aviarium:test'
+const cookieName = testEnvironment ? 'aviarium-test' : 'aviarium'
+const sessionCookie = secure ? '__Host-' + cookieName : cookieName
 const cookies = { path: '/', httpOnly: true, secure, sameSite: 'lax' as const }
 
 export async function currentUser(request: FastifyRequest): Promise<SessionUser | undefined> {
   const cookie = request.cookies[sessionCookie]
-  if (!loginEnabled || !cookie) return undefined
+  if ((!loginEnabled && !testEnvironment) || !cookie) return undefined
   const result = await pool.query<SessionUser>(`SELECT ${userFields}, s.expires_at AS "expiresAt" FROM users u JOIN auth_sessions s
-    ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()`, [digest(cookie)])
-  return result.rows[0]
+    ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() AND (u.issuer=$2)=$3`, [digest(cookie), testIssuer, testEnvironment])
+  const user = result.rows[0]
+  if (user && testEnvironment)
+    user.testRole = user.role === 'admin' ? 'admin' : user.editorGames.includes(sudoku.id) ? 'editor' : 'user'
+  return user
 }
 
 export async function requireUser(request: FastifyRequest, permission?: 'admin'): Promise<User> {
@@ -54,8 +62,36 @@ function provider() {
 
 export function registerAuth(app: FastifyInstance) {
   app.get('/api/me', async request => ({
-    user: await currentUser(request) ?? null, signIn: Boolean(oidc), loginEnabled,
+    user: await currentUser(request) ?? null, signIn: Boolean(oidc), loginEnabled, testEnvironment,
   }))
+  if (testEnvironment) {
+    app.post('/api/auth/test-role', async (request, reply) => {
+      const { role } = z.object({ role: testRoleSchema }).parse(request.body)
+      const cookie = request.cookies[sessionCookie]
+      const next = await transaction(async db => {
+        const current = cookie ? (await db.query<{id: string}>(`SELECT u.id FROM users u JOIN auth_sessions s ON s.user_id=u.id
+          WHERE s.token_hash=$1 AND s.expires_at>now() AND u.issuer=$2 FOR UPDATE OF u`, [digest(cookie), testIssuer])).rows[0] : undefined
+        const expectedId = request.headers['x-aviarium-account']
+        if (expectedId && current?.id !== expectedId)
+          throw new HttpError(409, 'The test session changed. Refresh and try again.')
+        const accountRole = role === 'admin' ? 'admin' : 'user'
+        const user = current ?? (await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role)
+          VALUES($1,$2,'Test user',$3) RETURNING id`, [testIssuer, token(), accountRole])).rows[0]
+        if (current) await db.query('UPDATE users SET role=$1 WHERE id=$2', [accountRole, user.id])
+        if (role === 'editor') await db.query('INSERT INTO game_editors(user_id,game_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [user.id, sudoku.id])
+        else await db.query('DELETE FROM game_editors WHERE user_id=$1', [user.id])
+        if (current) return undefined
+        const session = token()
+        await db.query('DELETE FROM auth_sessions WHERE expires_at<=now()')
+        await db.query(`INSERT INTO auth_sessions(token_hash,user_id,expires_at)
+          VALUES($1,$2,now()+interval '14 days')`, [digest(session), user.id])
+        return session
+      })
+      if (next) reply.setCookie(sessionCookie, next, { ...cookies, maxAge: 14 * 86400 })
+      return reply.code(204).send()
+    })
+    return
+  }
   if (!loginEnabled) return
   app.get('/api/auth/login', async (request, reply) => {
     const config = await provider()

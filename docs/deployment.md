@@ -52,7 +52,9 @@ To grant the first Aviarium admin role, set `OIDC_ADMIN_SUBJECT` to that user's 
 
 ## Test without Pocket ID
 
-Set `LOGIN_ENABLED=false` in the test environment's `.env`, then run `docker compose up -d` to apply it. The library opens directly. Saves, completions, and game preferences stay in that browser, and account and editor features require login. Test progress stays separate when login is enabled again. Login defaults to `true`.
+To test Studio or administration, set `TEST_ENVIRONMENT=true` in your localhost deployment's `.env`, then run `docker compose up -d`. Keep `APP_BIND` on loopback and use a database dedicated to the test deployment. The server creates a test account for the browser and defaults to **User**. In the library, open **Settings → Test user role** to switch between **User**, **Sudoku Editor**, and **Admin**. Drafts and progress stay with the same test account when you switch roles. Test mode takes precedence over Pocket ID and defaults to `false`.
+
+For browser-only play, set `LOGIN_ENABLED=false` with `TEST_ENVIRONMENT=false`. Saves, completions, and preferences stay in the browser's local profile. Account and editor features require a server session. Login defaults to `true`.
 
 ## Scheduled backup
 

@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type SessionAccount } from './api.js'
+import { api, json, type SessionAccount } from './api.js'
 
 const sessionKey = 'aviarium:session'
 const localPlayKey = 'aviarium:local-play'
+interface SessionStatus {
+  user: SessionAccount | null
+  signIn: boolean
+  loginEnabled?: boolean
+  testEnvironment?: boolean
+}
 
 function canPlayLocally() { return localStorage.getItem(localPlayKey) === 'true' }
 const validUntil = (account: SessionAccount) => Date.parse(account.expiresAt)
@@ -44,10 +50,14 @@ export function useSession() {
       return
     }
     try {
-      const result = await api<{ user: SessionAccount | null; signIn: boolean; loginEnabled?: boolean }>('/me', { signal: pending.signal })
+      let result = await api<SessionStatus>('/me', { signal: pending.signal })
+      if (result.testEnvironment && !result.user && !pending.signal.aborted) {
+        await api('/auth/test-role', { ...json('POST', { role: 'user' }), signal: pending.signal })
+        result = await api<SessionStatus>('/me', { signal: pending.signal })
+      }
       if (pending.signal.aborted) return
       setSignIn(result.signIn)
-      const local = result.loginEnabled === false
+      const local = !result.testEnvironment && result.loginEnabled === false
       setLocalPlay(local)
       if (local) localStorage.setItem(localPlayKey, 'true')
       else localStorage.removeItem(localPlayKey)
