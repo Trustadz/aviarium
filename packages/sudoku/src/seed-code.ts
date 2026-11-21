@@ -1,4 +1,17 @@
-import type { Difficulty } from '../../game-sdk/src/index.js'
+import type { Difficulty, PublishedLevel } from '../../game-sdk/src/index.js'
+import type { QuickPlayDescriptor } from './contracts.js'
+
+export async function quickPlayId({ seed, difficulty, version }: QuickPlayDescriptor) {
+  const input = new TextEncoder().encode(JSON.stringify([version, difficulty, seed]))
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', input))
+  const prefix = Array.from(hash.subarray(0, 18), byte => byte.toString(16).padStart(2, '0')).join('')
+  return 'quick-' + prefix
+}
+
+export function quickPlayLevel(id: string, grid: string, { seed, difficulty, version }: QuickPlayDescriptor): PublishedLevel {
+  return { id, revision: 1, ruleset: 1, title: 'Quick Play', grid, difficulty, source: 'Generated', seed,
+    generatorVersion: version }
+}
 
 const codes = { E: 'Easy', M: 'Medium', H: 'Hard', X: 'Extreme', G: 'Genius' } as const satisfies Record<string, Difficulty>
 

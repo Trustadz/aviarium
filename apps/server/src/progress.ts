@@ -6,8 +6,10 @@ import { mutationSchema, preferenceSchema, type StoredSession } from '../../../p
 import { rules } from '../../../packages/sudoku/src/rules.js'
 import { packLevelId, type PackRules } from '../../../packages/sudoku/src/packs.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
+import { quickPlayId } from '../../../packages/sudoku/src/seed-code.js'
 import { digest, HttpError, requireUser, userFields, type User } from './auth.js'
 import { pool, transaction } from './config.js'
+import { getQuickPlayLevel } from './quick-play.js'
 
 const fields = 'id,revision,data,parent_id AS "parentId",archived,floor(extract(epoch FROM updated_at) * 1000)::double precision AS "updatedAt"'
 const preferencesPatch = preferenceSchema.extend({ locale: z.enum(locales) }).partial()
@@ -39,10 +41,15 @@ export function registerProgress(app: FastifyInstance) {
         if (receipt.fingerprint !== fingerprint) throw new HttpError(409, 'mutation_conflict')
         return receipt.result as StoredSession
       }
-      const level = (await db.query<{grid: string; ruleset: number; pack: { id: string; stop: number } | null; packRules: PackRules | null}>(
+      let level = (await db.query<{grid: string; ruleset: number; pack: { id: string; stop: number } | null; packRules: PackRules | null}>(
         `SELECT l.grid,l.ruleset,l.pack,p.data->'rules' AS "packRules" FROM published_levels l
         LEFT JOIN sudoku_pack_revisions p ON p.pack_id=l.pack->>'id' AND p.revision=l.revision
         WHERE l.id=$1 AND l.revision=$2`, [mutation.data.level, mutation.data.levelRevision])).rows[0]
+      if (!level && mutation.quickPlay && mutation.data.levelRevision === 1 &&
+          await quickPlayId(mutation.quickPlay) === mutation.data.level) {
+        const generated = await getQuickPlayLevel(db, mutation.data.level, mutation.quickPlay)
+        level = { grid: generated.grid, ruleset: generated.ruleset, pack: null, packRules: null }
+      }
       if (!level || level.ruleset !== mutation.data.ruleset) throw new HttpError(422, 'level_version_unavailable')
       if (level.pack && level.packRules?.inOrder && level.pack.stop > 1) {
         const previous = packLevelId(level.pack.id, level.pack.stop - 1)

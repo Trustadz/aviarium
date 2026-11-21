@@ -43,8 +43,8 @@ export function PuzzleShare({ level }: { level: PublishedLevel }) {
   </>
 }
 
-export function QuickPlay({ online, profile, generate }: {
-  online: boolean; profile: string
+export function QuickPlay({ canPlay, profile, generate }: {
+  canPlay: boolean; profile: string
   generate: (difficulty: Difficulty, seed?: string, version?: number) => Promise<void>
 }) {
   const t = useT()
@@ -91,11 +91,10 @@ export function QuickPlay({ online, profile, generate }: {
           }}>
           {difficulties.map(value => <option key={value} value={value}>{t(value)}</option>)}
         </select>
-        <button type="submit" className="primary" disabled={!online || busy || (hasSeed && (!seed.trim() || (!embedded && seed.trim().length > 100)))}>
+        <button type="submit" className="primary" disabled={!canPlay || busy || (hasSeed && (!seed.trim() || (!embedded && seed.trim().length > 100)))}>
           <Shuffle size={17}/>{busy ? t("Preparing puzzle…") : hasSeed ? t("Play seed") : t("New puzzle")}
         </button>
       </div>
-      {!online && <p>{t("Connect to start a new Quick Play puzzle.")}</p>}
       {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
     </form>
   </section>

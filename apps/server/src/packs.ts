@@ -4,11 +4,12 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { PoolClient } from 'pg'
 import { z } from 'zod'
 import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
-import { difficultySchema } from '../../../packages/sudoku/src/contracts.js'
+import { quickPlayDescriptorSchema, quickPlayVersion, type QuickPlayDescriptor } from '../../../packages/sudoku/src/contracts.js'
 import { packLevels, packUploadBytes, type GradedPack, type PackDraft, type PackDraftData, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
-import { generateQuickPuzzle, quickPlayVersion } from '../../../packages/sudoku/src/quick-play.js'
+import { quickPlayId } from '../../../packages/sudoku/src/seed-code.js'
 import { builtInPacks } from '../../../packages/sudoku/src/built-in-packs.js'
-import { digest, HttpError, requireGameEditor, requireUser } from './auth.js'
+import { HttpError, requireGameEditor, requireUser } from './auth.js'
+import { getQuickPlayLevel } from './quick-play.js'
 import { loginEnabled, pool, testEnvironment, transaction } from './config.js'
 import { exportPack, gradePack, importPack, readPackDraft } from './pack-content.js'
 
@@ -158,18 +159,10 @@ export function registerPacks(app: FastifyInstance) {
 
   app.post('/api/sudoku/quick-play', async request => {
     await player(request)
-    const input = z.object({ difficulty: difficultySchema, seed: z.string().trim().min(1).max(100).optional(),
-      version: z.literal(quickPlayVersion).optional() }).parse(request.body)
-    const seed = input.seed ?? randomBytes(8).toString('hex')
-    const id = 'quick-' + digest(JSON.stringify([quickPlayVersion, input.difficulty, seed])).slice(0, 36)
-    const fields = 'id,revision,ruleset,title,grid,difficulty,source,seed,generator_version AS "generatorVersion"'
-    const existing = (await pool.query<PublishedLevel>(`SELECT ${fields} FROM published_levels WHERE id=$1 AND revision=1`, [id])).rows[0]
-    if (existing) return existing
-    const grid = generateQuickPuzzle(seed, input.difficulty)
-    await pool.query(`INSERT INTO published_levels(id,revision,ruleset,title,grid,difficulty,source,seed,generator_version,
-      validation,catalog_visible) VALUES($1,1,1,'Quick Play',$2,$3,'Generated',$4,$5,'unique',false) ON CONFLICT DO NOTHING`,
-    [id, grid, input.difficulty, seed, quickPlayVersion])
-    return (await pool.query<PublishedLevel>(`SELECT ${fields} FROM published_levels WHERE id=$1 AND revision=1`, [id])).rows[0]
+    const input = quickPlayDescriptorSchema.partial({ seed: true, version: true }).parse(request.body)
+    const descriptor: QuickPlayDescriptor = { difficulty: input.difficulty, seed: input.seed ?? randomBytes(8).toString('hex'),
+      version: quickPlayVersion }
+    return getQuickPlayLevel(pool, await quickPlayId(descriptor), descriptor)
   })
   app.get('/api/sudoku/level/:id/:revision', async request => {
     await player(request)

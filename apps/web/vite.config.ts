@@ -38,6 +38,12 @@ export default defineConfig({
           return chunk.type === 'chunk' && chunk.facadeModuleId?.endsWith(entry)
         }))
         if (!files.size) throw new Error('Missing offline player assets for ' + id)
+        if (id === 'sudoku') {
+          // Vite emits the worker URL outside the player's static import graph.
+          const worker = names.find(name => /^assets\/quick-play-worker-[\w-]+\.js$/.test(name))
+          if (!worker) throw new Error('Missing offline Sudoku Quick Play worker')
+          files.add(worker)
+        }
         return [id, [...files].filter(name => !shell.has(name)).map(name => '/' + name)]
       }))
       const source = readFileSync(new URL('./sw.txt', import.meta.url), 'utf8')
