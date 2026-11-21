@@ -30,5 +30,7 @@ it specifies a narrower scope or a different workflow.
 - Merging runs checks. Shipping is a separate, manual **Publish container**
   workflow on `main`. Trigger it only when the user authorizes publication.
   The owner can trigger it directly in GitHub Actions.
-- After publishing, verify that the version and `latest` image tags match.
-  See [release instructions](README.md#publish-a-release).
+- Use `enhancement` or `feature` for PRs that add features and `bug` or `fix`
+  for PRs that fix bugs so the generated release notes group them correctly.
+- After publishing, verify that the version and `latest` image tags match and
+  that a GitHub Release exists for the version. See [release instructions](README.md#publish-a-release).

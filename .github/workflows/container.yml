@@ -69,6 +69,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Publish version and latest
         env:
           IMAGE: ghcr.io/trustadz/aviarium
@@ -105,3 +107,26 @@ jobs:
           ensure_current_main
           docker tag "$IMAGE:$tag" "$IMAGE:latest"
           docker push "$IMAGE:latest"
+      - name: Create GitHub Release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="v$VERSION"
+          if release=$(gh release view "$tag" --json isDraft,url); then
+            if [[ "$(jq -r '.isDraft' <<< "$release")" == true ]]; then
+              gh release edit "$tag" --draft=false --latest
+            else
+              jq -r '.url' <<< "$release"
+            fi
+            exit 0
+          fi
+
+          previous=$(git tag --merged "$GITHUB_SHA" --sort=-version:refname --list 'v*' |
+            awk -v current="$tag" '$0 == current { found=1; next } found && /^v[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')
+          notes=(--generate-notes)
+          if [[ -n "$previous" ]]; then
+            notes+=(--notes-start-tag "$previous")
+          fi
+          gh release create "$tag" --verify-tag --latest --title "Aviarium $tag" "${notes[@]}"
