@@ -198,13 +198,14 @@ try {
     rail: getComputedStyle(element).backgroundColor,
     document: getComputedStyle(document.documentElement).backgroundColor,
     body: getComputedStyle(document.body).backgroundColor,
-    content: getComputedStyle(document.querySelector('.app-shell')).backgroundColor,
+    shell: getComputedStyle(document.querySelector('.app-shell')).backgroundColor,
+    content: getComputedStyle(document.querySelector('.main-frame')).backgroundColor,
     header: getComputedStyle(document.querySelector('.site-header')).backgroundColor,
     theme: document.querySelector('meta[name="theme-color"]').content,
   }))
   assert.deepEqual(await mobileChrome(), {
     rail: 'rgb(255, 253, 242)', document: 'rgb(255, 253, 242)', body: 'rgb(255, 253, 242)',
-    content: 'rgb(244, 241, 222)', header: 'rgb(255, 253, 242)', theme: '#fffdf2',
+    shell: 'rgb(255, 253, 242)', content: 'rgb(244, 241, 222)', header: 'rgb(255, 253, 242)', theme: '#fffdf2',
   })
   assert.equal(await page.locator('.app-rail .account-menu').evaluate(element => getComputedStyle(element).borderInlineStartWidth), '0px')
   assert.equal(await page.getByRole('contentinfo').count(), 0)
@@ -241,7 +242,7 @@ try {
   assert.equal(await page.locator('.app').getAttribute('data-theme'), 'dark')
   assert.deepEqual(await mobileChrome(), {
     rail: 'rgb(51, 53, 76)', document: 'rgb(51, 53, 76)', body: 'rgb(51, 53, 76)',
-    content: 'rgb(38, 40, 60)', header: 'rgb(51, 53, 76)', theme: '#33354c',
+    shell: 'rgb(51, 53, 76)', content: 'rgb(38, 40, 60)', header: 'rgb(51, 53, 76)', theme: '#33354c',
   })
   assert.equal(await page.getByLabel('Show timer').count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
@@ -400,6 +401,53 @@ try {
     await first.close()
     await second.close()
   }
+  const packContext = await browser.newContext({ viewport: { width: 320, height: 700 }, isMobile: true, hasTouch: true })
+  await packContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
+  const packPage = await packContext.newPage()
+  await packPage.goto(origin + '/games/sudoku')
+  await packPage.getByRole('button', { name: /^Budgies/ }).click()
+  const current = packPage.locator('.pack-trail [aria-current=step]')
+  await current.getByRole('heading', { name: 'Garden Perch' }).waitFor()
+  const locked = packPage.getByRole('button', { name: 'Play Eucalyptus Grove', exact: true })
+  assert.equal(await locked.isDisabled(), true)
+  const pins = await packPage.locator('.pack-stop-marker').evaluateAll(markers => markers.map(marker => {
+    const { left, top } = marker.getBoundingClientRect()
+    return { left, top }
+  }))
+  assert.equal(pins.length, 3)
+  assert.ok(pins[0].left < pins[1].left && pins[0].left === pins[2].left)
+  assert.ok(pins[0].top > pins[1].top && pins[1].top > pins[2].top)
+  assert.ok(pins[0].top < 700 && pins[0].top > 0)
+  assert.ok(await packPage.locator('.pack-roadmap').evaluate(roadmap => {
+    const info = roadmap.querySelector('.pack-banner').getBoundingClientRect()
+    const trail = roadmap.querySelector('.pack-trail').getBoundingClientRect()
+    return info.top >= trail.bottom
+  }))
+  assert.ok(await packPage.getByRole('button', { name: 'Sudoku menu', exact: true }).evaluate(button =>
+    button.getBoundingClientRect().top >= 0 && button.getBoundingClientRect().bottom <= innerHeight))
+  assert.equal(await packPage.evaluate(() => document.documentElement.scrollWidth), 320)
+
+  const headers = playerToken ? playerHeaders : adminHeaders
+  const pack = (await request('/api/packs', { headers })).find(item => item.id === 'budgies')
+  const firstGrid = Array.from(pack.data.puzzles[0].grid, Number)
+  const firstSolution = validate(firstGrid).solution
+  assert.ok(firstSolution)
+  await current.getByRole('button', { name: 'Play Garden Perch', exact: true }).click()
+  const cells = packPage.getByLabel('Sudoku board', { exact: true }).getByRole('button')
+  for (const [index, given] of firstGrid.entries()) {
+    if (!given) await cells.nth(index).press(String(firstSolution[index]))
+  }
+  await packPage.getByRole('button', { name: 'Back to roadmap', exact: true }).click()
+  await current.getByRole('heading', { name: 'Eucalyptus Grove' }).waitFor()
+  assert.ok(await current.locator('.pack-stop-marker').evaluate(marker => {
+    const { top, bottom } = marker.getBoundingClientRect()
+    return top >= 0 && bottom <= innerHeight
+  }))
+  assert.equal(await locked.isEnabled(), true)
+  assert.equal(await packPage.getByRole('button', { name: 'Replay Garden Perch', exact: true }).isEnabled(), true)
+  await packContext.close()
+  console.info('Pack trail checks passed: bottom-to-top pins, visible next stop, and unlocking the next stop.')
+
   const quickPlayContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await quickPlayContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
   const quickPlayPage = await quickPlayContext.newPage()
