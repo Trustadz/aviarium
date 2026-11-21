@@ -1,14 +1,15 @@
 import { useIntl } from 'react-intl'
 import { levelTitle, packDescription, packTitle } from './sudoku-copy.js'
 import { knownMessage, useT, type Translate } from './i18n.js'
-import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, Download, LockKeyhole, Share2, Shuffle, Timer } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, ArrowRight, Download, Share2, Shuffle } from 'lucide-react'
 import { difficulties, type Difficulty, type PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { packLevels, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { quickPlayVersion } from '../../../packages/sudoku/src/contracts.js'
 import { formatSeedCode, parseSeedCode } from '../../../packages/sudoku/src/seed-code.js'
 import { errorMessage } from './api.js'
 import { SudokuPreview } from './Grid.js'
+import { PackTrail, type PackTrailStop } from './PackTrail.js'
 import { levelKey, type LocalSession } from './storage.js'
 
 const sudokuPath = '/games/sudoku'
@@ -140,10 +141,21 @@ export function PackRoadmap({ pack, completed, sessions, canPlay, canExport, lea
   const solved = levels.map(level => completed.has(levelKey(level.id, level.revision)))
   const next = solved.indexOf(false)
   const art = pack.data.background ?? pack.data.cover
-  useEffect(() => {
-    const anchor = location.hash.slice(1)
-    if (/^stop-\d+$/.test(anchor)) document.getElementById(anchor)?.scrollIntoView({ block: 'center' })
-  }, [pack.id, pack.revision])
+  const stops: PackTrailStop[] = levels.map((level, index) => {
+    const locked = pack.data.rules.inOrder && index > 0 && !solved[index - 1]
+    const matching = sessions.filter(item => item.data.level === level.id && item.data.levelRevision === level.revision)
+    const saved = matching.some(item => !item.archived && !item.data.completed && item.data.lives !== 0)
+    const action = t(saved ? 'Resume' : solved[index] ? 'Replay' : 'Play')
+    const title = levelTitle(t, level)
+    const state = locked ? 'locked' : solved[index] ? 'solved' : next === index ? 'next' : 'available'
+    const times = pack.data.rules.timeTrial ? matching.filter(item => item.data.completed)
+      .map(item => item.data.elapsedMs) : []
+    return { id: level.id, title, state, play: () => play(level), detail: t(level.difficulty), actionLabel: action,
+      actionName: t('{action} {title}', { action, title }),
+      statusLabel: locked ? t('Solve the previous stop to unlock') : solved[index] ? t('Solved')
+        : next === index ? t('Up next') : undefined,
+      bestTime: times.length ? t('Best {time}', { time: displayTime(Math.min(...times)) }) : undefined }
+  })
   return <section className={`catalog pack-roadmap pack-${pack.data.theme}`}>
     <div className="game-navigation">
       <button className="text-button back" onClick={leave}><ArrowLeft size={17}/>{" "}{t("Sudoku menu")}</button>
@@ -160,27 +172,7 @@ export function PackRoadmap({ pack, completed, sessions, canPlay, canExport, lea
           pack.data.rules.timeTrial && t('Time trial')].filter(Boolean).map(rule => <li className="badge" key={String(rule)}>{rule}</li>)}</ul>
       </div>
     </header>
-    <ol className="pack-trail">
-      {levels.map((level, index) => {
-        const locked = pack.data.rules.inOrder && index > 0 && !solved[index - 1]
-        const saved = sessions.some(item => !item.archived && !item.data.completed && item.data.lives !== 0 &&
-          item.data.level === level.id && item.data.levelRevision === level.revision)
-        const action = saved ? 'Resume' : solved[index] ? 'Replay' : 'Play'
-        const times = pack.data.rules.timeTrial ? sessions.filter(item => item.data.completed && item.data.level === level.id &&
-          item.data.levelRevision === level.revision).map(item => item.data.elapsedMs) : []
-        return <li id={`stop-${index + 1}`} key={level.id} className={next === index ? 'next-stop' : undefined}>
-          <span className="stop-number" aria-hidden="true">{solved[index] ? <Check size={18}/> : index + 1}</span>
-          <div><h2>{levelTitle(t, level)}</h2>
-            <p>{[t(level.difficulty), locked ? t('Solve the previous stop to unlock') : solved[index] ? t('Solved')
-              : next === index ? t('Up next') : ''].filter(Boolean).join(' · ')}</p>
-            {times.length > 0 && <p className="pack-best"><Timer size={14}/> {t('Best {time}', { time: displayTime(Math.min(...times)) })}</p>}</div>
-          <button className="secondary" disabled={!canPlay || locked} onClick={() => play(level)}
-            aria-label={t('{action} {title}', { action: t(action), title: levelTitle(t, level) })}>
-            {locked ? <LockKeyhole size={17}/> : t(action)}
-          </button>
-        </li>
-      })}
-    </ol>
+    <PackTrail key={packPath(pack)} stops={stops} canPlay={canPlay}/>
   </section>
 }
 
