@@ -373,6 +373,9 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .pack-cover { aspect-ratio: 6 / 5; }
 .pack-card-copy { display: grid; gap: 4px; align-content: start; padding: 10px 11px; font-size: .78rem; overflow-wrap: anywhere; }
 .pack-card-title { display: flex; align-items: center; justify-content: space-between; gap: 5px; font-size: 1.02rem; font-weight: 770; }
+.pack-roadmap { display: flex; flex-direction: column; }
+.pack-roadmap > .pack-banner { order: 1; }
+.pack-roadmap > .pack-trail { width: 100%; }
 .pack-roadmap > .game-navigation {
   position: sticky;
   top: env(safe-area-inset-top, 0px);

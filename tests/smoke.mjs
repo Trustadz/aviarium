@@ -411,6 +411,11 @@ try {
   assert.ok(pins[0].left < pins[1].left && pins[0].left === pins[2].left)
   assert.ok(pins[0].top > pins[1].top && pins[1].top > pins[2].top)
   assert.ok(pins[0].top < 700 && pins[0].top > 0)
+  assert.ok(await packPage.locator('.pack-roadmap').evaluate(roadmap => {
+    const info = roadmap.querySelector('.pack-banner').getBoundingClientRect()
+    const trail = roadmap.querySelector('.pack-trail').getBoundingClientRect()
+    return info.top >= trail.bottom
+  }))
   assert.ok(await packPage.getByRole('button', { name: 'Sudoku menu', exact: true }).evaluate(button =>
     button.getBoundingClientRect().top >= 0 && button.getBoundingClientRect().bottom <= innerHeight))
   assert.equal(await packPage.evaluate(() => document.documentElement.scrollWidth), 320)
