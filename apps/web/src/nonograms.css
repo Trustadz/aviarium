@@ -1,10 +1,3 @@
-.nonograms { display: grid; gap: 18px; }
-.nonogram-picker, .nonogram-tools { display: flex; flex-wrap: wrap; gap: 8px; }
-.nonogram-picker small { color: var(--muted); }
-.nonogram-picker [aria-pressed=true], .nonogram-tools [aria-pressed=true] {
-  border-color: var(--accent); background: var(--tint); color: var(--accent-strong);
-}
-.nonogram-play { display: grid; justify-items: center; gap: 12px; padding-block: 10px; }
 .nonogram-board {
   --clue-width: calc(var(--row-clues) * 0.85em + 0.5em);
   --grid-rule: 1px solid var(--border);
@@ -34,12 +27,11 @@
 .nonogram-row .nonogram-cell:nth-of-type(5) { border-right-color: var(--text); }
 .nonogram-row:nth-child(5) .nonogram-cell { border-bottom-color: var(--text); }
 .nonogram-board[data-solved=true] .nonogram-cell { border-color: transparent; }
-.nonogram-tools { justify-content: center; }
-.nonogram-solved { color: var(--feedback); font-weight: 700; }
-.nonogram-menu { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
-.nonogram-menu-section { display: grid; gap: 10px; justify-items: start; align-content: start; }
-.nonogram-options { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
-.nonogram-options label { display: grid; gap: 4px; font-size: .88rem; }
-.nonogram-pack-trigger[aria-expanded=true] svg { rotate: 180deg; }
-.nonogram-picker[hidden] { display: none; }
+.quick-play-actions.nonogram-options { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
 .nonogram-cell { touch-action: none; user-select: none; }
+@media (max-width: 430px) {
+  .quick-play-actions.nonogram-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nonogram-options .primary { grid-column: 1 / -1; }
+}
+
+.nonogram-pack-cover { object-position: center 15%; }

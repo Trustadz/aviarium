@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { generateQuickPuzzle } from '../dist/packages/sudoku/src/quick-play.js'
+import { generateQuickPuzzle, quickPlayVersion } from '../dist/packages/sudoku/src/quick-play.js'
+import { formatSeedCode, quickPlayId } from '../dist/packages/sudoku/src/seed-code.js'
 import { validate } from '../dist/packages/sudoku/src/solver.js'
 import { rules } from '../dist/packages/sudoku/src/rules.js'
 
@@ -124,6 +126,10 @@ if (adminToken && playerToken) {
   const save = (data, baseRevision) => ({ data, sessionId, baseRevision, mutationId: crypto.randomUUID(), archived: false })
   const push = (body, expected = 200) => request('/api/progress', { headers: playerHeaders, method: 'POST', body, expected })
   const raw = save(initial, 0)
+  const wrongQuickId = { ...initial, level: 'quick-' + '0'.repeat(36) }
+  const wrongQuick = await push({ ...save(wrongQuickId, 0),
+    quickPlay: { seed: 'mismatched-seed', difficulty: 'Easy', version: quickPlayVersion } }, 422)
+  assert.equal(wrongQuick.code, 'level_version_unavailable')
   assert.equal((await push(raw)).revision, 1)
   assert.equal((await push(raw)).revision, 1)
   await push({ ...raw, data: { ...initial, elapsedMs: 10 } }, 409)
@@ -201,13 +207,14 @@ try {
     rail: getComputedStyle(element).backgroundColor,
     document: getComputedStyle(document.documentElement).backgroundColor,
     body: getComputedStyle(document.body).backgroundColor,
-    content: getComputedStyle(document.querySelector('.app-shell')).backgroundColor,
+    shell: getComputedStyle(document.querySelector('.app-shell')).backgroundColor,
+    content: getComputedStyle(document.querySelector('.main-frame')).backgroundColor,
     header: getComputedStyle(document.querySelector('.site-header')).backgroundColor,
     theme: document.querySelector('meta[name="theme-color"]').content,
   }))
   assert.deepEqual(await mobileChrome(), {
     rail: 'rgb(255, 253, 242)', document: 'rgb(255, 253, 242)', body: 'rgb(255, 253, 242)',
-    content: 'rgb(244, 241, 222)', header: 'rgb(255, 253, 242)', theme: '#fffdf2',
+    shell: 'rgb(255, 253, 242)', content: 'rgb(244, 241, 222)', header: 'rgb(255, 253, 242)', theme: '#fffdf2',
   })
   assert.equal(await page.locator('.app-rail .account-menu').evaluate(element => getComputedStyle(element).borderInlineStartWidth), '0px')
   assert.equal(await page.getByRole('contentinfo').count(), 0)
@@ -229,7 +236,7 @@ try {
   await cardPreview.waitFor()
   assert.equal(await cardPreview.locator('.cell').count(), 81)
   assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
-  const cardSurface = await page.locator('.game-card:has(.sudoku-theme)').evaluate(card => getComputedStyle(card).backgroundColor)
+  const cardSurface = await page.locator('.game-card').filter({ has: page.getByRole('heading', { name: 'Sudoku', exact: true }) }).evaluate(card => getComputedStyle(card).backgroundColor)
   assert.equal(cardSurface, 'rgb(255, 253, 242)')
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
   await page.getByRole('button', { name: 'Favorites', exact: true }).click()
@@ -244,7 +251,7 @@ try {
   assert.equal(await page.locator('.app').getAttribute('data-theme'), 'dark')
   assert.deepEqual(await mobileChrome(), {
     rail: 'rgb(51, 53, 76)', document: 'rgb(51, 53, 76)', body: 'rgb(51, 53, 76)',
-    content: 'rgb(38, 40, 60)', header: 'rgb(51, 53, 76)', theme: '#33354c',
+    shell: 'rgb(51, 53, 76)', content: 'rgb(38, 40, 60)', header: 'rgb(51, 53, 76)', theme: '#33354c',
   })
   assert.equal(await page.getByLabel('Show timer').count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
@@ -255,6 +262,34 @@ try {
   assert.equal(await page.getByRole('contentinfo').count(), 0)
   await page.getByRole('button', { name: 'Exit to library' }).waitFor()
   assert.equal(await page.getByRole('heading', { name: 'Browse puzzles' }).count(), 0)
+
+  const catalogContext = await browser.newContext({ viewport: { width: 390, height: 844 },
+    isMobile: true, hasTouch: true, serviceWorkers: 'block' })
+  await catalogContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
+  await catalogContext.route(origin + '/api/packs', route => route.abort(), { times: 1 })
+  await catalogContext.addInitScript(() => {
+    const originalPut = IDBObjectStore.prototype.put
+    IDBObjectStore.prototype.put = function (...args) {
+      if (this.name === 'packs') {
+        window.packCacheWriteFailed = true
+        throw new DOMException('The device storage is full.', 'QuotaExceededError')
+      }
+      return originalPut.apply(this, args)
+    }
+  })
+  const catalogPage = await catalogContext.newPage()
+  await catalogPage.goto(origin + '/games/sudoku')
+  await catalogPage.getByText('Could not load packs.', { exact: true }).waitFor()
+  assert.equal(await catalogPage.getByText('No packs available on this device yet.', { exact: true }).count(), 0)
+  await catalogPage.getByRole('button', { name: 'Retry loading packs' }).click()
+  const budgies = catalogPage.getByRole('button', { name: /^Budgies/ })
+  await budgies.waitFor()
+  await catalogPage.waitForFunction(() => window.packCacheWriteFailed)
+  await budgies.click()
+  await catalogPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
+  await catalogContext.close()
+  console.info('Pack catalog checks passed: retry after a failed request and opening an online pack when the cache write fails.')
+
   await page.goto(`${origin}/games/sudoku?puzzle=${selected.id}&revision=${selected.revision}`)
   await page.getByRole('button', { name: 'Sudoku settings' }).click()
   await page.getByLabel('Show timer').uncheck()
@@ -306,12 +341,16 @@ try {
   await context.setOffline(false)
   await page.setViewportSize({ width: 320, height: 700 })
   await page.goto(origin + '/games/nonograms')
-  await page.getByRole('button', { name: 'How to play' }).tap()
+  await page.getByRole('link', { name: 'How to play' }).tap()
   await page.getByRole('heading', { name: 'How to play Nonograms' }).waitFor()
   await page.getByRole('link', { name: 'Nonograms menu' }).tap()
-  assert.equal(await page.getByRole('button', { name: 'Heart' }).isVisible(), false)
-  await page.getByRole('button', { name: 'First Shapes' }).tap()
-  await page.getByRole('button', { name: 'Heart' }).tap()
+  const cockatoos = page.getByRole('button', { name: /Sulphur-crested Cockatoos/ })
+  await cockatoos.locator('img').evaluate(image => image.decode())
+  await cockatoos.tap()
+  await page.getByRole('heading', { name: 'Sulphur-crested Cockatoos', exact: true }).waitFor()
+  assert.equal(await page.locator('.pack-trail > li').count(), 5)
+  assert.equal(await page.getByRole('button', { name: 'Play Nest Hollow' }).isDisabled(), true)
+  await page.getByRole('button', { name: 'Play Cockatoo Egg' }).tap()
   const nonogramCells = page.getByRole('group', { name: 'Puzzle grid' }).getByRole('button')
   assert.equal(await nonogramCells.count(), 25)
   await nonogramCells.first().scrollIntoViewIfNeeded()
@@ -336,6 +375,7 @@ try {
   assert.deepEqual(await rowMarks(), ['1', '1', '1'])
   await page.getByRole('button', { name: 'Undo', exact: true }).tap()
   assert.deepEqual(await rowMarks(), ['0', '0', '0'])
+  await nonogramCells.nth(1).tap()
   const touch = await context.newCDPSession(page)
   await nonogramCells.first().scrollIntoViewIfNeeded()
   await page.getByRole('button', { name: 'Mark blank' }).tap()
@@ -344,8 +384,16 @@ try {
   await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [await center(2)] })
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await touch.detach()
-  assert.deepEqual(await rowMarks(), ['2', '2', '2'])
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  assert.deepEqual(await rowMarks(), ['2', '1', '2'])
+  await nonogramCells.first().scrollIntoViewIfNeeded()
+  const markedStart = await center(0)
+  const markedEnd = await center(2)
+  await page.mouse.move(markedStart.x, markedStart.y)
+  await page.mouse.down()
+  await page.mouse.move(markedEnd.x, markedEnd.y)
+  await page.mouse.up()
+  assert.deepEqual(await rowMarks(), ['0', '1', '0'])
+  for (let step = 0; step < 3; step++) await page.getByRole('button', { name: 'Undo', exact: true }).click()
   assert.deepEqual(await rowMarks(), ['0', '0', '0'])
   await page.getByRole('button', { name: 'Fill', exact: true }).click()
   await nonogramCells.nth(0).tap()
@@ -358,22 +406,28 @@ try {
   await page.getByRole('button', { name: 'Erase', exact: true }).tap()
   await nonogramCells.nth(0).tap()
   await page.getByRole('button', { name: 'Fill', exact: true }).tap()
-  for (const index of [1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 22])
+  for (const index of [2, 6, 7, 8, 11, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23])
     await nonogramCells.nth(index).tap()
-  await page.getByRole('status').filter({ hasText: 'Puzzle solved!' }).waitFor()
+  await page.getByRole('status').filter({ hasText: 'Puzzle solved' }).waitFor()
+  await page.getByRole('button', { name: 'Back to roadmap' }).tap()
+  assert.equal(await page.getByRole('button', { name: 'Play Nest Hollow' }).isEnabled(), true)
+  await page.getByRole('button', { name: 'Nonograms menu' }).tap()
   await page.getByLabel('Grid size').selectOption('5')
   await page.getByLabel('Difficulty').selectOption('Easy')
-  await page.getByRole('button', { name: 'Random puzzle', exact: true }).tap()
+  await page.getByRole('button', { name: 'New puzzle', exact: true }).tap()
   assert.equal(await nonogramCells.count(), 25)
+  await page.getByRole('button', { name: 'Game menu' }).tap()
   await page.getByLabel('Grid size').selectOption('10')
   await page.getByLabel('Difficulty').selectOption('Hard')
-  await page.getByRole('button', { name: 'Random puzzle', exact: true }).tap()
+  await page.getByRole('button', { name: 'New puzzle', exact: true }).tap()
   assert.equal(await nonogramCells.count(), 100)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
   await page.getByRole('button', { name: 'Mark blank' }).tap()
   await nonogramCells.first().tap()
+  await page.getByRole('button', { name: 'Game menu' }).tap()
   page.once('dialog', dialog => dialog.dismiss())
-  await page.getByRole('button', { name: 'Random puzzle', exact: true }).tap()
+  await page.getByRole('button', { name: 'New puzzle', exact: true }).tap()
+  await page.getByRole('button', { name: 'Resume random puzzle' }).tap()
   assert.equal(await nonogramCells.first().getAttribute('data-mark'), '2')
   await page.waitForFunction(async () => {
     if (!await caches.has('aviarium-game-nonograms')) return false
@@ -384,6 +438,11 @@ try {
   await page.reload()
   await page.getByRole('heading', { name: 'Random puzzle' }).waitFor()
   assert.equal(await nonogramCells.first().getAttribute('data-mark'), '2')
+  await page.getByRole('button', { name: 'Game menu' }).tap()
+  await cockatoos.tap()
+  await page.reload()
+  await page.locator('.pack-backdrop').evaluate(image => image.decode())
+  assert.equal(await page.getByRole('button', { name: 'Play Nest Hollow' }).isEnabled(), true)
   await page.evaluate(() => {
     const cached = JSON.parse(localStorage.getItem('aviarium:session'))
     cached.expiresAt = new Date(Date.now() - 1000).toISOString()
@@ -491,6 +550,106 @@ try {
     await first.close()
     await second.close()
   }
+  const packContext = await browser.newContext({ viewport: { width: 320, height: 700 }, isMobile: true, hasTouch: true })
+  await packContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
+  const packPage = await packContext.newPage()
+  await packPage.goto(origin + '/games/sudoku')
+  await packPage.getByRole('button', { name: /^Budgies/ }).click()
+  const current = packPage.locator('.pack-trail [aria-current=step]')
+  await current.getByRole('heading', { name: 'Garden Perch' }).waitFor()
+  const locked = packPage.getByRole('button', { name: 'Play Eucalyptus Grove', exact: true })
+  assert.equal(await locked.isDisabled(), true)
+  const pins = await packPage.locator('.pack-stop-marker').evaluateAll(markers => markers.map(marker => {
+    const { left, top } = marker.getBoundingClientRect()
+    return { left, top }
+  }))
+  assert.equal(pins.length, 3)
+  assert.ok(pins[0].left < pins[1].left && pins[0].left === pins[2].left)
+  assert.ok(pins[0].top > pins[1].top && pins[1].top > pins[2].top)
+  assert.ok(pins[0].top < 700 && pins[0].top > 0)
+  assert.ok(await packPage.locator('.pack-roadmap').evaluate(roadmap => {
+    const info = roadmap.querySelector('.pack-banner').getBoundingClientRect()
+    const trail = roadmap.querySelector('.pack-trail').getBoundingClientRect()
+    return info.top >= trail.bottom
+  }))
+  assert.ok(await packPage.getByRole('button', { name: 'Sudoku menu', exact: true }).evaluate(button =>
+    button.getBoundingClientRect().top >= 0 && button.getBoundingClientRect().bottom <= innerHeight))
+  assert.equal(await packPage.evaluate(() => document.documentElement.scrollWidth), 320)
+
+  const headers = playerToken ? playerHeaders : adminHeaders
+  const pack = (await request('/api/packs', { headers })).find(item => item.id === 'budgies')
+  const firstGrid = Array.from(pack.data.puzzles[0].grid, Number)
+  const firstSolution = validate(firstGrid).solution
+  assert.ok(firstSolution)
+  await current.getByRole('button', { name: 'Play Garden Perch', exact: true }).click()
+  const cells = packPage.getByLabel('Sudoku board', { exact: true }).getByRole('button')
+  for (const [index, given] of firstGrid.entries()) {
+    if (!given) await cells.nth(index).press(String(firstSolution[index]))
+  }
+  await packPage.getByRole('button', { name: 'Back to roadmap', exact: true }).click()
+  await current.getByRole('heading', { name: 'Eucalyptus Grove' }).waitFor()
+  assert.ok(await current.locator('.pack-stop-marker').evaluate(marker => {
+    const { top, bottom } = marker.getBoundingClientRect()
+    return top >= 0 && bottom <= innerHeight
+  }))
+  assert.equal(await locked.isEnabled(), true)
+  assert.equal(await packPage.getByRole('button', { name: 'Replay Garden Perch', exact: true }).isEnabled(), true)
+  await packContext.close()
+  console.info('Pack trail checks passed: bottom-to-top pins, visible next stop, and unlocking the next stop.')
+
+  const quickPlayContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await quickPlayContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
+  const quickPlayPage = await quickPlayContext.newPage()
+  const serverGenerations = []
+  quickPlayPage.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/sudoku/quick-play')
+      serverGenerations.push(request.url())
+  })
+  await quickPlayPage.goto(origin + '/games/sudoku')
+  await quickPlayPage.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
+  await until(() => quickPlayPage.evaluate(async () =>
+    Boolean(await caches.match('/__aviarium/last-played', { cacheName: 'aviarium-game-sudoku' }))), 'Sudoku offline download')
+  await quickPlayContext.setOffline(true)
+  await quickPlayPage.reload()
+  await quickPlayPage.getByRole('button', { name: 'New puzzle', exact: true }).click()
+  await quickPlayPage.getByRole('heading', { name: 'Quick Play', level: 1 }).waitFor()
+  await quickPlayPage.getByRole('button', { name: 'Game menu', exact: true }).click()
+
+  const descriptor = { seed: 'offline-smoke-' + crypto.randomUUID(), difficulty: 'Medium', version: quickPlayVersion }
+  const quickId = await quickPlayId(descriptor)
+  const oldId = 'quick-' + createHash('sha256').update(JSON.stringify([descriptor.version, descriptor.difficulty, descriptor.seed]))
+    .digest('hex').slice(0, 36)
+  assert.equal(quickId, oldId)
+  const quickGrid = generateQuickPuzzle(descriptor.seed, descriptor.difficulty)
+  const solutionValues = validate(Array.from(quickGrid, Number)).solution
+  const blank = quickGrid.indexOf('0')
+  const quickCell = `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, `
+  await quickPlayPage.getByRole('button', { name: 'Enter seed', exact: true }).click()
+  await quickPlayPage.getByLabel('Puzzle seed', { exact: true }).fill(formatSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version))
+  await quickPlayPage.getByRole('button', { name: 'Play seed', exact: true }).click()
+  const quickBoard = quickPlayPage.getByLabel('Sudoku board', { exact: true })
+  await quickBoard.waitFor()
+  assert.equal((await quickBoard.getByRole('button').allTextContents()).map(digit => digit.trim() || '0').join(''), quickGrid)
+  await quickPlayPage.getByRole('button', { name: quickCell + 'empty', exact: true }).press(String(solutionValues[blank]))
+  await quickPlayPage.getByRole('button', { name: 'Game menu', exact: true }).click()
+  await quickPlayPage.reload()
+  await quickPlayPage.getByRole('button', { name: 'Resume', exact: true }).first().click()
+  await quickPlayPage.getByRole('button', { name: quickCell + solutionValues[blank], exact: true }).waitFor()
+  await quickPlayContext.setOffline(false)
+  await quickPlayPage.getByRole('button', { name: 'Game menu', exact: true }).click()
+  const playbackHeaders = playerToken ? playerHeaders : adminHeaders
+  await until(async () => {
+    const progress = await request('/api/progress', { headers: playbackHeaders })
+    return progress.levels.some(level => level.id === quickId && level.grid === quickGrid) &&
+      progress.sessions.some(item => item.data.level === quickId && item.data.board.entries[blank] === solutionValues[blank])
+  }, 'offline Quick Play progress and puzzle sync')
+  assert.deepEqual(serverGenerations, [])
+  const legacyQuickPlay = await request('/api/sudoku/quick-play', { method: 'POST', headers: playbackHeaders, body: descriptor })
+  assert.equal(legacyQuickPlay.id, quickId)
+  assert.equal(legacyQuickPlay.grid, quickGrid)
+  await quickPlayContext.close()
+  console.info('Quick Play checks passed: random and shared seed offline, reload and resume, and sync after reconnecting.')
+
   console.info('Browser checks passed: mobile controls, notes, history, keyboard, pause, e-reader, offline reload and resume', adminToken ? ', studio and admin' : '', playerToken ? ', two-browser sync' : '')
 } finally {
   await browser.close()

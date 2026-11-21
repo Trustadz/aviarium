@@ -12,7 +12,8 @@ test('deduction neither guesses at ambiguous clues nor accepts contradictory one
   assert.equal(solveByDeduction({ rows: [[2], [0]], columns: [[2], [0]] }), undefined)
 })
 
-test('starter puzzles solve by deduction and do not require explicit blank marks', () => {
+test('all five pack puzzles solve by deduction without explicit blank marks', () => {
+  assert.equal(starterPack.puzzles.length, 5)
   for (const { id, puzzle } of starterPack.puzzles) {
     const result = solveByDeduction(puzzle)
     assert.ok(result, id)

@@ -4,6 +4,10 @@ import { difficulties } from '../../game-sdk/src/index.js'
 export const gridSchema = z.string().regex(/^[0-9]{81}$/)
 export const difficultySchema = z.enum(difficulties)
 export const quickPlayVersion = 2
+export const quickPlayDescriptorSchema = z.object({
+  seed: z.string().trim().min(1).max(100), difficulty: difficultySchema, version: z.literal(quickPlayVersion),
+})
+export type QuickPlayDescriptor = z.infer<typeof quickPlayDescriptorSchema>
 const board = z.object({
   entries: z.array(z.number().int().min(0).max(9)).length(81),
   notes: z.array(z.number().int().min(0).max(511)).length(81),
@@ -37,6 +41,7 @@ export const mutationSchema = z.object({
   data: saveSchema, archived: z.boolean(),
   updatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   archiveIfUnchanged: z.literal(true).optional(),
+  quickPlay: quickPlayDescriptorSchema.optional(),
 })
 export type Mutation = z.infer<typeof mutationSchema>
 export interface StoredSession {

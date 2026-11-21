@@ -33,7 +33,7 @@ export const games = [{
   Preview: SudokuPreview, player: () => import('./Player.js'), guide: sudokuGuide,
 }, {
   id: 'nonograms', title: 'Nonograms', description: 'Use row and column clues to reveal a picture.',
-  tags: ['Logic', 'Picross'], eReader: true, url: '/games/nonograms', theme: 'nonogram-theme',
+  tags: ['Logic', 'Picross'], eReader: true, url: '/games/nonograms', theme: 'sudoku-theme nonogram-theme',
   Preview: NonogramsPreview, player: () => import('./Nonograms.js'),
   guide: [
     {
@@ -47,7 +47,7 @@ export const games = [{
       title: 'Use the controls',
       paragraphs: [
         'Choose Fill, Mark blank, or Erase, then tap a square. Marks help you keep track of blanks. The puzzle is solved when the filled squares match every clue.',
-        'Drag across the grid to apply a tool to several squares. Starting on a square that already has that mark clears the whole stroke. Undo reverses one stroke.',
+        'Drag across the grid to apply a tool to several squares. Starting on a square that already has that mark clears the stroke. Mark blank leaves filled squares alone. Undo reverses one stroke.',
         'With a keyboard, use the arrow keys to move between squares, Space to use the selected tool, and X to mark a blank.',
       ],
     },

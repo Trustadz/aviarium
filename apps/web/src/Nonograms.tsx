@@ -1,8 +1,10 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
-import { ArrowLeft, BookOpen, ChevronDown, Shuffle, Undo2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Shuffle, Undo2 } from 'lucide-react'
 import { z } from 'zod'
 import { matchesClues, randomDifficulties, randomPuzzle, randomSizes, starterPack, type Cell, type Puzzle, type RandomOptions } from '../../../packages/nonograms/src/puzzles.js'
-import { useT } from './i18n.js'
+import { useT, type Translate } from './i18n.js'
+import { PackTrail, type PackTrailStop } from './PackTrail.js'
+import cockatoosCover from './assets/cockatoos-portrait.webp'
 import './nonograms.css'
 
 const marks = z.array(z.union([z.literal(0), z.literal(1), z.literal(2)])).max(100)
@@ -12,7 +14,7 @@ const puzzleLines = z.array(line)
 const savedPuzzle = z.object({ rows: puzzleLines, columns: puzzleLines }).refine(puzzle =>
   sizeSchema.safeParse(puzzle.rows.length).success && puzzle.rows.length === puzzle.columns.length)
 const savedGame = z.object({
-  selected: z.string().optional(),
+  completed: z.array(z.string()).optional(),
   boards: z.record(z.string(), marks),
   random: savedPuzzle.optional(),
   options: z.object({ size: sizeSchema, difficulty: z.enum(randomDifficulties) }).optional(),
@@ -24,10 +26,23 @@ function readGame(key: string): SavedGame {
   catch { return { boards: {} } }
 }
 
-export default function Nonograms({ profile, leave, guide, onActivity }: {
+const menuPath = '/games/nonograms'
+const roadmapPath = `${menuPath}/packs/${starterPack.id}/${starterPack.revision}`
+const playPath = (id: string) => `${menuPath}/play/${id}`
+type PuzzleTitle = (typeof starterPack.puzzles)[number]['title'] | 'Random puzzle'
+
+function dimensions(puzzle: Puzzle) {
+  return `${puzzle.rows.length} × ${puzzle.columns.length}`
+}
+
+function progressLabel(t: Translate, solved: boolean[]) {
+  return t('{solved} of {total} solved', { solved: solved.filter(Boolean).length, total: solved.length })
+}
+
+export default function Nonograms({ profile, path, navigate, onActivity }: {
   profile: string
-  leave: () => void
-  guide: () => void
+  path: string
+  navigate: (path: string) => void
   onActivity: () => void
 }) {
   const t = useT()
@@ -35,12 +50,18 @@ export default function Nonograms({ profile, leave, guide, onActivity }: {
   const [saved, setSaved] = useState(() => readGame(key))
   const [error, setError] = useState('')
   const [options, setOptions] = useState<RandomOptions>(saved.options ?? { size: 10, difficulty: 'Medium' })
-  const [packOpen, setPackOpen] = useState(() => starterPack.puzzles.some(item => item.id === saved.selected))
-  const starter = starterPack.puzzles.find(item => item.id === saved.selected)
-  const puzzle = saved.selected === 'random' ? saved.random : starter?.puzzle
-  const selected = puzzle ? saved.selected : undefined
-  const currentRandom = saved.boards.random
-  const keepRandom = saved.random && (!currentRandom || !matchesClues(saved.random, currentRandom))
+  const currentRandom = saved.boards.random ?? []
+  const keepRandom = saved.random && !matchesClues(saved.random, currentRandom)
+  const solved = starterPack.puzzles.map(({ id, puzzle }) =>
+    saved.completed?.includes(id) || matchesClues(puzzle, saved.boards[id] ?? []))
+  const nextStop = solved.indexOf(false)
+  const starterIndex = starterPack.puzzles.findIndex(item => path === playPath(item.id))
+  const starter = starterPack.puzzles[starterIndex]
+  const random = path === playPath('random') ? saved.random : undefined
+  const playableStarter = starter && (starterIndex === 0 || solved[starterIndex - 1])
+  const puzzle = random || (playableStarter ? starter.puzzle : undefined)
+  const selected = random ? 'random' : starter?.id
+  const backPath = starter ? roadmapPath : menuPath
 
   function save(next: SavedGame) {
     setSaved(next)
@@ -52,74 +73,130 @@ export default function Nonograms({ profile, leave, guide, onActivity }: {
     }
   }
 
-  function select(id: string) {
+  function openStop(id: string, puzzle: Puzzle) {
+    const cells = saved.boards[id] ?? []
+    if (matchesClues(puzzle, cells)) save({ ...saved, boards: { ...saved.boards, [id]: [] } })
     onActivity()
-    save({ ...saved, selected: id })
+    navigate(playPath(id))
   }
 
   function newRandom() {
-    if (keepRandom && currentRandom?.some(Boolean) && !window.confirm(t('Replace your unfinished random puzzle?'))) return
+    if (keepRandom && currentRandom.some(Boolean) && !window.confirm(t('Replace your unfinished random puzzle?'))) return
     const random = randomPuzzle(options)
     if (!random) {
       setError(t('No random puzzle found. Try again.'))
       return
     }
     onActivity()
-    save({ ...saved, selected: 'random', boards: { ...saved.boards, random: [] }, random, options })
+    save({ ...saved, boards: { ...saved.boards, random: [] }, random, options })
+    navigate(playPath('random'))
   }
 
-  return <section className="catalog nonograms" aria-labelledby="nonograms-title">
-    <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t('Library')}</button>
-      <button className="text-button" onClick={guide}><BookOpen size={17}/> {t('How to play')}</button>
+  if (puzzle && selected) return <>
+    {error && <p className="notice" role="alert">{error}</p>}
+    <PuzzleBoard key={selected} puzzle={puzzle} title={starter?.title ?? 'Random puzzle'}
+      pack={Boolean(starter)} leave={() => navigate(backPath)} savedCells={saved.boards[selected]}
+      onMove={cells => {
+        onActivity()
+        const completed = saved.completed ?? []
+        save({ ...saved, boards: { ...saved.boards, [selected]: cells },
+          completed: starter && matchesClues(puzzle, cells) && !completed.includes(selected)
+            ? [...completed, selected] : completed })
+      }}/>
+  </>
+
+  if (path === roadmapPath) {
+    const stops: PackTrailStop[] = starterPack.puzzles.map(({ id, title, puzzle }, index) => {
+      const locked = index > 0 && !solved[index - 1]
+      const board = saved.boards[id] ?? []
+      const inProgress = !matchesClues(puzzle, board) && board.some(Boolean)
+      const action = t(inProgress ? 'Resume' : solved[index] ? 'Replay' : 'Play')
+      const state = locked ? 'locked' : solved[index] ? 'solved' : index === nextStop ? 'next' : 'available'
+      return {
+        id, title: t(title), detail: dimensions(puzzle), state, actionLabel: action,
+        actionName: t('{action} {title}', { action, title: t(title) }),
+        statusLabel: locked ? t('Solve the previous stop to unlock') : solved[index] ? t('Solved')
+          : index === nextStop ? t('Up next') : undefined,
+        play: () => openStop(id, puzzle),
+      }
+    })
+    return <section className="catalog pack-roadmap pack-meadow">
+      <div className="game-navigation">
+        <button className="text-button back" onClick={() => navigate(menuPath)}><ArrowLeft size={17}/> {t('Nonograms menu')}</button>
+      </div>
+      <header className="pack-banner">
+        <img className="pack-backdrop" src={cockatoosCover} alt=""/>
+        <div className="pack-intro">
+          <h1>{t(starterPack.title)}</h1>
+          <p>{t(starterPack.description)}</p>
+          <p>{progressLabel(t, solved)}</p>
+          <ul className="pack-tags"><li className="badge">{t('In order')}</li></ul>
+        </div>
+      </header>
+      <PackTrail stops={stops} canPlay/>
+    </section>
+  }
+
+  return <section className="catalog sudoku-menu" aria-labelledby="nonograms-title">
+    <div className="game-menu-heading">
+      <div className="game-navigation">
+        <button className="text-button back" aria-label={t('Exit to library')} onClick={() => navigate('/')}><ArrowLeft size={17}/> {t('Library')}</button>
+      </div>
+      <div className="game-navigation">
+        <h1 id="nonograms-title">Nonograms</h1>
+        <a className="text-button" href={menuPath + '/how-to'}
+          onClick={event => { event.preventDefault(); navigate(menuPath + '/how-to') }}><BookOpen size={17}/> {t('How to play')}</a>
+      </div>
     </div>
-    <h1 id="nonograms-title">Nonograms</h1>
-    <div className="nonogram-menu">
-      <section className="panel padded nonogram-menu-section" aria-labelledby="nonogram-random-title">
-        <h2 id="nonogram-random-title">{t('Quick Play')}</h2>
-        <form className="nonogram-options" onSubmit={event => { event.preventDefault(); newRandom() }}>
-          <label>{t('Grid size')}<select value={options.size} onChange={event => {
+    <section className="quick-play panel" aria-labelledby="nonogram-random-title">
+      <form onSubmit={event => { event.preventDefault(); newRandom() }}>
+        <div className="quick-play-header">
+          <h2 id="nonogram-random-title">{t('Quick Play')}</h2>
+          {keepRandom && <button type="button" className="text-button" onClick={() => navigate(playPath('random'))}>
+            {t('Resume random puzzle')}
+          </button>}
+        </div>
+        <div className="quick-play-actions nonogram-options">
+          <select aria-label={t('Grid size')} value={options.size} onChange={event => {
             setOptions({ ...options, size: sizeSchema.parse(Number(event.target.value)) })
           }}>
             {randomSizes.map(size => <option key={size} value={size}>{size} × {size}</option>)}
-          </select></label>
-          <label>{t('Difficulty')}<select value={options.difficulty} onChange={event => {
+          </select>
+          <select aria-label={t('Difficulty')} value={options.difficulty} onChange={event => {
             const difficulty = randomDifficulties.find(value => value === event.target.value)
             if (difficulty) setOptions({ ...options, difficulty })
           }}>
             {randomDifficulties.map(difficulty => <option key={difficulty} value={difficulty}>{t(difficulty)}</option>)}
-          </select></label>
-          <button className="primary" type="submit"><Shuffle size={17}/> {t('Random puzzle')}</button>
-        </form>
-        {keepRandom && selected !== 'random' && <button className="secondary" onClick={() => select('random')}>
-          {t('Resume random puzzle')}
-        </button>}
-      </section>
-      <section className="panel padded nonogram-menu-section" aria-labelledby="nonogram-packs-title">
-        <h2 id="nonogram-packs-title">{t('Packs')}</h2>
-        <button className="secondary nonogram-pack-trigger" aria-expanded={packOpen} aria-controls="nonogram-starter-pack"
-          onClick={() => setPackOpen(!packOpen)}>{t(starterPack.title)} <ChevronDown size={16}/></button>
-        <div className="nonogram-picker" id="nonogram-starter-pack" hidden={!packOpen}>
-          {starterPack.puzzles.map(({ id, title, puzzle }) => <button key={id} className="secondary"
-            aria-pressed={selected === id} onClick={() => select(id)}>
-            {t(title)} <small>{puzzle.rows.length} × {puzzle.columns.length}</small>
-          </button>)}
+          </select>
+          <button className="primary" type="submit"><Shuffle size={17}/> {t('New puzzle')}</button>
         </div>
-      </section>
-    </div>
-    {error && <p role="alert">{error}</p>}
-    {puzzle && selected && <PuzzleBoard key={selected + JSON.stringify(puzzle)} puzzle={puzzle}
-      title={starter?.title ?? 'Random puzzle'} savedCells={saved.boards[selected]}
-      onMove={cells => {
-        onActivity()
-        save({ ...saved, boards: { ...saved.boards, [selected]: cells } })
-      }}/>}
+        {error && <p className="error" role="alert">{error}</p>}
+      </form>
+    </section>
+    <section className="sudoku-packs" aria-labelledby="nonogram-packs-title">
+      <h2 id="nonogram-packs-title">{t('Packs')}</h2>
+      <div className="pack-cards">
+        <button className="pack-card pack-meadow" onClick={() => navigate(roadmapPath)}>
+          <img className="pack-cover nonogram-pack-cover" src={cockatoosCover} alt=""/>
+          <div className="pack-card-copy">
+            <span className="pack-card-title">{t(starterPack.title)}<ArrowRight size={18}/></span>
+            <span>{progressLabel(t, solved)}</span>
+          </div>
+        </button>
+      </div>
+    </section>
   </section>
 }
 
-function PuzzleBoard({ puzzle, title, savedCells, onMove }: {
+function markValue(current: Cell, tool: Cell, value: Cell) {
+  return tool === 2 && current === 1 ? current : value
+}
+
+function PuzzleBoard({ puzzle, title, pack, leave, savedCells, onMove }: {
   puzzle: Puzzle
-  title: (typeof starterPack.puzzles)[number]['title'] | 'Random puzzle'
+  title: PuzzleTitle
+  pack: boolean
+  leave: () => void
   savedCells?: Cell[]
   onMove: (cells: Cell[]) => void
 }) {
@@ -136,7 +213,7 @@ function PuzzleBoard({ puzzle, title, savedCells, onMove }: {
   const squares = useRef<(HTMLButtonElement | null)[]>([])
 
   const stroke = useRef<{
-    id: number; value: Cell; next: Cell[]; x: number; y: number; step: number
+    id: number; tool: Cell; value: Cell; next: Cell[]; x: number; y: number; step: number
   } | null>(null)
 
   function startStroke(event: PointerEvent<HTMLDivElement>) {
@@ -145,9 +222,9 @@ function PuzzleBoard({ puzzle, title, savedCells, onMove }: {
     const index = Number(cell.dataset.cell)
     const value = cells[index] === mode ? 0 : mode
     const next = [...cells]
-    next[index] = value
+    next[index] = markValue(cells[index], mode, value)
     const { width, height } = cell.getBoundingClientRect()
-    stroke.current = { id: event.pointerId, value, next, x: event.clientX, y: event.clientY,
+    stroke.current = { id: event.pointerId, tool: mode, value, next, x: event.clientX, y: event.clientY,
       step: Math.min(width, height) / 2 }
     cell.focus({ preventScroll: true })
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -167,9 +244,10 @@ function PuzzleBoard({ puzzle, title, savedCells, onMove }: {
         ?.closest<HTMLButtonElement>('[data-cell]')
       if (!cell || !event.currentTarget.contains(cell)) continue
       const index = Number(cell.dataset.cell)
-      if (next[index] === active.value) continue
+      const value = markValue(next[index], active.tool, active.value)
+      if (next[index] === value) continue
       if (next === active.next) next = [...next]
-      next[index] = active.value
+      next[index] = value
     }
     active.x = event.clientX
     active.y = event.clientY
@@ -192,7 +270,7 @@ function PuzzleBoard({ puzzle, title, savedCells, onMove }: {
   }
 
   function move(index: number, mark: Cell) {
-    const value = cells[index] === mark ? 0 : mark
+    const value = markValue(cells[index], mark, cells[index] === mark ? 0 : mark)
     if (solved || stroke.current || cells[index] === value) return
     const next = [...cells]
     next[index] = value
@@ -218,52 +296,68 @@ function PuzzleBoard({ puzzle, title, savedCells, onMove }: {
     }
   }
 
-  return <section className="nonogram-play" aria-labelledby="nonogram-puzzle-title">
-    <h2 id="nonogram-puzzle-title">{t(title)}</h2>
-    <div className="nonogram-board" data-solved={solved} style={{
-      '--columns': width,
-      '--row-clues': Math.max(...puzzle.rows.map(clue => clue.length)),
-    } as CSSProperties}>
-      <div className="nonogram-column-clues" aria-hidden="true">
-        {puzzle.columns.map((runs, column) => <div key={column}>{runs.map((run, index) => <span key={index}>{run}</span>)}</div>)}
+  return <section className={pack ? 'play-page nonogram-play pack-play pack-meadow' : 'play-page nonogram-play'}
+    aria-labelledby="nonogram-puzzle-title">
+    {pack && <img className="pack-play-art" src={cockatoosCover} alt=""/>}
+    <div className="game-navigation">
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t('Game menu')}</button>
+    </div>
+    <div className="play-heading">
+      <div><div className="eyebrow">{pack ? t(starterPack.title) : 'Nonograms'}</div><h1 id="nonogram-puzzle-title">{t(title)}</h1></div>
+      <div className="play-meta"><span className="badge">{dimensions(puzzle)}</span></div>
+    </div>
+    <div className="play-layout">
+      <div className="nonogram-board" data-solved={solved} style={{
+        '--columns': width,
+        '--row-clues': Math.max(...puzzle.rows.map(clue => clue.length)),
+      } as CSSProperties}>
+        <div className="nonogram-column-clues" aria-hidden="true">
+          {puzzle.columns.map((runs, column) => <div key={column}>{runs.map((run, index) => <span key={index}>{run}</span>)}</div>)}
+        </div>
+        <div className="nonogram-cells" role="group" aria-label={t('Puzzle grid')}
+          onPointerDown={startStroke} onPointerMove={paint} onPointerUp={endStroke}
+          onPointerCancel={endStroke} onLostPointerCapture={endStroke}>
+          {puzzle.rows.map((runs, row) => <div className="nonogram-row" key={row} role="group"
+            aria-label={t('Row {row}, clues {clues}', { row: row + 1, clues: runs.join(', ') })}>
+            <div className="nonogram-row-clue" aria-hidden="true">{runs.join(' ')}</div>
+            {puzzle.columns.map((columnRuns, column) => {
+              const index = row * width + column
+              const state = cells[index]
+              return <button key={column} className="nonogram-cell"
+                ref={element => { squares.current[index] = element }}
+                type="button" tabIndex={focus === index ? 0 : -1} data-mark={state} data-cell={index}
+                aria-disabled={solved}
+                aria-label={t('Column {column}, clues {clues}, {mark}', {
+                  column: column + 1, clues: columnRuns.join(', '),
+                  mark: t(state === 1 ? 'filled' : state === 2 ? 'marked blank' : 'unmarked'),
+                })}
+                onFocus={() => setFocus(index)}
+                onClick={event => { if (event.detail === 0) move(index, mode) }}
+                onContextMenu={event => { event.preventDefault(); move(index, 2) }}
+                onKeyDown={event => keyboard(event, index)}>
+                {state === 2 && !solved && <span aria-hidden="true">×</span>}
+              </button>
+            })}
+          </div>)}
+        </div>
       </div>
-      <div className="nonogram-cells" role="group" aria-label={t('Puzzle grid')}
-        onPointerDown={startStroke} onPointerMove={paint} onPointerUp={endStroke}
-        onPointerCancel={endStroke} onLostPointerCapture={endStroke}>
-        {puzzle.rows.map((runs, row) => <div className="nonogram-row" key={row} role="group"
-          aria-label={t('Row {row}, clues {clues}', { row: row + 1, clues: runs.join(', ') })}>
-          <div className="nonogram-row-clue" aria-hidden="true">{runs.join(' ')}</div>
-          {puzzle.columns.map((columnRuns, column) => {
-            const index = row * width + column
-            const state = cells[index]
-            return <button key={column} className="nonogram-cell"
-              ref={element => { squares.current[index] = element }}
-              type="button" tabIndex={focus === index ? 0 : -1} data-mark={state} data-cell={index}
-              aria-disabled={solved}
-              aria-label={t('Column {column}, clues {clues}, {mark}', {
-                column: column + 1, clues: columnRuns.join(', '),
-                mark: t(state === 1 ? 'filled' : state === 2 ? 'marked blank' : 'unmarked'),
-              })}
-              onFocus={() => setFocus(index)}
-              onClick={event => { if (event.detail === 0) move(index, mode) }}
-              onContextMenu={event => { event.preventDefault(); move(index, 2) }}
-              onKeyDown={event => keyboard(event, index)}>
-              {state === 2 && !solved && <span aria-hidden="true">×</span>}
-            </button>
-          })}
-        </div>)}
+      <div className="play-controls">
+        {solved && <section className="panel success" role="status">
+          <h2>{t('Puzzle solved')}</h2>
+          <p>{t('Your completion has been saved.')}</p>
+          <button className="primary" onClick={leave}>{t(pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
+        </section>}
+        <div className="tools nonogram-tools" role="group" aria-label={t('Mark squares')}>
+          {([['Fill', '■', 1], ['Mark blank', '×', 2], ['Erase', '□', 0]] as const).map(([label, symbol, mark]) =>
+            <button key={mark} aria-pressed={mode === mark} disabled={solved} onClick={() => setMode(mark)}>
+              <span aria-hidden="true">{symbol}</span> {t(label)}
+            </button>)}
+          <button disabled={!undo.length} onClick={() => {
+            onMove(undo[undo.length - 1])
+            setUndo(undo.slice(0, -1))
+          }}><Undo2 size={18}/> {t('Undo')}</button>
+        </div>
       </div>
     </div>
-    <div className="nonogram-tools" role="group" aria-label={t('Mark squares')}>
-      {([['Fill', '■', 1], ['Mark blank', '×', 2], ['Erase', '□', 0]] as const).map(([label, symbol, mark]) =>
-        <button key={mark} className="secondary" aria-pressed={mode === mark} disabled={solved} onClick={() => setMode(mark)}>
-          <span aria-hidden="true">{symbol}</span> {t(label)}
-        </button>)}
-      <button className="secondary" disabled={!undo.length} onClick={() => {
-        onMove(undo[undo.length - 1])
-        setUndo(undo.slice(0, -1))
-      }}><Undo2 size={17}/> {t('Undo')}</button>
-    </div>
-    {solved && <p className="nonogram-solved" role="status">{t('Puzzle solved!')}</p>}
   </section>
 }
