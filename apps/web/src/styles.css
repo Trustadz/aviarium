@@ -88,7 +88,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --easy-bg: #1d4a3b; --easy-fg: var(--sudoku-mist); --medium-bg: #544025; --medium-fg: #fae0af; --hard-bg: #55363d; --hard-fg: #fed0d5;
   --card-art: linear-gradient(128deg, #29473b, #395c4d);
 }
-.frame { width: min(1120px, calc(100% - 64px)); margin-inline: auto; }
+.frame { --frame-gutter: 32px; width: min(1120px, calc(100% - 2 * var(--frame-gutter))); margin-inline: auto; }
 .site-header { background: var(--surface); border-bottom: 1px solid var(--border); }
 .header-frame { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 58px; }
 .brand { display: flex; align-items: center; gap: 11px; font-size: 1.23rem; font-weight: 780; letter-spacing: -.04em; }
@@ -311,7 +311,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .reader .cell.wrong { text-decoration: underline double; }
 .settings-panel > .section-heading { margin-bottom: 12px; }
 @media (max-width: 800px) {
-  .frame { width: calc(100% - 36px); }
+  .frame { --frame-gutter: 18px; }
   .hero-art { right: 0; top: 55px; }
   .play-layout, .studio-layout, .admin-layout { grid-template-columns: minmax(0,1fr); }
   .play-page, .studio-layout { max-width: 540px; margin-inline: auto; }
@@ -322,7 +322,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   .number-pad button:nth-child(6) { grid-column: 2 / span 2; }
 }
 @media (max-width: 530px) {
-  .frame { width: calc(100% - 26px); }
+  .frame { --frame-gutter: 13px; }
   .main-frame { padding-top: 18px; }
   .hero { height: auto; min-height: 265px; padding-block: 22px; border-radius: 17px; }
   .hero-art { right: -112px; top: 56px; opacity: .38; --art-size: 295px; }
@@ -532,7 +532,11 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 @media (max-width: 899px) {
   .app-shell {
     --nav-safe-max: env(safe-area-max-inset-bottom, env(safe-area-inset-bottom, 0px));
+    background: var(--surface);
     padding-bottom: calc(69px + var(--nav-safe-max));
+  }
+  .app-shell > .main-frame {
+    width: 100%; padding-inline: var(--frame-gutter); background: var(--bg);
   }
   .app-rail {
     display: flex; position: fixed; inset-inline: 0;

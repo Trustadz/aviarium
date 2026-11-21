@@ -192,13 +192,14 @@ try {
     rail: getComputedStyle(element).backgroundColor,
     document: getComputedStyle(document.documentElement).backgroundColor,
     body: getComputedStyle(document.body).backgroundColor,
-    content: getComputedStyle(document.querySelector('.app-shell')).backgroundColor,
+    shell: getComputedStyle(document.querySelector('.app-shell')).backgroundColor,
+    content: getComputedStyle(document.querySelector('.main-frame')).backgroundColor,
     header: getComputedStyle(document.querySelector('.site-header')).backgroundColor,
     theme: document.querySelector('meta[name="theme-color"]').content,
   }))
   assert.deepEqual(await mobileChrome(), {
     rail: 'rgb(255, 253, 242)', document: 'rgb(255, 253, 242)', body: 'rgb(255, 253, 242)',
-    content: 'rgb(244, 241, 222)', header: 'rgb(255, 253, 242)', theme: '#fffdf2',
+    shell: 'rgb(255, 253, 242)', content: 'rgb(244, 241, 222)', header: 'rgb(255, 253, 242)', theme: '#fffdf2',
   })
   assert.equal(await page.locator('.app-rail .account-menu').evaluate(element => getComputedStyle(element).borderInlineStartWidth), '0px')
   assert.equal(await page.getByRole('contentinfo').count(), 0)
@@ -235,7 +236,7 @@ try {
   assert.equal(await page.locator('.app').getAttribute('data-theme'), 'dark')
   assert.deepEqual(await mobileChrome(), {
     rail: 'rgb(51, 53, 76)', document: 'rgb(51, 53, 76)', body: 'rgb(51, 53, 76)',
-    content: 'rgb(38, 40, 60)', header: 'rgb(51, 53, 76)', theme: '#33354c',
+    shell: 'rgb(51, 53, 76)', content: 'rgb(38, 40, 60)', header: 'rgb(51, 53, 76)', theme: '#33354c',
   })
   assert.equal(await page.getByLabel('Show timer').count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
