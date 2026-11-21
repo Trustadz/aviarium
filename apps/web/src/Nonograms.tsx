@@ -189,7 +189,8 @@ export default function Nonograms({ profile, path, navigate, onActivity }: {
 }
 
 function markValue(current: Cell, tool: Cell, value: Cell) {
-  return tool === 2 && current === 1 ? current : value
+  const protectedMark = tool !== 0 && current !== 0 && current !== tool
+  return protectedMark ? current : value
 }
 
 function PuzzleBoard({ puzzle, title, pack, leave, savedCells, onMove }: {

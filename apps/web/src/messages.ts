@@ -11,7 +11,7 @@ export const dutch = {
   "Nonograms menu": "Nonogrammenu",
   "Grid size": "Roostergrootte",
   "First Shapes": "Eerste vormen",
-  "Drag across the grid to apply a tool to several squares. Starting on a square that already has that mark clears the stroke. Mark blank leaves filled squares alone. Undo reverses one stroke.": "Sleep over het rooster om meerdere vakjes tegelijk te bewerken. Begin op een vakje met dezelfde markering om alle geraakte vakjes te wissen. Leeg markeren laat gevulde vakjes ongemoeid. Ongedaan maken draait één sleepbeweging terug.",
+  "Drag across the grid to mark several squares. Start on a matching mark to clear those marks. Fill and Mark blank preserve each other’s marks. Use Erase to clear either kind. Undo reverses one stroke.": "Sleep over het rooster om meerdere vakjes te markeren. Begin op een vakje met dezelfde markering om die markeringen te wissen. Vullen en Leeg markeren laten elkaars markeringen staan. Gebruik Wissen om beide soorten te wissen. Ongedaan maken draait één sleepbeweging terug.",
   "Build and test puzzles here, then publish them in Pack Studio.": "Maak en test hier puzzels en publiceer ze daarna in de pakketstudio.",
   "Open Pack Studio": "Pakketstudio openen",
   "Publish this puzzle as part of a pack.": "Publiceer deze puzzel als onderdeel van een pakket.",
