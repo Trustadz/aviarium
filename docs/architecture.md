@@ -30,7 +30,7 @@ The platform ships Sudoku, player accounts and roles, draft review and publishin
 
 ## Release announcements
 
-Bundle user-facing release announcements in a new SQL migration when preparing a feature release. Add one News post for the live environment and one for the test environment, using the release's public version and date. The first startup on an updated server applies the migration once, so the announcement appears automatically and existing local posts and likes stay in place.
+Create a release announcement only when the owner explicitly requests one. When requested, bundle it in a new SQL migration. Add one News post for the live environment and one for the test environment, using the release's public version and date. The first startup on an updated server applies the migration once, so the announcement appears automatically and existing local posts and likes stay in place.
 
 ## Localization
 

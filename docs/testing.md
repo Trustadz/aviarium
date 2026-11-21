@@ -15,3 +15,12 @@ Run `npm run test:localization` after building, with
 The test starts a local app with a simulated translation provider and checks
 admin review, bilingual publication, shared likes, and resuming a saved Sudoku
 puzzle after an offline language change. Set `AVIARIUM_CHROMIUM` to use a system Chromium.
+
+
+To run the browser suites together, build the app and point the runner at a disposable PostgreSQL server with a user who can create databases:
+
+```sh
+AVIARIUM_BROWSER_TEST_DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/postgres npm run test:browser
+```
+
+The runner creates and removes separate databases for the OIDC, localization, and signed-in smoke tests. GitHub runs the same suite on pull requests, pushes to `main`, and manual releases.

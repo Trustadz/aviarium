@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { generateQuickPuzzle } from '../dist/packages/sudoku/src/quick-play.js'
@@ -187,10 +188,25 @@ try {
   assert.deepEqual(await layout(), { bottom: '0px', padding: '37px' })
   await mobileSession.send('Emulation.setSafeAreaInsetsOverride', { insets: {} })
   await mobileSession.detach()
+  const mobileChrome = () => rail.evaluate(element => ({
+    rail: getComputedStyle(element).backgroundColor,
+    document: getComputedStyle(document.documentElement).backgroundColor,
+    body: getComputedStyle(document.body).backgroundColor,
+    content: getComputedStyle(document.querySelector('.app-shell')).backgroundColor,
+    header: getComputedStyle(document.querySelector('.site-header')).backgroundColor,
+    theme: document.querySelector('meta[name="theme-color"]').content,
+  }))
+  assert.deepEqual(await mobileChrome(), {
+    rail: 'rgb(255, 253, 242)', document: 'rgb(255, 253, 242)', body: 'rgb(255, 253, 242)',
+    content: 'rgb(244, 241, 222)', header: 'rgb(255, 253, 242)', theme: '#fffdf2',
+  })
+  assert.equal(await page.locator('.app-rail .account-menu').evaluate(element => getComputedStyle(element).borderInlineStartWidth), '0px')
   assert.equal(await page.getByRole('contentinfo').count(), 0)
   await openSettings(page, 'About')
   await page.getByRole('heading', { name: 'About Aviarium' }).waitFor()
   await page.reload()
+  const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  await page.getByText('Version ' + version, { exact: true }).waitFor()
   assert.equal(await page.getByRole('link', { name: 'Aviarium on GitHub' }).getAttribute('href'),
     'https://github.com/Trustadz/aviarium')
   await page.getByRole('link', { name: 'Library', exact: true }).click()
@@ -205,7 +221,7 @@ try {
   assert.equal(await cardPreview.locator('.cell').count(), 81)
   assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
   const cardSurface = await page.locator('.game-card').evaluate(card => getComputedStyle(card).backgroundColor)
-  assert.equal(cardSurface, await page.getByRole('banner').evaluate(header => getComputedStyle(header).backgroundColor))
+  assert.equal(cardSurface, 'rgb(255, 253, 242)')
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
   await page.getByRole('button', { name: 'Favorites', exact: true }).click()
   await page.getByRole('link', { name: 'Sudoku', exact: true }).waitFor()
@@ -217,7 +233,10 @@ try {
   await openSettings(page, 'Device settings')
   await page.getByLabel('Theme').selectOption('dark')
   assert.equal(await page.locator('.app').getAttribute('data-theme'), 'dark')
-  assert.equal(await page.locator('meta[name="theme-color"]').getAttribute('content'), '#33354c')
+  assert.deepEqual(await mobileChrome(), {
+    rail: 'rgb(51, 53, 76)', document: 'rgb(51, 53, 76)', body: 'rgb(51, 53, 76)',
+    content: 'rgb(38, 40, 60)', header: 'rgb(51, 53, 76)', theme: '#33354c',
+  })
   assert.equal(await page.getByLabel('Show timer').count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
   await page.reload()

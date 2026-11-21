@@ -1,6 +1,6 @@
 {
   "name": "aviarium",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -17,7 +17,8 @@
     "migrate": "node dist/apps/server/src/migrate.js",
     "test:smoke": "node tests/smoke.mjs",
     "test:oidc": "node tests/oidc-smoke.mjs",
-    "test:localization": "node tests/localization-smoke.mjs"
+    "test:localization": "node tests/localization-smoke.mjs",
+    "test:browser": "node tests/browser-suite.mjs"
   },
   "engines": {
     "node": ">=24"

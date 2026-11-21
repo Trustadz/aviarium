@@ -65,7 +65,9 @@ function AppleInstallHelp() {
 function setBrowserTheme(element: HTMLElement | null, property: '--surface' | '--sudoku-page') {
   if (!element) return
   const color = getComputedStyle(element).getPropertyValue(property).trim()
-  if (color) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
+  if (!color) return
+  document.documentElement.style.setProperty('--window-background', color)
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
 }
 
 function Application() {
@@ -523,6 +525,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : inNews ? <News account={account} online={online}/>
       : inAbout ? <section className="panel about-page" aria-labelledby="about-heading">
         <h1 id="about-heading">{t("About Aviarium")}</h1>
+        <p>{t('Version {version}', { version: import.meta.env.VITE_AVIARIUM_VERSION })}</p>
         <p>{t('Aviarium is a self-hosted puzzle library. Start with Sudoku, play the same published puzzles as everyone else, and pick up where you left off. You can download games to play offline, and creators can use Studio to build and share their own puzzles.')}</p>
         <a className="secondary" href="https://github.com/Trustadz/aviarium">{t("Aviarium on GitHub")}</a>
       </section>
