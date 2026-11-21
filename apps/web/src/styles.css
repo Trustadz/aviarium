@@ -172,7 +172,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .continue-games { min-width: 0; margin-top: 24px; }
 .continue-track {
   display: grid; grid-auto-flow: column; grid-auto-columns: min(17rem, calc(100% - 30px)); gap: 12px;
-  margin: 0; padding: 10px 4px 8px; list-style: none; overflow-x: auto;
+  margin: 0; padding: 10px 4px 16px; list-style: none; overflow-x: auto;
   scroll-snap-type: x proximity; scroll-padding-inline: 4px;
   scrollbar-color: var(--border) transparent;
 }
@@ -199,8 +199,6 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 }
 .continue-options-panel .text-button { color: var(--error-text); font-size: .85rem; padding-inline: 9px; }
 .eyebrow { color: var(--accent-strong); letter-spacing: .1em; margin-bottom: 5px; }
-.footer { display: flex; justify-content: space-between; gap: 12px; padding-block: 18px;
-  border-top: 1px solid var(--border); color: var(--muted); font-size: .82rem; }
 .empty, .padded { padding: 20px; }
 .empty { border: 1px dashed var(--border); border-radius: 12px; }
 .play-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -513,12 +511,11 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .studio-tools .tabs { margin: 0; }
 @media (min-width: 900px) {
   .app-shell {
-    display: grid; grid-template-columns: 188px minmax(0, 1fr); grid-template-rows: auto 1fr auto;
-    grid-template-areas: "rail header" "rail content" "rail footer";
+    display: grid; grid-template-columns: 188px minmax(0, 1fr); grid-template-rows: auto 1fr;
+    grid-template-areas: "rail header" "rail content";
   }
   .app-shell > .site-header { grid-area: header; }
   .app-shell > .main-frame { grid-area: content; min-width: 0; }
-  .app-shell > .footer { grid-area: footer; }
   .app-rail {
     grid-area: rail; position: sticky; top: 0; align-self: start; height: 100dvh; padding: 20px 12px 12px;
     display: flex; flex-direction: column; justify-content: space-between; gap: 12px; border-inline-end: 1px solid var(--border);
@@ -528,10 +525,15 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   .app-rail .account-options { right: auto; left: 0; }
 }
 @media (max-width: 899px) {
-  .app-shell { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .app-shell {
+    --nav-safe-max: env(safe-area-max-inset-bottom, env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(69px + var(--nav-safe-max));
+  }
   .app-rail {
-    display: flex; position: fixed; inset: auto 0 0; align-items: stretch; gap: 4px; border-top: 1px solid var(--border);
-    padding: 5px max(6px, env(safe-area-inset-right)) max(5px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    display: flex; position: fixed; inset-inline: 0;
+    bottom: calc(env(safe-area-inset-bottom, 0px) - var(--nav-safe-max));
+    align-items: stretch; gap: 4px; border-top: 1px solid var(--border);
+    padding: 5px max(6px, env(safe-area-inset-right)) calc(5px + var(--nav-safe-max)) max(6px, env(safe-area-inset-left));
   }
   .app-destinations { flex: 1; }
   .app-destinations a, .account-trigger {
@@ -539,10 +541,15 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
     padding: 4px; font-size: .78rem; line-height: 1.18; white-space: nowrap;
   }
   .app-destinations a { flex: 1; }
-  .app-rail .account-menu, .app-rail > .account-trigger { flex: 0 1 clamp(72px, 24vw, 132px); border-inline-start: 1px solid var(--border); }
+  .app-rail .account-menu { flex: 0 1 clamp(72px, 24vw, 132px); border-inline-start: 1px solid var(--border); }
   .app-rail .account-menu { padding-inline-start: 4px; }
   .account-trigger > span:not(.account-avatar) { width: 100%; text-align: center; }
   .account-chevron { position: absolute; right: 8px; top: 11px; }
   .account-trigger .account-avatar { width: 23px; height: 23px; }
   .app-rail .account-options { max-width: calc(100vw - 16px); }
+}
+
+.about-page {
+  max-width: 680px; margin-inline: auto; display: grid; justify-items: start;
+  gap: 16px; padding: clamp(18px, 4vw, 30px);
 }

@@ -60,7 +60,7 @@ export async function makeApp() {
     },
   })
   app.setNotFoundHandler((request, reply) => {
-    if (request.method === 'GET' && /^\/(?:games\/sudoku(?:\/history|\/packs\/[a-z0-9-]+\/\d+)?|news|studio(?:\/(?:sudoku|packs))?|admin)?\/?$/.test(request.url.split('?')[0]))
+    if (request.method === 'GET' && /^\/(?:games\/sudoku(?:\/history|\/packs\/[a-z0-9-]+\/\d+)?|news|about|studio(?:\/(?:sudoku|packs))?|admin)?\/?$/.test(request.url.split('?')[0]))
       return reply.sendFile('index.html')
     return reply.code(404).send({ error: 'Not found.' })
   })

@@ -175,6 +175,26 @@ try {
   await page.goto(origin)
   await page.getByRole('heading', { name: 'Game library' }).waitFor()
   assert.equal(await page.getByRole('link', { name: 'Sudoku', exact: true }).count(), 1)
+  const mobileSession = await context.newCDPSession(page)
+  const rail = page.locator('.app-rail')
+  const layout = () => rail.evaluate(node => ({
+    bottom: getComputedStyle(node).bottom,
+    padding: getComputedStyle(node).paddingBottom,
+  }))
+  await mobileSession.send('Emulation.setSafeAreaInsetsOverride', { insets: { bottom: 0, bottomMax: 32 } })
+  assert.deepEqual(await layout(), { bottom: '-32px', padding: '37px' })
+  await mobileSession.send('Emulation.setSafeAreaInsetsOverride', { insets: { bottom: 32, bottomMax: 32 } })
+  assert.deepEqual(await layout(), { bottom: '0px', padding: '37px' })
+  await mobileSession.send('Emulation.setSafeAreaInsetsOverride', { insets: {} })
+  await mobileSession.detach()
+  assert.equal(await page.getByRole('contentinfo').count(), 0)
+  await openSettings(page, 'About')
+  await page.getByRole('heading', { name: 'About Aviarium' }).waitFor()
+  await page.reload()
+  assert.equal(await page.getByRole('link', { name: 'Aviarium on GitHub' }).getAttribute('href'),
+    'https://github.com/Trustadz/aviarium')
+  await page.getByRole('link', { name: 'Library', exact: true }).click()
+
   const boardAppearance = locator => locator.evaluate(board => Array.from(board.querySelectorAll('.cell'), cell => {
     const style = getComputedStyle(cell)
     return [cell.textContent, style.backgroundColor, style.color, style.borderRightColor]
@@ -197,6 +217,7 @@ try {
   await openSettings(page, 'Device settings')
   await page.getByLabel('Theme').selectOption('dark')
   assert.equal(await page.locator('.app').getAttribute('data-theme'), 'dark')
+  assert.equal(await page.locator('meta[name="theme-color"]').getAttribute('content'), '#33354c')
   assert.equal(await page.getByLabel('Show timer').count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
   await page.reload()
@@ -245,6 +266,8 @@ try {
   await context.setOffline(true)
   await page.reload()
   await page.locator('.app.reader[data-theme=dark]').waitFor()
+  const track = page.locator('.continue-track').first()
+  assert.equal(await track.evaluate(element => getComputedStyle(element).paddingBottom), '16px')
   await page.getByRole('button', { name: 'Resume', exact: true }).first().tap()
   await cell(String(solution[firstBlank])).waitFor()
   if (process.env.AVIARIUM_SCREENSHOTS) await page.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/player-reader-mobile.png', fullPage: true })

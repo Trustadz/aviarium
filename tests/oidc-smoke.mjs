@@ -76,8 +76,8 @@ const provider = createServer({ key: await readFile(key), cert: await readFile(c
   return send(res, { error: 'not_found' }, 404)
 })
 async function openSettings(page, name) {
-  const account = page.getByRole('button', { name: 'Account menu' })
-  if (await account.isVisible()) await account.click()
+  const account = page.getByRole('button', { name: /Account menu|Device menu/ })
+  await account.click()
   await page.getByRole('button', { name, exact: true }).click()
 }
 
@@ -134,6 +134,8 @@ try {
   assert.match(customized.avatar, /^data:image\/(webp|png);base64,/)
   await page.getByRole('button', { name: 'Close' }).click()
   await page.getByRole('link', { name: 'News', exact: true }).click()
+  const releaseTitle = 'What’s new in Aviarium 0.1.13'
+  await page.getByRole('heading', { name: releaseTitle }).waitFor()
   await page.getByRole('button', { name: 'New announcement' }).click()
   await page.getByLabel('Category').selectOption('content')
   await page.getByLabel('Header image (optional)', { exact: true }).setInputFiles({
@@ -144,19 +146,20 @@ try {
   await page.getByLabel('Intro paragraph').fill('Three new puzzles are ready.')
   await page.getByLabel('More text (optional)').fill('Start with the easiest puzzle in the pack.')
   await page.getByRole('button', { name: 'Publish announcement' }).click()
-  await page.getByRole('heading', { name: 'A new Sudoku pack' }).waitFor()
+  const publishedPost = page.getByRole('article').filter({ hasText: 'A new Sudoku pack' })
+  await publishedPost.getByRole('heading', { name: 'A new Sudoku pack' }).waitFor()
   await page.getByRole('img', { name: 'Aviarium artwork' }).evaluate(image => image.decode())
   await page.getByText('Three new puzzles are ready.').waitFor()
   const fullText = page.getByText('Start with the easiest puzzle in the pack.')
   assert.equal(await fullText.isVisible(), false)
-  await page.getByText('Read more', { exact: true }).click()
+  await publishedPost.getByText('Read more', { exact: true }).click()
   await fullText.waitFor()
-  await page.getByText('Show less', { exact: true }).click()
+  await publishedPost.getByText('Show less', { exact: true }).click()
   await fullText.waitFor({ state: 'hidden' })
-  await page.getByRole('button', { name: 'Like announcement' }).click()
-  await page.getByRole('button', { name: 'Unlike announcement' }).waitFor()
+  await publishedPost.getByRole('button', { name: 'Like announcement' }).click()
+  await publishedPost.getByRole('button', { name: 'Unlike announcement' }).waitFor()
   await page.reload()
-  await page.getByRole('button', { name: 'Unlike announcement' }).waitFor()
+  await publishedPost.getByRole('button', { name: 'Unlike announcement' }).waitFor()
   await page.getByRole('link', { name: 'Library', exact: true }).click()
 
   const adminExport = await context.request.get(origin + '/api/packs/budgies/1/export')
@@ -188,7 +191,7 @@ try {
   await page.getByRole('link', { name: 'News', exact: true }).click()
   await page.getByRole('heading', { name: 'A new Sudoku pack' }).waitFor()
   assert.equal(await page.getByRole('button', { name: 'New announcement' }).count(), 0)
-  assert.equal(await page.getByRole('button', { name: 'Like announcement' }).locator('span').textContent(), '1')
+  assert.equal(await publishedPost.getByRole('button', { name: 'Like announcement' }).locator('span').textContent(), '1')
   await page.getByRole('link', { name: 'Library', exact: true }).click()
 
   assert.equal(await page.getByRole('button', { name: 'Add Sudoku to favorites' }).count(), 1)
@@ -375,7 +378,8 @@ try {
   assert.equal((await who()).name, 'Preview Player')
   await page.getByRole('button', { name: 'Close' }).click()
   await page.getByRole('link', { name: 'News', exact: true }).click()
-  await page.getByText('No announcements yet.').waitFor()
+  await page.getByRole('heading', { name: releaseTitle }).waitFor()
+  assert.equal(await page.getByRole('heading', { name: 'A new Sudoku pack' }).count(), 0)
   await page.getByRole('link', { name: 'Library', exact: true }).click()
 
   const get = path => context.request.get(origin + path)

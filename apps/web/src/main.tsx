@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowLeft, ArrowRight, BookOpen, Check, Heart, History, LogIn, LogOut, Newspaper,
   Pencil, Search, Settings2, Trash2, Users, WifiOff } from 'lucide-react'
@@ -57,11 +57,19 @@ function AppleInstallHelp() {
   </details>
 }
 
+function setBrowserTheme(element: HTMLElement | null, property: '--surface' | '--sudoku-page') {
+  if (!element) return
+  const color = getComputedStyle(element).getPropertyValue(property).trim()
+  if (color) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
+}
+
 function App() {
   const { account, localPlay, checking, online, signIn, refresh, forget } = useSession()
   const [preference, setPreference] = useState(() => themePreference(localStorage.getItem(themeKey)))
   const system = useSyncExternalStore(subscribeToSystemTheme, readSystemTheme)
   const theme = preference === 'auto' ? system : preference
+  const signInPage = useRef<HTMLElement>(null)
+  useLayoutEffect(() => setBrowserTheme(signInPage.current, '--surface'), [account, localPlay, theme])
   useGameDownloads(undefined, online, !checking && !account && !localPlay)
   const [activate, setActivate] = useState<() => void>()
   useEffect(() => { void registerOffline(handler => setActivate(() => handler)).catch(() => undefined) }, [])
@@ -75,7 +83,7 @@ function App() {
       setPreference(value)
     }}/>
 
-  return <main className="app login-page" data-theme={theme}>
+  return <main ref={signInPage} className="app login-page" data-theme={theme}>
     <section className="panel login-panel" aria-labelledby="login-title">
       <img src="/aviarium.svg" alt="" width="64" height="64"/>
       <h1 id="login-title">Aviarium</h1>
@@ -346,18 +354,22 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
   const inNews = path === '/news'
   const inStudio = path === '/studio' || path === '/studio/sudoku' || path === '/studio/packs'
   const inAdmin = path === '/admin'
+  const inAbout = path === '/about'
   const inGame = Boolean(openGame)
   const inShell = !inGame
   const surface = inGame ? 'sudoku' : inStudio ? 'studio' : 'library'
+  const app = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => setBrowserTheme(app.current, surface === 'sudoku' ? '--sudoku-page' : '--surface'),
+    [reader, surface, theme])
   const sharedPuzzle = new URLSearchParams(location.search)
   const sharedId = sharedPuzzle.get('puzzle')
   const sharedRevision = sharedPuzzle.get('revision')
 
-  return <div className={'app' + (reader ? ' reader' : '') + (inShell ? ' app-shell' : '')} data-theme={theme} data-surface={surface}>
+  return <div ref={app} className={'app' + (reader ? ' reader' : '') + (inShell ? ' app-shell' : '')} data-theme={theme} data-surface={surface}>
     {inShell && <>
       <header className="site-header"><div className="frame header-frame">
         <a className="brand" href="/" aria-label="Aviarium home" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/>
-          <span>{inStudio ? 'Studio' : inNews ? 'News' : inAdmin ? 'Administration' : 'Aviarium'}</span>
+          <span>{inStudio ? 'Studio' : inNews ? 'News' : inAdmin ? 'Administration' : inAbout ? 'About' : 'Aviarium'}</span>
         </a>
         {!online && <span className="offline-tag"><WifiOff size={16}/> Offline</span>}
       </div></header>
@@ -368,7 +380,7 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
             onClick={event => link(event, '/studio')}><Pencil size={21}/><span>Studio</span></a>}
           <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>News</span></a>
         </nav>
-        <AccountMenu account={account} open={showDialog}
+        <AccountMenu account={account} open={showDialog} about={() => go('/about')}
           administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
       </div>
     </>}
@@ -457,6 +469,13 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
         <PackCards packs={packs} completed={completed} open={pack => go(packPath(pack))}/>
       </section>
       : inNews ? <News account={account} online={online}/>
+      : inAbout ? <section className="panel about-page" aria-labelledby="about-heading">
+        <h1 id="about-heading">About Aviarium</h1>
+        <p>Aviarium is a self-hosted puzzle library. Start with Sudoku, play the same published puzzles as everyone else,
+          and pick up where you left off. You can download games to play offline, and creators can use Studio to build
+          and share their own puzzles.</p>
+        <a className="secondary" href="https://github.com/Trustadz/aviarium">Aviarium on GitHub</a>
+      </section>
       : inStudio && account && editableGames.length > 0 ? path === '/studio' ? <section className="creator-home" aria-labelledby="studio-heading">
         <h1 id="studio-heading">Studio</h1>
         <div className="game-list">{editableGames.map(game => <article className="game-card" key={game.id}>
@@ -546,7 +565,6 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
         </>}
       </section>
     </div>}
-    {inShell && <footer className="frame footer"><span>Aviarium</span><span>Play at your own pace.</span></footer>}
   </div>
 }
 

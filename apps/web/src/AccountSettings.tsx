@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ChevronUp, Settings2, Shield, UserRound } from 'lucide-react'
+import { ChevronUp, Info, Settings2, Shield, UserRound } from 'lucide-react'
 import { api, errorMessage, json, type SessionAccount } from './api.js'
 
 export function Avatar({ name, src }: { name: string; src?: string | null }) {
@@ -11,10 +11,11 @@ export function Avatar({ name, src }: { name: string; src?: string | null }) {
   </span>
 }
 
-export function AccountMenu({ account, open, administration }: {
+export function AccountMenu({ account, open, administration, about }: {
   account?: SessionAccount
   open: (settings: 'display' | 'account') => void
   administration?: () => void
+  about: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const menu = useRef<HTMLDivElement>(null)
@@ -29,8 +30,6 @@ export function AccountMenu({ account, open, administration }: {
     return () => document.removeEventListener('pointerdown', dismiss)
   }, [expanded])
 
-  if (!account) return <button className="account-trigger" aria-label="Device settings" onClick={() => open('display')}><Settings2 size={21}/><span>Device</span></button>
-
   function select(which: 'display' | 'account') {
     setExpanded(false)
     open(which)
@@ -44,17 +43,22 @@ export function AccountMenu({ account, open, administration }: {
         trigger.current?.focus()
       }
     }}>
-    <button ref={trigger} className="account-trigger" aria-label={'Account menu for ' + account.name} title={account.name}
+    <button ref={trigger} className="account-trigger" aria-label={account ? 'Account menu for ' + account.name : 'Device menu'} title={account?.name}
       aria-expanded={expanded} aria-controls={options} onClick={() => setExpanded(value => !value)}>
-      <Avatar name={account.name} src={account.avatar}/><span>{account.name}</span><ChevronUp className="account-chevron" size={13} aria-hidden="true"/>
+      {account ? <Avatar name={account.name} src={account.avatar}/> : <Settings2 size={21}/>}
+      <span>{account?.name ?? 'Device'}</span><ChevronUp className="account-chevron" size={13} aria-hidden="true"/>
     </button>
     <div id={options} className="account-options" hidden={!expanded}>
       <button className="text-button" onClick={() => select('display')}><Settings2 size={17}/> Device settings</button>
-      <button className="text-button" onClick={() => select('account')}><UserRound size={17}/> Account settings</button>
+      {account && <button className="text-button" onClick={() => select('account')}><UserRound size={17}/> Account settings</button>}
       {administration && <button className="text-button" onClick={() => {
         setExpanded(false)
         administration()
       }}><Shield size={17}/> Administration</button>}
+      <button className="text-button" onClick={() => {
+        setExpanded(false)
+        about()
+      }}><Info size={17}/> About</button>
     </div>
   </div>
 }
