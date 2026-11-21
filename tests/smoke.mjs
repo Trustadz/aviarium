@@ -253,6 +253,34 @@ try {
   assert.equal(await page.getByRole('contentinfo').count(), 0)
   await page.getByRole('button', { name: 'Exit to library' }).waitFor()
   assert.equal(await page.getByRole('heading', { name: 'Browse puzzles' }).count(), 0)
+
+  const catalogContext = await browser.newContext({ viewport: { width: 390, height: 844 },
+    isMobile: true, hasTouch: true, serviceWorkers: 'block' })
+  await catalogContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
+  await catalogContext.route(origin + '/api/packs', route => route.abort(), { times: 1 })
+  await catalogContext.addInitScript(() => {
+    const originalPut = IDBObjectStore.prototype.put
+    IDBObjectStore.prototype.put = function (...args) {
+      if (this.name === 'packs') {
+        window.packCacheWriteFailed = true
+        throw new DOMException('The device storage is full.', 'QuotaExceededError')
+      }
+      return originalPut.apply(this, args)
+    }
+  })
+  const catalogPage = await catalogContext.newPage()
+  await catalogPage.goto(origin + '/games/sudoku')
+  await catalogPage.getByText('Could not load packs.', { exact: true }).waitFor()
+  assert.equal(await catalogPage.getByText('No packs available on this device yet.', { exact: true }).count(), 0)
+  await catalogPage.getByRole('button', { name: 'Retry loading packs' }).click()
+  const budgies = catalogPage.getByRole('button', { name: /^Budgies/ })
+  await budgies.waitFor()
+  await catalogPage.waitForFunction(() => window.packCacheWriteFailed)
+  await budgies.click()
+  await catalogPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
+  await catalogContext.close()
+  console.info('Pack catalog checks passed: retry after a failed request and opening an online pack when the cache write fails.')
+
   await page.goto(`${origin}/games/sudoku?puzzle=${selected.id}&revision=${selected.revision}`)
   await page.getByRole('button', { name: 'Sudoku settings' }).click()
   await page.getByLabel('Show timer').uncheck()

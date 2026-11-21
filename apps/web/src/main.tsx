@@ -168,6 +168,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [sessions, setSessions] = useState<LocalSession[]>([])
   const [savedLevels, setSavedLevels] = useState<ReadonlyMap<string, PublishedLevel>>(new Map())
   const [packs, setPacks] = useState<PublishedPack[]>([])
+  const [packStatus, setPackStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const [packRetry, setPackRetry] = useState(0)
   const [viewedPack, setViewedPack] = useState<PublishedPack>()
   const [packProblem, setPackProblem] = useState('')
   const [completions, setCompletions] = useState<string[]>([])
@@ -197,21 +199,24 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       return undefined
     }
   }, [accountId, catalogKey, refreshSession])
-  const refreshPacks = useCallback(async () => {
-    const published = await api<PublishedPack[]>('/packs', undefined, accountId)
-    const records = published.map(pack => ({ key: levelKey(pack.id, pack.revision), pack }))
-    await db.packs.bulkPut(records)
-    localStorage.setItem(packIndexKey, JSON.stringify(records.map(record => record.key)))
+  const refreshPacks = useCallback(async (signal?: AbortSignal) => {
+    const published = await api<PublishedPack[]>('/packs', { signal }, accountId)
+    if (signal?.aborted) return
     setPacks(published)
+    setPackStatus('ready')
+    const records = published.map(pack => ({ key: levelKey(pack.id, pack.revision), pack }))
+    void db.packs.bulkPut(records).then(() => {
+      localStorage.setItem(packIndexKey, JSON.stringify(records.map(record => record.key)))
+    }).catch(() => undefined)
   }, [accountId, packIndexKey])
   const findPack = useCallback(async (id: string, revision: number, review = false) => {
     const key = levelKey(id, revision)
-    const cached = await db.packs.get(key)
+    const cached = await db.packs.get(key).catch(() => undefined)
     if (cached && (!review || !online)) return cached.pack
     if (!online) throw new Error('Connect to open this pack for the first time.')
     try {
       const { ownedByViewer, ...pack } = await api<PublishedPack>(`/packs/${id}/${revision}`, undefined, accountId)
-      await db.packs.put({ key, pack })
+      void db.packs.put({ key, pack }).catch(() => undefined)
       return { ...pack, ownedByViewer }
     } catch (error) {
       if (cached) return cached.pack
@@ -246,19 +251,24 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   }, [])
   useEffect(() => { if (online) void refreshCatalog() }, [refreshCatalog, online])
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
+    const { signal } = controller
     async function load() {
       if (online) {
-        try { await refreshPacks(); return } catch { /* Use the last available catalog. */ }
+        setPackStatus('loading')
+        try { await refreshPacks(signal); return } catch {
+          if (signal.aborted) return
+        }
       }
+      setPackStatus(online ? 'failed' : 'ready')
       const index: unknown = JSON.parse(localStorage.getItem(packIndexKey) ?? '[]')
-      if (!Array.isArray(index) || !index.every(key => typeof key === 'string')) return
+      if (!Array.isArray(index) || !index.length || !index.every(key => typeof key === 'string')) return
       const cached = await db.packs.bulkGet(index)
-      if (!cancelled) setPacks(cached.flatMap(record => record ? [record.pack] : []))
+      if (!signal.aborted) setPacks(current => current.length ? current : cached.flatMap(record => record ? [record.pack] : []))
     }
     void load().catch(() => undefined)
-    return () => { cancelled = true }
-  }, [online, packIndexKey, refreshPacks])
+    return () => controller.abort()
+  }, [online, packIndexKey, packRetry, refreshPacks])
   useEffect(() => {
     const match = /^\/games\/sudoku\/packs\/([a-z0-9-]+)\/(\d+)$/.exec(path)
     if (!match) return
@@ -520,7 +530,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           const { createQuickPlayLevel } = await featuredGame.player()
           await open(await createQuickPlayLevel(difficulty, seed, version))
         }}/>
-        <PackCards packs={packs} completed={completed} open={pack => go(packPath(pack))}/>
+        <PackCards packs={packs} completed={completed} status={packStatus}
+          retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>
       </section>
       : inNews ? <News account={account} online={online}/>
       : inAbout ? <section className="panel about-page" aria-labelledby="about-heading">

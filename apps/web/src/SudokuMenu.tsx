@@ -106,8 +106,9 @@ function gradeRange(t: Translate, pack: PublishedPack) {
   return min === max ? t(difficulties[min]) : t(difficulties[min]) + '–' + t(difficulties[max])
 }
 
-export function PackCards({ packs, completed, open }: {
-  packs: PublishedPack[]; completed: ReadonlySet<string>; open: (pack: PublishedPack) => void
+export function PackCards({ packs, completed, status, retry, open }: {
+  packs: PublishedPack[]; completed: ReadonlySet<string>; status: 'loading' | 'ready' | 'failed'
+  retry: () => void; open: (pack: PublishedPack) => void
 }) {
   const t = useT()
   return <section className="sudoku-packs" aria-labelledby="packs-title">
@@ -122,7 +123,10 @@ export function PackCards({ packs, completed, open }: {
           <span>{gradeRange(t, pack)} · {t('{solved} of {total} solved', { solved, total: levels.length })}</span>
         </div>
       </button>
-    })}</div> : <p>{t("No packs available on this device yet.")}</p>}
+    })}</div> : status === 'loading' ? <p role="status">{t("Loading packs…")}</p>
+      : status === 'failed' ? <p role="status">{t("Could not load packs.")}</p>
+        : <p>{t("No packs available on this device yet.")}</p>}
+    {status === 'failed' && <button className="text-button" onClick={retry}>{t("Retry loading packs")}</button>}
   </section>
 }
 
