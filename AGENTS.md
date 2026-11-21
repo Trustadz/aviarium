@@ -27,9 +27,10 @@ it specifies a narrower scope or a different workflow.
 
 - Keep version bumps with the changes intended to ship or in a release PR.
   Create a News announcement only when the user explicitly requests one.
-- Merging runs checks. Shipping is a separate, manual **Publish container**
-  workflow on `main`. Trigger it only when the user authorizes publication.
-  The owner can trigger it directly in GitHub Actions.
+- **Verify** runs automatically on PRs and pushes to `main`. Shipping uses
+  the separate, manual **Publish container** workflow on `main`, which reruns
+  verification. Trigger publishing only when the user authorizes it. The
+  owner can start it directly in GitHub Actions.
 - Use `enhancement` or `feature` for PRs that add features and `bug` or `fix`
   for PRs that fix bugs so the generated release notes group them correctly.
 - After publishing, verify that the version and `latest` image tags match and

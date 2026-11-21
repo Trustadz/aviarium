@@ -37,7 +37,7 @@ npm run build
 
 ## Publish a release
 
-1. Open a draft PR from a feature branch. Test the local preview and wait for the GitHub checks.
+1. Open a draft PR from a feature branch. Test the local preview when applicable and wait for the automatic **Verify** checks.
 2. When the change is approved, make sure its PR includes the next unused version in `package.json` and `package-lock.json`. Use `npm version 0.1.16 --no-git-tag-version` with the version you intend to release. Merge the approved PR.
 3. In GitHub, go to **Actions → Publish container → Run workflow**, choose **main**, enter the package version without the `v` prefix, and run it. The workflow reruns the checks, creates the Git version tag, and publishes the public version and `latest` images. It then creates a GitHub Release with notes covering the merged PRs since the previous version. GitHub supplies the source ZIP and tarball.
 
