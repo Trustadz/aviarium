@@ -572,7 +572,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             <button aria-pressed={path === '/studio/packs'} onClick={() => go('/studio/packs')}>{t("Packs")}</button>
           </div>
         </div>
-        {path === '/studio/sudoku' ? <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
+        {path === '/studio/sudoku' ? <Studio key={account.id} account={account} openPacks={() => go('/studio/packs')}/>
           : <PackStudio key={account.id} account={account} levels={catalog} onPublish={() => perform(() => refreshPacks())}/>}
       </> : <section className="panel"><h1>{t("Access required")}</h1><a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t("Studio games")}</a></section>
       : inAdmin && online && account?.role === 'admin' ? <>

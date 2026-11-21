@@ -1,7 +1,7 @@
 import { technique } from './sudoku-copy.js'
 import { knownMessage, useT } from './i18n.js'
 import { useEffect, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, Cloud, Download, FlaskConical, Plus, Save, Sparkles, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Cloud, Download, FlaskConical, Plus, Save, Sparkles, Upload } from 'lucide-react'
 import { difficulties, type Difficulty } from '../../../packages/game-sdk/src/index.js'
 import { conflicts, parseGrid } from '../../../packages/sudoku/src/rules.js'
 import type { LogicalStep } from '../../../packages/sudoku/src/logic.js'
@@ -19,7 +19,7 @@ const blank = '0'.repeat(81)
 const statuses: Record<string, string> = { unique: 'Valid · unique solution', multiple: 'Valid · multiple solutions',
   unsolvable: 'Proven unsolvable', invalid: 'Invalid grid', inconclusive: 'Validation incomplete' }
 
-export default function Studio({ account, onPublish }: { account: Account; onPublish: () => void }) {
+export default function Studio({ account, openPacks }: { account: Account; openPacks: () => void }) {
   const t = useT()
   const key = 'aviarium:draft:' + account.id
   const [initial] = useState<Partial<Draft>>(() => { try { return JSON.parse(localStorage.getItem(key) ?? '{}') } catch { return {} } })
@@ -64,7 +64,7 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
   const shown = jobs.find(job => job.id === selectedJob) ?? validateJob
   const result = validateJob?.result
   const solvable = result?.kind === 'unique' || result?.kind === 'multiple'
-  const allowPublish = solvable && Boolean(result?.difficulty)
+  const canReview = solvable && Boolean(result?.difficulty)
   const board = Array.from(grid, Number)
   if (playback !== undefined && result?.steps) for (const step of result.steps.slice(0, playback))
     for (const change of step.updates) if (change.filledValue) board[change.index] = change.filledValue
@@ -111,7 +111,7 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
 
   return <section className="editor">
     <div className="section-heading"><div><div className="eyebrow">SUDOKU</div><h1>{t("Creator studio")}</h1>
-      <p>{t("Build a puzzle and run the checks before publishing it to the shared catalog.")}</p></div>
+      <p>{t("Build and test puzzles here, then publish them in Pack Studio.")}</p></div>
       <button className="secondary" onClick={() => load()}><Plus size={17}/>{" "}{t("New draft")}</button></div>
     {problem && <p role="alert" className="error">{knownMessage(t, problem)}</p>}
     {message && <p role="status" className="feedback">{message}</p>}
@@ -145,13 +145,12 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
             {result?.difficulty ? ' · ' + t(result.difficulty) : solvable ? ' · ' + t('Needs review') : ''}
             {result?.reason ? ' · ' + knownMessage(t, result.reason) : ''}</p>}
           {Boolean(result?.extremeFamilies?.length) && <p>{t('Extreme techniques')} · {result?.extremeFamilies?.map(family => knownMessage(t, family)).join(', ')}</p>}
-          {allowPublish && <div className="button-bar">
+          {canReview && <div className="button-bar">
             <button className="secondary" onClick={() => setPlayback(result?.steps?.length ?? 0)}>{t("Show solution")}</button>
             <button className="secondary" onClick={() => setPlayback(0)}>{t("Step through")}</button>
-            <button className="primary" disabled={busy} onClick={() => doTask(async () => {
-              const published = await api<{revision: number}>('/drafts/' + draft!.id + '/publish', json('POST', { jobId: validateJob!.id }), account.id)
-              setMessage(t('Published revision {revision} to the shared catalog.', { revision: published.revision })); onPublish()
-            })}><Check size={16}/>{" "}{t("Publish")}</button>
+            {result?.kind === 'unique' && <button className="primary" disabled={busy} onClick={openPacks}>
+              {t('Open Pack Studio')}
+            </button>}
           </div>}
           {playback !== undefined && result?.steps && <div className="playback">
             <button className="icon-button" aria-label={t("Previous step")} disabled={!playback} onClick={() => setPlayback(playback - 1)}><ChevronLeft size={18}/></button>

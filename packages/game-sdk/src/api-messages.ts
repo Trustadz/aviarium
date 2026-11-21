@@ -21,7 +21,7 @@ export const apiMessages = {
   job_limit: "Wait for an existing puzzle job to finish.",
   draft_test_conflict: "Save and reopen the current draft before testing.",
   draft_not_found: "Draft was not found.",
-  draft_publish_unverified: "This exact draft needs a complete logical solve before publication.",
+  draft_pack_required: "Publish this puzzle as part of a pack.",
   draft_generated_grid_changed: "The grid differs from the generation result.",
   mutation_conflict: "This mutation ID was already used.",
   level_version_unavailable: "That level version is unavailable.",

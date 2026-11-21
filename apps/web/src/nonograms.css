@@ -36,3 +36,10 @@
 .nonogram-board[data-solved=true] .nonogram-cell { border-color: transparent; }
 .nonogram-tools { justify-content: center; }
 .nonogram-solved { color: var(--feedback); font-weight: 700; }
+.nonogram-menu { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+.nonogram-menu-section { display: grid; gap: 10px; justify-items: start; align-content: start; }
+.nonogram-options { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.nonogram-options label { display: grid; gap: 4px; font-size: .88rem; }
+.nonogram-pack-trigger[aria-expanded=true] svg { rotate: 180deg; }
+.nonogram-picker[hidden] { display: none; }
+.nonogram-cell { touch-action: none; user-select: none; }

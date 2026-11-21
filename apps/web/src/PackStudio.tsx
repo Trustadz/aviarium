@@ -8,6 +8,8 @@ import { parseGrid } from '../../../packages/sudoku/src/rules.js'
 import { api, errorMessage, json, type Account } from './api.js'
 import { SudokuPreview } from './Grid.js'
 
+type PuzzleDraft = Pick<PublishedLevel, 'id' | 'title' | 'grid' | 'seed' | 'generatorVersion'> & { version: number }
+
 const emptyPack: PackDraftData = { format: 1, game: 'sudoku', title: 'Untitled pack', description: '', theme: 'meadow',
   rules: { hints: true, autoNotes: true, inOrder: false, lives: null, timeTrial: false }, puzzles: [] }
 
@@ -25,7 +27,8 @@ export default function PackStudio({ account, levels, onPublish }: { account: Ac
   const [drafts, setDrafts] = useState<PackDraft[]>([])
   const [draft, setDraft] = useState<PackDraft>()
   const [data, setData] = useState(() => ({ ...emptyPack, title: t('Untitled pack') }))
-  const [catalogPuzzle, setCatalogPuzzle] = useState('')
+  const [sourcePuzzle, setSourcePuzzle] = useState('')
+  const [puzzleDrafts, setPuzzleDrafts] = useState<PuzzleDraft[]>([])
   const [puzzleTitle, setPuzzleTitle] = useState('')
   const [puzzleGrid, setPuzzleGrid] = useState('')
   const [previewIndex, setPreviewIndex] = useState<number>()
@@ -35,6 +38,9 @@ export default function PackStudio({ account, levels, onPublish }: { account: Ac
   useEffect(() => {
     const cleanup = new AbortController()
     void api<PackDraft[]>('/pack-drafts', { signal: cleanup.signal }, account.id).then(setDrafts, error => {
+      if (!cleanup.signal.aborted) setProblem(errorMessage(error))
+    })
+    void api<PuzzleDraft[]>('/drafts', { signal: cleanup.signal }, account.id).then(setPuzzleDrafts, error => {
       if (!cleanup.signal.aborted) setProblem(errorMessage(error))
     })
     return () => cleanup.abort()
@@ -74,6 +80,11 @@ export default function PackStudio({ account, levels, onPublish }: { account: Ac
     store(saved)
     return saved
   }
+
+  const catalog = levels.map(level => ({ ...level,
+    key: 'catalog:' + level.id + ':' + level.revision, title: levelTitle(t, level) }))
+  const authored = puzzleDrafts.map(item => ({ ...item, key: 'draft:' + item.id + ':' + item.version }))
+  const source = [...authored, ...catalog].find(item => item.key === sourcePuzzle)
 
   return <section className="pack-studio">
     <div className="section-heading"><h1>{t("Pack studio")}</h1>
@@ -138,16 +149,20 @@ export default function PackStudio({ account, levels, onPublish }: { account: Ac
       <section className="panel padded pack-form">
         <h2>{t("Puzzles")}</h2>
         <div className="pack-add">
-          <select aria-label={t("Catalog puzzle")} value={catalogPuzzle} disabled={busy}
-            onChange={event => setCatalogPuzzle(event.target.value)}>
-            <option value="">{t("Choose a published puzzle")}</option>
-            {levels.map((level, index) => <option key={level.id + ':' + level.revision} value={index}>{levelTitle(t, level)}</option>)}
+          <select aria-label={t('Add an existing puzzle')} value={sourcePuzzle} disabled={busy}
+            onChange={event => setSourcePuzzle(event.target.value)}>
+            <option value="">{t('Choose a puzzle')}</option>
+            {!!authored.length && <optgroup label={t('Saved drafts')}>
+              {authored.map(item => <option key={item.key} value={item.key}>{item.title}</option>)}
+            </optgroup>}
+            {!!catalog.length && <optgroup label={t('Legacy catalog')}>
+              {catalog.map(item => <option key={item.key} value={item.key}>{item.title}</option>)}
+            </optgroup>}
           </select>
-          <button className="secondary" disabled={!catalogPuzzle || busy} onClick={() => {
-            const level = levels[Number(catalogPuzzle)]
-            if (level) add({ title: levelTitle(t, level), grid: level.grid, ruleset: 1,
-              seed: level.seed ?? undefined, generatorVersion: level.generatorVersion ?? undefined })
-          }}><Plus size={16}/>{" "}{t("Add")}</button>
+          <button className="secondary" disabled={!source || busy} onClick={() => {
+            if (source) add({ title: source.title, grid: source.grid, ruleset: 1,
+              seed: source.seed ?? undefined, generatorVersion: source.generatorVersion ?? undefined })
+          }}><Plus size={16}/>{' '}{t('Add')}</button>
         </div>
         <details><summary>{t("Add a Sudoku grid")}</summary>
           <label>{t("Puzzle title")}<input maxLength={100} value={puzzleTitle} onChange={event => setPuzzleTitle(event.target.value)}/></label>

@@ -1,6 +1,6 @@
 # Aviarium
 
-A self-hosted, installable puzzle library. Play Sudoku and Nonograms. Everyone plays the same published Sudoku catalog with the same difficulty grades. Nonograms has three starter puzzles and a random 10 × 10 mode with device-local progress. Creators can generate drafts and test them on the server before publishing.
+A self-hosted, installable puzzle library. Play Sudoku and Nonograms. Everyone plays the same published Sudoku catalog with the same difficulty grades. Nonograms has a starter pack and random 5 × 5 or 10 × 10 puzzles at three difficulties, with device-local progress. Creators can test Sudoku drafts on the server before publishing them in packs.
 
 ## Deploy
 

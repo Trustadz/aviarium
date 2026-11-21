@@ -38,7 +38,7 @@ export function registerLevels(app: FastifyInstance) {
   })
   app.get('/api/drafts', async request => {
     const user = await requireGameEditor(request, sudoku.id)
-    return (await pool.query('SELECT id,title,grid,version,seed FROM drafts WHERE owner_id=$1 ORDER BY updated_at DESC', [user.id])).rows
+    return (await pool.query('SELECT id,title,grid,version,seed,generator_version AS "generatorVersion" FROM drafts WHERE owner_id=$1 ORDER BY updated_at DESC', [user.id])).rows
   })
   app.post('/api/drafts', async request => {
     const user = await requireGameEditor(request, sudoku.id)
@@ -89,28 +89,8 @@ export function registerLevels(app: FastifyInstance) {
     })
   })
   app.post('/api/drafts/:id/publish', async request => {
-    const user = await requireGameEditor(request, sudoku.id)
-    const { jobId } = z.object({ jobId: z.uuid() }).parse(request.body)
-    const id = recordId(request)
-    return transaction(async db => {
-      const draft = (await db.query<Draft>('SELECT * FROM drafts WHERE id=$1 AND owner_id=$2 FOR UPDATE', [id, user.id])).rows[0]
-      if (!draft) throw new HttpError(404, 'draft_not_found')
-      const job = (await db.query(`SELECT result FROM puzzle_jobs WHERE id=$1 AND owner_id=$2 AND draft_id=$3
-        AND draft_version=$4 AND kind='validate' AND status='complete'`, [jobId, user.id, id, draft.version])).rows[0]
-      const result = job?.result
-      if (!result?.difficulty || (result.kind !== 'unique' && result.kind !== 'multiple'))
-        throw new HttpError(409, 'draft_publish_unverified')
-      const previous = (await db.query(`SELECT revision,title,grid,seed FROM published_levels WHERE id=$1
-        ORDER BY revision DESC LIMIT 1`, [id])).rows[0]
-      if (previous?.title === draft.title && previous.grid === draft.grid && previous.seed === draft.seed)
-        return { id, revision: previous.revision }
-      const revision = (previous?.revision ?? 0) + 1
-      await db.query(`INSERT INTO published_levels(id,revision,ruleset,title,grid,difficulty,source,
-        author_id,seed,generator_version,validation)
-        SELECT id::text,$2,1,title,grid,$3,$4,owner_id,seed,generator_version,$5 FROM drafts WHERE id=$1`,
-      [id, revision, result.difficulty, draft.seed ? 'Generated' : 'Creator', result.kind])
-      return { id, revision }
-    })
+    await requireGameEditor(request, sudoku.id)
+    throw new HttpError(409, 'draft_pack_required')
   })
 }
 

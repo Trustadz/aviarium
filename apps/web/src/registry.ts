@@ -47,6 +47,7 @@ export const games = [{
       title: 'Use the controls',
       paragraphs: [
         'Choose Fill, Mark blank, or Erase, then tap a square. Marks help you keep track of blanks. The puzzle is solved when the filled squares match every clue.',
+        'Drag across the grid to apply a tool to several squares. Starting on a square that already has that mark clears the whole stroke. Undo reverses one stroke.',
         'With a keyboard, use the arrow keys to move between squares, Space to use the selected tool, and X to mark a blank.',
       ],
     },

@@ -27,22 +27,25 @@ function fromPicture(picture: readonly string[]): Puzzle {
   }
 }
 
-export const starterPuzzles = [
-  { id: 'heart', title: 'Heart', puzzle: fromPicture(['.#.#.', '#####', '#####', '.###.', '..#..']) },
-  { id: 'owl', title: 'Owl', puzzle: fromPicture(['#...#', '#####', '#.#.#', '.###.', '.#.#.']) },
-  { id: 'perched-bird', title: 'Perched bird', puzzle: fromPicture([
-    '.....###..',
-    '....######',
-    '....####..',
-    '...#####..',
-    '..######..',
-    '.######...',
-    '#####.....',
-    '..##......',
-    '...#......',
-    '.######...',
-  ]) },
-] as const
+export const starterPack = {
+  title: 'First Shapes',
+  puzzles: [
+    { id: 'heart', title: 'Heart', puzzle: fromPicture(['.#.#.', '#####', '#####', '.###.', '..#..']) },
+    { id: 'owl', title: 'Owl', puzzle: fromPicture(['#...#', '#####', '#.#.#', '.###.', '.#.#.']) },
+    { id: 'perched-bird', title: 'Perched bird', puzzle: fromPicture([
+      '.....###..',
+      '....######',
+      '....####..',
+      '...#####..',
+      '..######..',
+      '.######...',
+      '#####.....',
+      '..##......',
+      '...#......',
+      '.######...',
+    ]) },
+  ],
+} as const
 
 function patterns(size: number, runs: Line): number[] {
   if (runs[0] === 0) return [0]
@@ -98,17 +101,28 @@ export function solveByDeduction(puzzle: Puzzle) {
 export function matchesClues(puzzle: Puzzle, cells: readonly Cell[]) {
   const width = puzzle.columns.length
   const matches = (line: readonly Cell[], runs: Line) => clues(line).join(',') === runs.join(',')
-  return puzzle.rows.every((runs, row) => matches(cells.slice(row * width, (row + 1) * width), runs)) &&
+  return cells.length === width * puzzle.rows.length && puzzle.rows.every((runs, row) => matches(cells.slice(row * width, (row + 1) * width), runs)) &&
     puzzle.columns.every((runs, col) => matches(puzzle.rows.map((_, row) => cells[row * width + col]), runs))
 }
 
-export function randomPuzzle(random = Math.random): Puzzle | undefined {
-  for (let attempt = 0; attempt < 160; attempt++) {
+export const randomSizes = [5, 10] as const
+export const randomDifficulties = ['Easy', 'Medium', 'Hard'] as const
+export type RandomOptions = {
+  size: typeof randomSizes[number]
+  difficulty: typeof randomDifficulties[number]
+}
+
+export function randomPuzzle({ size, difficulty }: RandomOptions, random = Math.random): Puzzle | undefined {
+  // The same number of passes is generally harder to reach on smaller boards.
+  const [medium, hard] = size === 5 ? [2, 3] : [3, 5]
+  for (let attempt = 0; attempt < 240; attempt++) {
     const density = 0.52 + random() * 0.16
-    const picture = Array.from({ length: 10 }, () =>
-      Array.from({ length: 10 }, () => random() < density ? '#' : '.').join(''))
+    const picture = Array.from({ length: size }, () =>
+      Array.from({ length: size }, () => random() < density ? '#' : '.').join(''))
     const puzzle = fromPicture(picture)
     const solved = solveByDeduction(puzzle)
-    if (solved && solved.passes >= 3) return puzzle
+    if (!solved) continue
+    const grade = solved.passes >= hard ? 'Hard' : solved.passes >= medium ? 'Medium' : 'Easy'
+    if (grade === difficulty) return puzzle
   }
 }

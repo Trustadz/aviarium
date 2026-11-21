@@ -1,6 +1,14 @@
 import type { apiMessages } from '../../../packages/game-sdk/src/api-messages.js'
 
 export const dutch = {
+  "Grid size": "Roostergrootte",
+  "First Shapes": "Eerste vormen",
+  "Drag across the grid to apply a tool to several squares. Starting on a square that already has that mark clears the whole stroke. Undo reverses one stroke.": "Sleep over het rooster om meerdere vakjes tegelijk te bewerken. Begin op een vakje met dezelfde markering om alle geraakte vakjes te wissen. Ongedaan maken draait één sleepbeweging terug.",
+  "Build and test puzzles here, then publish them in Pack Studio.": "Maak en test hier puzzels en publiceer ze daarna in de pakketstudio.",
+  "Open Pack Studio": "Pakketstudio openen",
+  "Publish this puzzle as part of a pack.": "Publiceer deze puzzel als onderdeel van een pakket.",
+  "Add an existing puzzle": "Een bestaande puzzel toevoegen",
+  "Legacy catalog": "Oude catalogus",
   "Use row and column clues to reveal a picture.": "Gebruik de aanwijzingen bij rijen en kolommen om een afbeelding te onthullen.",
   "Each clue tells you the length of a group of filled squares. Read row clues left to right and column clues top to bottom.": "Elke aanwijzing geeft de lengte van een groep gevulde vakjes aan. Lees rijen van links naar rechts en kolommen van boven naar beneden.",
   "For a clue of 2 1, fill two squares together, leave at least one blank, then fill one more. A clue of 0 means the entire line is blank.": "Bij de aanwijzing 2 1 vul je twee vakjes naast elkaar, laat je minstens één vakje leeg en vul je daarna nog één vakje. Bij 0 blijft de hele rij of kolom leeg.",

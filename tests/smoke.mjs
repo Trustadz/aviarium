@@ -90,24 +90,33 @@ if (adminToken && playerToken) {
   assert.equal(verified.kind, 'unique')
   assert.equal(verified.steps.flatMap(step => step.updates).filter(update => update.filledValue).length,
     Array.from(generated.grid).filter(value => value === '0').length)
-  const published = await request('/api/drafts/' + draft.id + '/publish', {
-    method: 'POST', headers: adminHeaders, body: { jobId: validation.id },
+  const standalone = await request('/api/drafts/' + draft.id + '/publish', {
+    method: 'POST', headers: adminHeaders, body: { jobId: validation.id }, expected: 409,
   })
-  assert.equal(published.revision, 1)
-  const nextDraft = await request('/api/drafts/' + draft.id, { method: 'PUT', headers: adminHeaders,
-    body: { title: updatedTitle + ' Revised', grid: generated.grid, version: draft.version } })
-  await request('/api/drafts/' + draft.id + '/publish', { method: 'POST', expected: 409,
-    headers: adminHeaders, body: { jobId: validation.id } })
-  const nextJob = await verifyDraft(nextDraft)
-  await jobResult(nextJob.id)
-  const second = await request('/api/drafts/' + draft.id + '/publish', { method: 'POST', headers: adminHeaders,
-    body: { jobId: nextJob.id } })
-  assert.equal(second.revision, 2)
-  assert.deepEqual(await request('/api/catalog', { headers: adminHeaders }), await request('/api/catalog', { headers: playerHeaders }))
-  await request('/api/admin/levels/' + published.id, { method: 'PATCH', headers: adminHeaders, body: { hidden: true } })
-  assert.ok(!(await request('/api/catalog', { headers: adminHeaders })).some(level => level.id === published.id))
-  await request('/api/admin/levels/' + published.id, { method: 'PATCH', headers: adminHeaders, body: { hidden: false } })
-  assert.ok((await request('/api/catalog', { headers: adminHeaders })).some(level => level.id === published.id))
+  assert.equal(standalone.code, 'draft_pack_required')
+  const packData = { format: 1, game: 'sudoku', title: updatedTitle, description: '', theme: 'meadow',
+    rules: { hints: true, autoNotes: true, inOrder: false, lives: null, timeTrial: false },
+    puzzles: [{ title: draft.title, grid: draft.grid, ruleset: 1 }] }
+  const pack = await request('/api/pack-drafts', { method: 'POST', headers: adminHeaders, body: packData })
+  const publish = (version, expected = 200) => request('/api/pack-drafts/' + pack.id + '/publish', {
+    method: 'POST', headers: adminHeaders, body: { version }, expected,
+  })
+  assert.equal((await publish(pack.version)).published, 1)
+  const updated = await request('/api/pack-drafts/' + pack.id, { method: 'PUT', headers: adminHeaders,
+    body: { version: pack.version, data: { ...packData, title: updatedTitle + ' Revised' } } })
+  await publish(pack.version, 409)
+  assert.equal((await publish(updated.version)).published, 2)
+  assert.equal((await request('/api/packs/' + pack.id + '/1', { headers: playerHeaders })).data.title, updatedTitle)
+  assert.deepEqual(await request('/api/catalog', { headers: playerHeaders }), starting)
+  const visibility = visible => request('/api/pack-drafts/' + pack.id + '/visibility', {
+    method: 'PATCH', headers: adminHeaders, body: { visible },
+  })
+  const visiblePacks = () => request('/api/packs', { headers: playerHeaders })
+  assert.ok((await visiblePacks()).some(item => item.id === pack.id && item.revision === 2))
+  await visibility(false)
+  assert.ok(!(await visiblePacks()).some(item => item.id === pack.id))
+  await visibility(true)
+  assert.ok((await visiblePacks()).some(item => item.id === pack.id))
 
   const sessionId = crypto.randomUUID()
   const initial = { game: 'sudoku', format: 1, ruleset: 1, level: selected.id, levelRevision: selected.revision,
@@ -300,9 +309,45 @@ try {
   await page.getByRole('button', { name: 'How to play' }).tap()
   await page.getByRole('heading', { name: 'How to play Nonograms' }).waitFor()
   await page.getByRole('link', { name: 'Nonograms menu' }).tap()
+  assert.equal(await page.getByRole('button', { name: 'Heart' }).isVisible(), false)
+  await page.getByRole('button', { name: 'First Shapes' }).tap()
   await page.getByRole('button', { name: 'Heart' }).tap()
   const nonogramCells = page.getByRole('group', { name: 'Puzzle grid' }).getByRole('button')
   assert.equal(await nonogramCells.count(), 25)
+  await nonogramCells.first().scrollIntoViewIfNeeded()
+  const center = async index => {
+    const bounds = await nonogramCells.nth(index).boundingBox()
+    return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  }
+  const from = await center(0)
+  const to = await center(2)
+  const drag = async () => {
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(to.x, to.y)
+    await page.mouse.up()
+  }
+  const rowMarks = () => nonogramCells.evaluateAll(cells => cells.slice(0, 3).map(cell => cell.dataset.mark))
+  await drag()
+  assert.deepEqual(await rowMarks(), ['1', '1', '1'])
+  await drag()
+  assert.deepEqual(await rowMarks(), ['0', '0', '0'])
+  await page.getByRole('button', { name: 'Undo', exact: true }).tap()
+  assert.deepEqual(await rowMarks(), ['1', '1', '1'])
+  await page.getByRole('button', { name: 'Undo', exact: true }).tap()
+  assert.deepEqual(await rowMarks(), ['0', '0', '0'])
+  const touch = await context.newCDPSession(page)
+  await nonogramCells.first().scrollIntoViewIfNeeded()
+  await page.getByRole('button', { name: 'Mark blank' }).tap()
+  await nonogramCells.first().scrollIntoViewIfNeeded()
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [await center(0)] })
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [await center(2)] })
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await touch.detach()
+  assert.deepEqual(await rowMarks(), ['2', '2', '2'])
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  assert.deepEqual(await rowMarks(), ['0', '0', '0'])
+  await page.getByRole('button', { name: 'Fill', exact: true }).click()
   await nonogramCells.nth(0).tap()
   assert.equal(await nonogramCells.nth(0).getAttribute('data-mark'), '1')
   await nonogramCells.nth(0).press('ArrowRight')
@@ -316,6 +361,12 @@ try {
   for (const index of [1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 22])
     await nonogramCells.nth(index).tap()
   await page.getByRole('status').filter({ hasText: 'Puzzle solved!' }).waitFor()
+  await page.getByLabel('Grid size').selectOption('5')
+  await page.getByLabel('Difficulty').selectOption('Easy')
+  await page.getByRole('button', { name: 'Random puzzle', exact: true }).tap()
+  assert.equal(await nonogramCells.count(), 25)
+  await page.getByLabel('Grid size').selectOption('10')
+  await page.getByLabel('Difficulty').selectOption('Hard')
   await page.getByRole('button', { name: 'Random puzzle', exact: true }).tap()
   assert.equal(await nonogramCells.count(), 100)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
@@ -363,6 +414,13 @@ try {
     await adminPage.getByRole('button', { name: 'Next step' }).click()
     await adminPage.getByText(/^1 \/ \d+/).waitFor()
     if (process.env.AVIARIUM_SCREENSHOTS) await adminPage.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/studio-desktop.png', fullPage: true })
+    const savedTitle = await adminPage.getByLabel('Draft title').inputValue()
+    await adminPage.getByRole('button', { name: 'Open Pack Studio' }).click()
+    await adminPage.getByLabel('Pack title').fill('From a saved draft')
+    await adminPage.getByLabel('Add an existing puzzle').selectOption({ label: savedTitle })
+    await adminPage.getByRole('button', { name: 'Add', exact: true }).click()
+    await adminPage.getByRole('button', { name: 'Publish pack' }).click()
+    await adminPage.getByRole('status').filter({ hasText: 'Published pack revision 1' }).waitFor()
     await adminPage.getByRole('navigation', { name: 'Main navigation' }).waitFor()
     await openSettings(adminPage, 'Administration')
     await adminPage.getByRole('heading', { name: 'Administration' }).waitFor()
