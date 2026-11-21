@@ -1,6 +1,7 @@
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 
 import type { GuideSection } from './GameGuide.js'
+import { NonogramsPreview } from './NonogramsPreview.js'
 import { SudokuPreview } from './Grid.js'
 
 const sudokuGuide: readonly GuideSection[] = [
@@ -30,4 +31,24 @@ const sudokuGuide: readonly GuideSection[] = [
 export const games = [{
   ...sudoku, url: '/games/sudoku', theme: 'sudoku-theme',
   Preview: SudokuPreview, player: () => import('./Player.js'), guide: sudokuGuide,
+}, {
+  id: 'nonograms', title: 'Nonograms', description: 'Use row and column clues to reveal a picture.',
+  tags: ['Logic', 'Picross'], eReader: true, url: '/games/nonograms', theme: 'nonogram-theme',
+  Preview: NonogramsPreview, player: () => import('./Nonograms.js'),
+  guide: [
+    {
+      title: 'The goal',
+      paragraphs: [
+        'Each clue tells you the length of a group of filled squares. Read row clues left to right and column clues top to bottom.',
+        'For a clue of 2 1, fill two squares together, leave at least one blank, then fill one more. A clue of 0 means the entire line is blank.',
+      ],
+    },
+    {
+      title: 'Use the controls',
+      paragraphs: [
+        'Choose Fill, Mark blank, or Erase, then tap a square. Marks help you keep track of blanks. The puzzle is solved when the filled squares match every clue.',
+        'With a keyboard, use the arrow keys to move between squares, Space to use the selected tool, and X to mark a blank.',
+      ],
+    },
+  ],
 }] as const

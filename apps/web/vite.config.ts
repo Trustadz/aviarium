@@ -32,7 +32,7 @@ export default defineConfig({
         const chunk = bundle[name]
         return chunk.type === 'chunk' && chunk.isEntry
       }))
-      const gameAssets = Object.fromEntries(Object.entries({ sudoku: '/src/Player.tsx' }).map(([id, entry]) => {
+      const gameAssets = Object.fromEntries(Object.entries({ sudoku: '/src/Player.tsx', nonograms: '/src/Nonograms.tsx' }).map(([id, entry]) => {
         const files = assets(names.filter(name => {
           const chunk = bundle[name]
           return chunk.type === 'chunk' && chunk.facadeModuleId?.endsWith(entry)

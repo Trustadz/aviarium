@@ -18,7 +18,7 @@ async function offlineRequest(worker: ServiceWorker, operation: 'open' | 'touch'
 export function useGameDownloads(game: string | undefined, online: boolean, enabled = true) {
   const [installed, setInstalled] = useState<string[]>([])
   const opened = useRef<{ game: string; worker: ServiceWorker; installed: boolean } | undefined>(undefined)
-  const nextActivity = useRef(0)
+  const nextActivity = useRef(new Map<string, number>())
   useEffect(() => {
     const serviceWorker = navigator.serviceWorker
     if (!enabled || !serviceWorker) return
@@ -57,9 +57,9 @@ export function useGameDownloads(game: string | undefined, online: boolean, enab
   }, [])
   const recordActivity = useCallback((id: string) => {
     const worker = navigator.serviceWorker?.controller
-    if (!worker || Date.now() < nextActivity.current) return
-    nextActivity.current = Date.now() + 60 * 60 * 1000
-    void offlineRequest(worker, 'touch', id).catch(() => { nextActivity.current = 0 })
+    if (!worker || Date.now() < (nextActivity.current.get(id) ?? 0)) return
+    nextActivity.current.set(id, Date.now() + 60 * 60 * 1000)
+    void offlineRequest(worker, 'touch', id).catch(() => { nextActivity.current.delete(id) })
   }, [])
   return { installed, remove, recordActivity }
 }

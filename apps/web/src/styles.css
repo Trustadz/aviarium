@@ -557,3 +557,14 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   max-width: 680px; margin-inline: auto; display: grid; justify-items: start;
   gap: 16px; padding: clamp(18px, 4vw, 30px);
 }
+
+.app[data-surface=nonograms] { background: var(--surface); }
+.nonogram-theme { --card-art: linear-gradient(135deg, #f6dfb5, #e9b5a0); }
+.app[data-theme=dark] .nonogram-theme { --card-art: linear-gradient(135deg, #514354, #643e4c); }
+.nonogram-preview {
+  display: grid; grid-template-columns: repeat(7, 1fr); width: 126px; aspect-ratio: 1;
+  border: 1px solid var(--border); background: var(--surface); box-shadow: 0 8px 18px #382b3b30;
+}
+.nonogram-preview span { border: 1px solid var(--border); }
+.nonogram-preview [data-filled=true] { background: var(--accent); border-color: var(--accent); }
+.reader .nonogram-theme { --card-art: var(--surface); }

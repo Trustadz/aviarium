@@ -24,6 +24,8 @@ import './styles.css'
 
 const featuredGame = games[0]
 const Player = lazy(featuredGame.player)
+const nonograms = games[1]
+const Nonograms = lazy(nonograms.player)
 const Studio = lazy(() => import('./Studio.js'))
 const PackStudio = lazy(() => import('./PackStudio.js'))
 const Admin = lazy(() => import('./Admin.js'))
@@ -176,6 +178,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [manageInstalls, setManageInstalls] = useState(() => localStorage.getItem('aviarium:manage-installs') === 'on')
   const [active, setActive] = useState<{ session: LocalSession; level: PublishedLevel; head: LocalSession; pack?: PublishedPack }>()
   const [query, setQuery] = useState('')
+  const favoriteKey = 'aviarium:nonograms:favorite:' + profile
+  const [favoriteNonograms, setFavoriteNonograms] = useState(() => localStorage.getItem(favoriteKey) === 'on')
+  function toggleNonogramsFavorite() {
+    if (favoriteNonograms) localStorage.removeItem(favoriteKey)
+    else localStorage.setItem(favoriteKey, 'on')
+    setFavoriteNonograms(!favoriteNonograms)
+  }
   const [category, setCategory] = useState('All games')
   const [dialog, showDialog] = useState<'display' | 'sudoku' | 'account'>()
   const [changingRole, setChangingRole] = useState(false)
@@ -357,7 +366,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     })
   }
   const matches = games.filter(game => (!reader || game.eReader) &&
-    (category !== 'Favorites' || prefs.favorite) &&
+    (category !== 'Favorites' || (game.id === 'sudoku' ? prefs.favorite : favoriteNonograms)) &&
     (category !== 'Logic' || game.tags.includes('Logic')) &&
     (game.title + ' ' + game.tags.map(tag => knownMessage(t, tag)).join(' ')).toLowerCase().includes(query.trim().toLowerCase()))
   const continueCards = sessions.flatMap(session => {
@@ -395,7 +404,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     .map(item => levelKey(item.data.level, item.data.levelRevision))])
 
   const editableGames = account && online ? games.filter(game =>
-    account.role === 'admin' || account.editorGames.includes(game.id)) : []
+    game.id === 'sudoku' && (account.role === 'admin' || account.editorGames.includes(game.id))) : []
   const canEditSudoku = Boolean(account && editableGames.some(game => game.id === featuredGame.id))
   const preview = catalog.find(level => level.id === 'first-light') ?? catalog[0]
   const inLibrary = path === '/'
@@ -405,7 +414,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const inAbout = path === '/about'
   const inGame = Boolean(openGame)
   const inShell = !inGame
-  const surface = inGame ? 'sudoku' : inStudio ? 'studio' : 'library'
+  const surface = openGame?.id ?? (inStudio ? 'studio' : 'library')
   const app = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => setBrowserTheme(app.current, surface === 'sudoku' ? '--sudoku-page' : '--surface'),
     [reader, surface, theme])
@@ -432,7 +441,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
       </div>
     </>}
-    <main className={(inGame ? 'game-frame' : 'frame main-frame') + (inGame ? ' sudoku-theme' : '')}>
+    <main className={(inGame ? 'game-frame' : 'frame main-frame') + (openGame ? ' ' + openGame.theme : '')}>
       {notice && <div className="notice" role="alert">{knownMessage(t, notice)}<button onClick={() => setNotice('')}>{t("Dismiss")}</button></div>}
       {inLibrary && networkNotice && <p role="status" className="network-notice">{t("Sync delayed.")}{" "}{knownMessage(t, networkNotice)}</p>}
       {inLibrary && online && activate && <div className="notice">{t("An Aviarium update is ready.")}<button onClick={activate}>{t("Reload")}</button></div>}
@@ -457,11 +466,15 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           <div className="tabs" aria-label={t("Game categories")}>{['All games', 'Logic', 'Favorites'].map(name =>
             <button key={name} aria-pressed={name === category} onClick={() => setCategory(name)}>{knownMessage(t, name)}</button>)}</div>
           <div className="game-list">{matches.map(game => <article className="game-card" key={game.id}>
-            <a className={'game-card-image ' + game.theme} href={game.url} onClick={event => link(event, game.url)} aria-label={t('Open {game}', { game: game.title })}>{preview && <game.Preview grid={preview.grid}/>}</a>
+            <a className={'game-card-image ' + game.theme} href={game.url} onClick={event => link(event, game.url)} aria-label={t('Open {game}', { game: game.title })}>{game.id === 'sudoku' ? preview && <game.Preview grid={preview.grid}/> : <game.Preview/>}</a>
             <div className="game-card-body">
               <div className="card-title"><h3><a href={game.url} onClick={event => link(event, game.url)}>{game.title}</a></h3>
-              <button className="icon-button" aria-label={prefs.favorite ? t("Remove Sudoku from favorites") : t("Add Sudoku to favorites")}
-                aria-pressed={prefs.favorite} onClick={() => changePrefs({ favorite: !prefs.favorite })}><Heart size={19} fill={prefs.favorite ? 'currentColor' : 'none'}/></button></div>
+              {game.id === 'sudoku'
+                ? <button className="icon-button" aria-label={prefs.favorite ? t("Remove Sudoku from favorites") : t("Add Sudoku to favorites")}
+                  aria-pressed={prefs.favorite} onClick={() => changePrefs({ favorite: !prefs.favorite })}><Heart size={19} fill={prefs.favorite ? 'currentColor' : 'none'}/></button>
+                : <button className="icon-button" aria-label={favoriteNonograms ? t('Remove Nonograms from favorites') : t('Add Nonograms to favorites')}
+                  aria-pressed={favoriteNonograms} onClick={toggleNonogramsFavorite}><Heart size={19} fill={favoriteNonograms ? 'currentColor' : 'none'}/></button>}
+            </div>
               <p>{t(game.description)}</p>
               <div className="card-footer"><span className="badge">{t("Logic")}</span><span className="badge e-ink"><BookOpen size={13}/>{" "}{t("E-reader")}</span>
                 <a className="text-button" href={game.url} onClick={event => link(event, game.url)}>{t("Play")}{" "}<ArrowRight size={16}/></a></div>
@@ -484,6 +497,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         reset={() => perform(async () => { await deleteAttempt(active.head.id); await open(active.level, undefined, active.pack) })}/>
       : openGame && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
         sections={openGame.guide} leave={event => link(event, openGame.url)}/>
+      : path === nonograms.url ? (online || installed.includes(nonograms.id)
+        ? <Nonograms profile={profile} leave={() => go('/')} guide={() => go(nonograms.url + '/how-to')}
+          onActivity={() => recordActivity(nonograms.id)}/>
+        : <section className="catalog"><button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> {t('Library')}</button>
+          <h1>Nonograms</h1><p className="notice">{t('Connect to install Nonograms on this device.')}</p></section>)
       : path === '/games/sudoku/history' ? <SudokuHistory sessions={sessions} levels={savedLevels} packs={packs}
         leave={() => go('/games/sudoku')} replay={level => perform(() => open(level))} canPlay={canPlay}/>
       : path.startsWith('/games/sudoku/packs/') ? viewedPack && packPath(viewedPack) === path

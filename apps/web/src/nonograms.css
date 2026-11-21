@@ -1,0 +1,38 @@
+.nonograms { display: grid; gap: 18px; }
+.nonogram-picker, .nonogram-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.nonogram-picker small { color: var(--muted); }
+.nonogram-picker [aria-pressed=true], .nonogram-tools [aria-pressed=true] {
+  border-color: var(--accent); background: var(--tint); color: var(--accent-strong);
+}
+.nonogram-play { display: grid; justify-items: center; gap: 12px; padding-block: 10px; }
+.nonogram-board {
+  --clue-width: calc(var(--row-clues) * 0.85em + 0.5em);
+  --grid-rule: 1px solid var(--border);
+  width: min(100%, 410px);
+  font: 650 clamp(.75rem, 2.75vw, 1rem)/1.15 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.nonogram-column-clues, .nonogram-row {
+  display: grid;
+  grid-template-columns: var(--clue-width) repeat(var(--columns), minmax(0, 1fr));
+}
+.nonogram-column-clues::before { content: ''; }
+.nonogram-column-clues > div { display: grid; align-content: end; justify-items: center; padding-bottom: .3em; }
+.nonogram-row-clue { align-self: center; justify-self: end; padding-right: .3em; white-space: nowrap; }
+.nonogram-cell {
+  display: grid; place-items: center; min-width: 0; aspect-ratio: 1; padding: 0;
+  border: 0; border-right: var(--grid-rule); border-bottom: var(--grid-rule);
+  background: var(--surface); color: var(--text);
+}
+.nonogram-cell[data-mark="1"] { background: var(--accent); }
+.nonogram-cell:focus-visible { z-index: 1; outline-color: var(--text); outline-offset: 1px; }
+.nonogram-cell[aria-disabled=true] { cursor: default; }
+.nonogram-row:first-child .nonogram-cell { border-top: 1px solid var(--text); }
+.nonogram-row .nonogram-cell:first-of-type { border-left: 1px solid var(--text); }
+.nonogram-row .nonogram-cell:last-of-type { border-right-color: var(--text); }
+.nonogram-row:last-child .nonogram-cell { border-bottom-color: var(--text); }
+.nonogram-row .nonogram-cell:nth-of-type(5) { border-right-color: var(--text); }
+.nonogram-row:nth-child(5) .nonogram-cell { border-bottom-color: var(--text); }
+.nonogram-board[data-solved=true] .nonogram-cell { border-color: transparent; }
+.nonogram-tools { justify-content: center; }
+.nonogram-solved { color: var(--feedback); font-weight: 700; }

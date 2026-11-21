@@ -1,6 +1,6 @@
 # Aviarium
 
-A self-hosted, installable puzzle library. Sudoku is the only game in the first release. Everyone plays the same published catalog with the same difficulty grades. Creators can generate drafts and test them on the server before publishing.
+A self-hosted, installable puzzle library. Play Sudoku and Nonograms. Everyone plays the same published Sudoku catalog with the same difficulty grades. Nonograms has three starter puzzles and a random 10 × 10 mode with device-local progress. Creators can generate drafts and test them on the server before publishing.
 
 ## Deploy
 
@@ -50,6 +50,7 @@ From a terminal with the GitHub CLI, the same release command is `gh workflow ru
 - `apps/web` holds the launcher, creator studio, admin screens, IndexedDB, and PWA.
 - `apps/server` holds the Fastify API, PostgreSQL migrations, OIDC, puzzle worker, and backup runner.
 - `packages/game-sdk` provides renderer-neutral game and result types.
+- `packages/nonograms` holds the starter puzzles and deduction-based random puzzle filter.
 - `packages/sudoku` holds the deterministic rules, versioned save contract, generator, grader, and solver.
 
 See [game registration and data contracts](docs/architecture.md).

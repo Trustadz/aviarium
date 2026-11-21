@@ -2,7 +2,7 @@
 
 ## Game registration
 
-The web registry in `apps/web/src/registry.ts` exposes lightweight metadata and a lazy player loader. Sudoku ruleset 1 is used by the player, API completion verification, and the server puzzle worker. The current API and PWA routes are explicitly bound to Sudoku. When a second game is approved, add its registered ruleset, content codecs, optional creator tools, route, and asset graph alongside Sudoku. A game supplies its own validation semantics and rendering technology.
+The web registry in `apps/web/src/registry.ts` exposes lightweight metadata and a lazy player loader. Sudoku ruleset 1 is used by the player, API completion verification, and the server puzzle worker. Server puzzle APIs and Studio are bound to Sudoku. Nonograms registers its own player, guide, routes, and offline asset graph. It has three built-in puzzles and generates 10 × 10 puzzles locally, accepting only boards solved by forced line deductions over multiple passes. The deduction process also establishes uniqueness. Its current board and latest random puzzle are saved on the device per profile.
 
 ## Levels and checks
 
@@ -26,7 +26,7 @@ The production service worker caches the library shell and installs game assets 
 
 ## Current scope
 
-The platform ships Sudoku, player accounts and roles, draft review and publishing, local and server progress, and scheduled PostgreSQL backups. It also ships Sudoku packs, seeded Quick Play, and completion history. Personal or competitive ranking, daily schedules, and other games require their own milestones.
+The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, and scheduled PostgreSQL backups. It also ships Sudoku packs, seeded Quick Play, and completion history. Personal or competitive ranking, daily schedules, and other games require their own milestones.
 
 ## Release announcements
 
