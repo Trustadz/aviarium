@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Check, LockKeyhole, Timer } from 'lucide-react'
 
 export interface PackTrailStop {
@@ -18,9 +18,13 @@ export function PackTrail({ stops, canPlay }: {
   canPlay: boolean
 }) {
   const trail = useRef<HTMLOListElement>(null)
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const list = trail.current
+    if (!list) return
     const anchor = location.hash.slice(1)
-    if (/^stop-\d+$/.test(anchor)) trail.current?.querySelector('#' + anchor)?.scrollIntoView({ block: 'center' })
+    const linked = /^stop-\d+$/.test(anchor) ? list.querySelector('#' + anchor) : null
+    const stop = linked ?? list.querySelector('[aria-current="step"]') ?? list.lastElementChild
+    stop?.scrollIntoView({ block: 'center' })
   }, [])
 
   return <ol className="pack-trail" ref={trail} role="list">

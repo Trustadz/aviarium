@@ -409,7 +409,10 @@ try {
   }))
   assert.equal(pins.length, 3)
   assert.ok(pins[0].left < pins[1].left && pins[0].left === pins[2].left)
-  assert.ok(pins[0].top < pins[1].top && pins[1].top < pins[2].top)
+  assert.ok(pins[0].top > pins[1].top && pins[1].top > pins[2].top)
+  assert.ok(pins[0].top < 700 && pins[0].top > 0)
+  assert.ok(await packPage.getByRole('button', { name: 'Sudoku menu', exact: true }).evaluate(button =>
+    button.getBoundingClientRect().top >= 0 && button.getBoundingClientRect().bottom <= innerHeight))
   assert.equal(await packPage.evaluate(() => document.documentElement.scrollWidth), 320)
 
   const headers = playerToken ? playerHeaders : adminHeaders
@@ -424,10 +427,14 @@ try {
   }
   await packPage.getByRole('button', { name: 'Back to roadmap', exact: true }).click()
   await current.getByRole('heading', { name: 'Eucalyptus Grove' }).waitFor()
+  assert.ok(await current.locator('.pack-stop-marker').evaluate(marker => {
+    const { top, bottom } = marker.getBoundingClientRect()
+    return top >= 0 && bottom <= innerHeight
+  }))
   assert.equal(await locked.isEnabled(), true)
   assert.equal(await packPage.getByRole('button', { name: 'Replay Garden Perch', exact: true }).isEnabled(), true)
   await packContext.close()
-  console.info('Pack trail checks passed: alternating pins, mobile layout, locked stop, and unlocking the next stop.')
+  console.info('Pack trail checks passed: bottom-to-top pins, visible next stop, and unlocking the next stop.')
 
   console.info('Browser checks passed: mobile controls, notes, history, keyboard, pause, e-reader, offline reload and resume', adminToken ? ', studio and admin' : '', playerToken ? ', two-browser sync' : '')
 } finally {

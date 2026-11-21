@@ -373,6 +373,12 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .pack-cover { aspect-ratio: 6 / 5; }
 .pack-card-copy { display: grid; gap: 4px; align-content: start; padding: 10px 11px; font-size: .78rem; overflow-wrap: anywhere; }
 .pack-card-title { display: flex; align-items: center; justify-content: space-between; gap: 5px; font-size: 1.02rem; font-weight: 770; }
+.pack-roadmap > .game-navigation {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 2;
+  background: var(--sudoku-page, var(--bg));
+}
 .pack-banner { display: grid; grid-template-columns: minmax(0,1fr) minmax(0, min(40%, 300px)); overflow: hidden;
   border: 1px solid var(--pack-border); border-radius: var(--radius); background: var(--pack-surface); }
 .pack-backdrop { grid-column: 2; grid-row: 1; aspect-ratio: 4 / 5; height: 100%; }
@@ -387,6 +393,8 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --pack-road-gap: clamp(40px, 9vw, 64px);
   --pack-road-curve: 24px;
   --pack-road-color: var(--pack-border, var(--border));
+  display: flex;
+  flex-direction: column-reverse;
   list-style: none;
   max-width: 660px;
   margin: clamp(16px, 4vw, 28px) auto;
@@ -404,7 +412,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   column-gap: clamp(10px, 3vw, 22px);
   position: relative;
   isolation: isolate;
-  padding-block-end: var(--pack-stop-gap);
+  padding-block-start: var(--pack-stop-gap);
 }
 .pack-trail > li:last-child { --pack-stop-gap: 0px; }
 .pack-trail > li:nth-child(even) { grid-template-columns: minmax(0, 1fr) var(--pack-pin-size); }
@@ -415,16 +423,16 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   pointer-events: none;
   border: 0 solid var(--pack-road-color);
 }
-.pack-trail > li:first-child::before, .pack-trail > li:last-child::after { content: none; }
+.pack-trail > li:last-child::before, .pack-trail > li:first-child::after { content: none; }
 /* The two bends meet halfway between stops, regardless of card height. */
 .pack-trail > li::before {
-  inset-block-start: calc((var(--pack-road-gap) + var(--pack-road-width)) / -2);
-  inset-block-end: calc((100% + var(--pack-stop-gap)) / 2);
+  inset-block-start: calc((var(--pack-road-gap) - var(--pack-road-width)) / 2);
+  inset-block-end: calc((100% - var(--pack-stop-gap)) / 2);
   border-block-start-width: var(--pack-road-width);
 }
 .pack-trail > li::after {
-  inset-block-start: calc((100% - var(--pack-stop-gap)) / 2);
-  inset-block-end: calc((var(--pack-road-gap) - var(--pack-road-width)) / 2);
+  inset-block-start: calc((100% + var(--pack-stop-gap)) / 2);
+  inset-block-end: calc((var(--pack-road-gap) + var(--pack-road-width)) / -2);
   border-block-end-width: var(--pack-road-width);
 }
 .pack-trail > li:nth-child(odd)::before, .pack-trail > li:nth-child(odd)::after {
