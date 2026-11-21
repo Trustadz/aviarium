@@ -1,7 +1,10 @@
+import { useIntl } from 'react-intl'
+import { levelTitle, packDescription, packTitle } from './sudoku-copy.js'
+import { knownMessage, useT, type Translate } from './i18n.js'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, Download, LockKeyhole, Share2, Shuffle, Timer } from 'lucide-react'
 import { difficulties, type Difficulty, type PublishedLevel } from '../../../packages/game-sdk/src/index.js'
-import { packLevels, packRuleLabels, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { packLevels, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { quickPlayVersion } from '../../../packages/sudoku/src/contracts.js'
 import { formatSeedCode, parseSeedCode } from '../../../packages/sudoku/src/seed-code.js'
 import { errorMessage } from './api.js'
@@ -12,6 +15,7 @@ const sudokuPath = '/games/sudoku'
 export const packPath = (pack: Pick<PublishedPack, 'id' | 'revision'>) => `${sudokuPath}/packs/${pack.id}/${pack.revision}`
 
 export function PuzzleShare({ level }: { level: PublishedLevel }) {
+  const t = useT()
   const [show, setShow] = useState(false)
   const [copied, setCopied] = useState(false)
   if (!level.seed || level.pack || level.generatorVersion !== quickPlayVersion) return null
@@ -28,12 +32,12 @@ export function PuzzleShare({ level }: { level: PublishedLevel }) {
     }
     setShow(true)
   }
-  return <><button className="text-button" onClick={() => { void share() }}><Share2 size={16}/> Share seed</button>
+  return <><button className="text-button" onClick={() => { void share() }}><Share2 size={16}/>{" "}{t("Share seed")}</button>
     {show && <div className="puzzle-share">
-      <input readOnly aria-label="Seed code" value={seed} onFocus={event => event.target.select()}/>
+      <input readOnly aria-label={t("Seed code")} value={seed} onFocus={event => event.target.select()}/>
       {navigator.clipboard && <button className="secondary" onClick={() => {
         void navigator.clipboard.writeText(seed).then(() => setCopied(true)).catch(() => undefined)
-      }}>{copied ? 'Copied' : 'Copy seed'}</button>}
+      }}>{copied ? t("Copied") : t("Copy seed")}</button>}
     </div>}
   </>
 }
@@ -42,6 +46,7 @@ export function QuickPlay({ online, profile, generate }: {
   online: boolean; profile: string
   generate: (difficulty: Difficulty, seed?: string, version?: number) => Promise<void>
 }) {
+  const t = useT()
   const params = new URLSearchParams(location.search)
   const received = params.get('sharedSeed')?.trim() ?? ''
   const sharedCode = parseSeedCode(received)
@@ -70,53 +75,54 @@ export function QuickPlay({ online, profile, generate }: {
         .catch(error => setProblem(errorMessage(error))).finally(() => setBusy(false))
     }}>
       <div className="quick-play-header">
-        <h2 id="quick-title">Quick Play</h2>
+        <h2 id="quick-title">{t("Quick Play")}</h2>
         <button type="button" className="text-button" aria-expanded={hasSeed} disabled={busy}
-          onClick={() => setHasSeed(!hasSeed)}>{hasSeed ? 'Random seed' : 'Enter seed'}</button>
+          onClick={() => setHasSeed(!hasSeed)}>{hasSeed ? t("Random seed") : t("Enter seed")}</button>
       </div>
-      {hasSeed && <label className="quick-seed">Puzzle seed<input maxLength={120} value={seed} required
+      {hasSeed && <label className="quick-seed">{t("Puzzle seed")}<input maxLength={120} value={seed} required
         onChange={event => setSeed(event.target.value)}/></label>}
       <div className="quick-play-actions">
-        <select aria-label="Difficulty" value={selectedDifficulty} disabled={busy || Boolean(seedDifficulty)}
+        <select aria-label={t("Difficulty")} value={selectedDifficulty} disabled={busy || Boolean(seedDifficulty)}
           onChange={event => {
             const next = event.target.value as Difficulty
             setDifficulty(next)
             localStorage.setItem(difficultyKey, next)
           }}>
-          {difficulties.map(value => <option key={value} value={value}>{value}</option>)}
+          {difficulties.map(value => <option key={value} value={value}>{t(value)}</option>)}
         </select>
         <button type="submit" className="primary" disabled={!online || busy || (hasSeed && (!seed.trim() || (!embedded && seed.trim().length > 100)))}>
-          <Shuffle size={17}/>{busy ? 'Preparing puzzle…' : hasSeed ? 'Play seed' : 'New puzzle'}
+          <Shuffle size={17}/>{busy ? t("Preparing puzzle…") : hasSeed ? t("Play seed") : t("New puzzle")}
         </button>
       </div>
-      {!online && <p>Connect to start a new Quick Play puzzle.</p>}
-      {problem && <p className="error" role="alert">{problem}</p>}
+      {!online && <p>{t("Connect to start a new Quick Play puzzle.")}</p>}
+      {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
     </form>
   </section>
 }
 
-function gradeRange(pack: PublishedPack) {
+function gradeRange(t: Translate, pack: PublishedPack) {
   const tiers = pack.data.puzzles.map(puzzle => difficulties.indexOf(puzzle.difficulty))
   const min = Math.min(...tiers), max = Math.max(...tiers)
-  return min === max ? difficulties[min] : difficulties[min] + '–' + difficulties[max]
+  return min === max ? t(difficulties[min]) : t(difficulties[min]) + '–' + t(difficulties[max])
 }
 
 export function PackCards({ packs, completed, open }: {
   packs: PublishedPack[]; completed: ReadonlySet<string>; open: (pack: PublishedPack) => void
 }) {
+  const t = useT()
   return <section className="sudoku-packs" aria-labelledby="packs-title">
-    <h2 id="packs-title">Packs</h2>
+    <h2 id="packs-title">{t("Packs")}</h2>
     {packs.length ? <div className="pack-cards">{packs.map(pack => {
       const levels = packLevels(pack)
       const solved = levels.filter(level => completed.has(levelKey(level.id, level.revision))).length
       return <button className={`pack-card pack-${pack.data.theme}`} key={pack.id} onClick={() => open(pack)}>
         {pack.data.cover && <img className="pack-cover" src={pack.data.cover} alt=""/>}
         <div className="pack-card-copy">
-          <span className="pack-card-title">{pack.data.title}<ArrowRight size={18}/></span>
-          <span>{gradeRange(pack)} · {solved} of {levels.length} solved</span>
+          <span className="pack-card-title">{packTitle(t, pack)}<ArrowRight size={18}/></span>
+          <span>{gradeRange(t, pack)} · {t('{solved} of {total} solved', { solved, total: levels.length })}</span>
         </div>
       </button>
-    })}</div> : <p>No packs available on this device yet.</p>}
+    })}</div> : <p>{t("No packs available on this device yet.")}</p>}
   </section>
 }
 
@@ -129,6 +135,7 @@ export function PackRoadmap({ pack, completed, sessions, canPlay, canExport, lea
   pack: PublishedPack; completed: ReadonlySet<string>; sessions: LocalSession[]; canPlay: boolean; canExport: boolean
   leave: () => void; play: (level: PublishedLevel) => void
 }) {
+  const t = useT()
   const levels = packLevels(pack)
   const solved = levels.map(level => completed.has(levelKey(level.id, level.revision)))
   const next = solved.indexOf(false)
@@ -139,15 +146,18 @@ export function PackRoadmap({ pack, completed, sessions, canPlay, canExport, lea
   }, [pack.id, pack.revision])
   return <section className={`catalog pack-roadmap pack-${pack.data.theme}`}>
     <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> Sudoku menu</button>
-      {canExport && <a className="text-button" href={`/api/packs/${pack.id}/${pack.revision}/export`} download><Download size={17}/> Export pack</a>}
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/>{" "}{t("Sudoku menu")}</button>
+      {canExport && <a className="text-button" href={`/api/packs/${pack.id}/${pack.revision}/export`} download><Download size={17}/>{" "}{t("Export pack")}</a>}
     </div>
     <header className="pack-banner">
       {art && <img className="pack-backdrop" src={art} alt=""/>}
-      <div className="pack-intro"><h1>{pack.data.title}</h1>
-        {pack.data.description && <p>{pack.data.description}</p>}
-        <p>{gradeRange(pack)} · {solved.filter(Boolean).length} of {levels.length} solved</p>
-        <ul className="pack-tags">{packRuleLabels(pack.data.rules).map(rule => <li className="badge" key={String(rule)}>{rule}</li>)}</ul>
+      <div className="pack-intro"><h1>{packTitle(t, pack)}</h1>
+        {pack.data.description && <p>{packDescription(t, pack)}</p>}
+        <p>{gradeRange(t, pack)} · {t('{solved} of {total} solved', { solved: solved.filter(Boolean).length, total: levels.length })}</p>
+        <ul className="pack-tags">{[t(pack.data.rules.inOrder ? 'In order' : 'Pick & choose'),
+          !pack.data.rules.hints && t('No hints'), !pack.data.rules.autoNotes && t('No Auto notes'),
+          pack.data.rules.lives && t('{count, plural, one {# life} other {# lives}}', { count: pack.data.rules.lives }),
+          pack.data.rules.timeTrial && t('Time trial')].filter(Boolean).map(rule => <li className="badge" key={String(rule)}>{rule}</li>)}</ul>
       </div>
     </header>
     <ol className="pack-trail">
@@ -160,12 +170,13 @@ export function PackRoadmap({ pack, completed, sessions, canPlay, canExport, lea
           item.data.levelRevision === level.revision).map(item => item.data.elapsedMs) : []
         return <li id={`stop-${index + 1}`} key={level.id} className={next === index ? 'next-stop' : undefined}>
           <span className="stop-number" aria-hidden="true">{solved[index] ? <Check size={18}/> : index + 1}</span>
-          <div><h2>{level.title}</h2>
-            <p>{level.difficulty}{locked ? ' · Solve the previous stop to unlock' : solved[index] ? ' · Solved' : next === index ? ' · Up next' : ''}</p>
-            {times.length > 0 && <p className="pack-best"><Timer size={14}/> Best {displayTime(Math.min(...times))}</p>}</div>
+          <div><h2>{levelTitle(t, level)}</h2>
+            <p>{[t(level.difficulty), locked ? t('Solve the previous stop to unlock') : solved[index] ? t('Solved')
+              : next === index ? t('Up next') : ''].filter(Boolean).join(' · ')}</p>
+            {times.length > 0 && <p className="pack-best"><Timer size={14}/> {t('Best {time}', { time: displayTime(Math.min(...times)) })}</p>}</div>
           <button className="secondary" disabled={!canPlay || locked} onClick={() => play(level)}
-            aria-label={action + ' ' + level.title}>
-            {locked ? <LockKeyhole size={17}/> : action}
+            aria-label={t('{action} {title}', { action: t(action), title: levelTitle(t, level) })}>
+            {locked ? <LockKeyhole size={17}/> : t(action)}
           </button>
         </li>
       })}
@@ -177,23 +188,25 @@ export function SudokuHistory({ sessions, levels, packs, leave, replay, canPlay 
   sessions: LocalSession[]; levels: ReadonlyMap<string, PublishedLevel>; packs: PublishedPack[]
   leave: () => void; replay: (level: PublishedLevel) => void; canPlay: boolean
 }) {
+  const t = useT()
+  const { formatDate } = useIntl()
   const date = (session: LocalSession) => session.data.completedAt ?? session.updated
   const history = sessions.filter(item => item.data.completed).sort((a, b) => date(b) - date(a))
   return <section className="catalog sudoku-history">
-    <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> Sudoku menu</button>
-    <h1>History</h1>
-    {!history.length && <p>No completed puzzles yet.</p>}
+    <button className="text-button back" onClick={leave}><ArrowLeft size={17}/>{" "}{t("Sudoku menu")}</button>
+    <h1>{t("History")}</h1>
+    {!history.length && <p>{t("No completed puzzles yet.")}</p>}
     <ul className="history-list">{history.map(item => {
       const level = levels.get(levelKey(item.data.level, item.data.levelRevision))
       const pack = level?.pack && packs.find(pack => pack.id === level.pack?.id && pack.revision === level.pack.revision)
       return <li className="panel history-card" key={item.id}>
         {level && <div className="continue-preview"><SudokuPreview grid={level.grid} entries={item.data.board.entries}/></div>}
-        <div className="history-card-info"><h2>{level?.title ?? 'Sudoku puzzle'}</h2>
-          <p>{[level?.difficulty, pack?.data.title ?? (level?.pack ? 'Pack' : undefined),
-            displayTime(item.data.elapsedMs), date(item) > 0 ? new Date(date(item)).toLocaleDateString() : undefined].filter(Boolean).join(' · ')}</p></div>
+        <div className="history-card-info"><h2>{level ? levelTitle(t, level) : t('Sudoku puzzle')}</h2>
+          <p>{[level && t(level.difficulty), pack ? packTitle(t, pack) : level?.pack ? t('Pack') : undefined,
+            displayTime(item.data.elapsedMs), date(item) > 0 ? formatDate(new Date(date(item))) : undefined].filter(Boolean).join(' · ')}</p></div>
         {level && <div className="button-bar">
           <PuzzleShare level={level}/>
-          <button className="secondary" disabled={!canPlay} onClick={() => replay(level)}>Replay</button>
+          <button className="secondary" disabled={!canPlay} onClick={() => replay(level)}>{t("Replay")}</button>
         </div>}
       </li>
     })}</ul>

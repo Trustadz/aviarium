@@ -1,4 +1,5 @@
 import { Dexie, type EntityTable } from 'dexie'
+import type { Locale } from '../../../packages/game-sdk/src/locales.js'
 import { savedGameLimit, type PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
@@ -9,7 +10,9 @@ export const localProfile = 'local-play'
 export type LocalSession = StoredSession & {
   profile: string; updated: number; dirty: boolean; sent?: Mutation; expired?: true
 }
-interface LocalPrefs { profile: string; data: Preferences; pending: Partial<Preferences> }
+type ProfilePreferences = Preferences & { locale?: Locale }
+interface LocalPrefs { profile: string; data: ProfilePreferences; pending: Partial<ProfilePreferences>; revision?: number }
+interface RemotePreferences { revision: number; data: Partial<ProfilePreferences> }
 interface StoredLevel { key: string; level: PublishedLevel }
 interface Completion { key: string; profile: string; level: string; revision: number }
 interface StoredPack { key: string; pack: PublishedPack }
@@ -85,11 +88,12 @@ export function writeAttempt(expected: LocalSession, data: LocalSession['data'])
   })
 }
 
-export async function updatePreferences(profile: string, patch: Partial<Preferences>) {
+export async function updatePreferences(profile: string, patch: Partial<ProfilePreferences>) {
   return db.transaction('rw', db.prefs, async () => {
     const current = await db.prefs.get(profile)
     const data = { ...defaults, ...current?.data, ...patch }
-    await db.prefs.put({ profile, data, pending: profile === localProfile ? {} : { ...current?.pending, ...patch } })
+    await db.prefs.put({ profile, ...current, data,
+      pending: profile === localProfile ? {} : { ...current?.pending, ...patch } })
     return data
   })
 }
@@ -97,7 +101,7 @@ export async function updatePreferences(profile: string, patch: Partial<Preferen
 interface Progress {
   sessions: StoredSession[]
   completions: { level: string; revision: number }[]
-  prefs: { data: Partial<Preferences> }
+  prefs: RemotePreferences
   levels: PublishedLevel[]
 }
 const synchronizing = new Map<string, Promise<void>>()
@@ -108,6 +112,32 @@ export function sync(profile: string) {
   const pending = synchronize(profile).finally(() => synchronizing.delete(profile))
   synchronizing.set(profile, pending)
   return pending
+}
+
+const syncingPreferences = new Map<string, Promise<void>>()
+export function syncPreferences(profile: string) {
+  const current = syncingPreferences.get(profile)
+  if (current) return current
+  const pending = sendPreferences(profile).finally(() => syncingPreferences.delete(profile))
+  syncingPreferences.set(profile, pending)
+  return pending
+}
+
+async function sendPreferences(profile: string) {
+  while (true) {
+    const prefs = await db.prefs.get(profile)
+    if (!prefs || !Object.keys(prefs.pending).length) return
+    const saved = await api<RemotePreferences>('/preferences', json('PATCH', prefs.pending), profile)
+    await db.transaction('rw', db.prefs, async () => {
+      const latest = await db.prefs.get(profile)
+      if (!latest || saved.revision < (latest.revision ?? 0)) return
+      const pending = { ...latest.pending }
+      for (const key of Object.keys(prefs.pending) as (keyof ProfilePreferences)[]) {
+        if (pending[key] === prefs.pending[key]) delete pending[key]
+      }
+      await db.prefs.put({ profile, revision: saved.revision, data: { ...defaults, ...saved.data, ...pending }, pending })
+    })
+  }
 }
 
 async function synchronize(profile: string) {
@@ -138,19 +168,7 @@ async function synchronize(profile: string) {
       })
     })
   }
-  const prefs = await db.prefs.get(profile)
-  if (prefs && Object.keys(prefs.pending).length) {
-    await api('/preferences', json('PATCH', prefs.pending), profile)
-    await db.transaction('rw', db.prefs, async () => {
-      const latest = await db.prefs.get(profile)
-      if (!latest) return
-      const pending = { ...latest.pending }
-      for (const key of Object.keys(prefs.pending) as (keyof Preferences)[]) {
-        if (pending[key] === prefs.pending[key]) delete pending[key]
-      }
-      await db.prefs.put({ ...latest, pending })
-    })
-  }
+  await syncPreferences(profile)
   const progress = await api<Progress>('/progress', undefined, profile)
   await cacheLevels(progress.levels)
   await db.transaction('rw', db.sessions, db.prefs, db.completions, async () => {
@@ -161,7 +179,10 @@ async function synchronize(profile: string) {
     }
     await trimSavedGames(profile)
     const current = await db.prefs.get(profile)
-    await db.prefs.put({ profile, data: { ...defaults, ...progress.prefs.data, ...current?.pending }, pending: current?.pending ?? {} })
+    if (progress.prefs.revision >= (current?.revision ?? 0)) {
+      await db.prefs.put({ profile, revision: progress.prefs.revision,
+        data: { ...defaults, ...progress.prefs.data, ...current?.pending }, pending: current?.pending ?? {} })
+    }
     await db.completions.bulkPut(progress.completions.map(completion =>
       ({ ...completion, profile, key: profile + ':' + levelKey(completion.level, completion.revision) })))
   })

@@ -74,7 +74,7 @@ export function registerPacks(app: FastifyInstance) {
     const { rows: [pack] } = await pool.query<PublishedPack & { ownerId: string | null }>(`SELECT p.id,r.revision,
       p.owner_id IS NULL AS "builtIn",p.owner_id AS "ownerId",r.data
       FROM sudoku_packs p JOIN sudoku_pack_revisions r ON r.pack_id=p.id WHERE p.id=$1 AND r.revision=$2`, [id, rev])
-    if (!pack) throw new HttpError(404, 'This pack revision is unavailable.')
+    if (!pack) throw new HttpError(404, 'pack_revision_unavailable')
     return pack
   }
   app.get('/api/packs/:id/:revision', async request => {
@@ -86,7 +86,7 @@ export function registerPacks(app: FastifyInstance) {
     const user = await requireGameEditor(request, game)
     const pack = await loadPack(request)
     if (user.role !== 'admin' && pack.ownerId !== user.id)
-      throw new HttpError(403, 'Only this pack’s editor or an admin can export it.')
+      throw new HttpError(403, 'pack_export_denied')
     return reply.type('application/zip').header('Content-Disposition', `attachment; filename="${pack.id}.aviarium-pack"`)
       .send(exportPack(pack.data))
   })
@@ -118,7 +118,7 @@ export function registerPacks(app: FastifyInstance) {
     const { rows: [draft] } = await pool.query<PackDraft>(`UPDATE sudoku_packs SET draft=$1,draft_version=draft_version+1
       WHERE id=$2 AND owner_id=$3 AND draft_version=$4 RETURNING ${draftFields}`,
     [readPackDraft(data), idOf(request), user.id, version])
-    if (!draft) throw new HttpError(409, 'The draft changed. Reopen it before saving.')
+    if (!draft) throw new HttpError(409, 'pack_draft_save_conflict')
     return draft
   })
   app.post('/api/pack-drafts/:id/publish', async request => {
@@ -127,12 +127,12 @@ export function registerPacks(app: FastifyInstance) {
     const { version } = z.object({ version: z.number().int().positive() }).parse(request.body)
     const { rows: [draft] } = await pool.query<PackDraft>(`SELECT ${draftFields} FROM sudoku_packs
       WHERE id=$1 AND owner_id=$2 AND draft_version=$3`, [id, user.id, version])
-    if (!draft) throw new HttpError(409, 'The draft changed. Reopen it before publishing.')
+    if (!draft) throw new HttpError(409, 'pack_draft_publish_conflict')
     const data = gradePack(draft.data)
     return transaction(async db => {
       const { rows: [current] } = await db.query<PackDraft>(`SELECT ${draftFields} FROM sudoku_packs
         WHERE id=$1 AND owner_id=$2 AND draft_version=$3 FOR UPDATE`, [id, user.id, version])
-      if (!current) throw new HttpError(409, 'The draft changed. Reopen it before publishing.')
+      if (!current) throw new HttpError(409, 'pack_draft_publish_conflict')
       if (current.published) {
         const equal = (await db.query(`SELECT 1 FROM sudoku_pack_revisions WHERE pack_id=$1 AND revision=$2 AND data=$3`,
           [id, current.published, data])).rowCount
@@ -152,7 +152,7 @@ export function registerPacks(app: FastifyInstance) {
     const { visible } = z.object({ visible: z.boolean() }).parse(request.body)
     const { rows: [draft] } = await pool.query<PackDraft>(`UPDATE sudoku_packs SET visible=$1
       WHERE id=$2 AND owner_id=$3 AND published_revision IS NOT NULL RETURNING ${draftFields}`, [visible, idOf(request), user.id])
-    if (!draft) throw new HttpError(404, 'The published pack was not found.')
+    if (!draft) throw new HttpError(404, 'pack_not_found')
     return draft
   })
 
@@ -178,7 +178,7 @@ export function registerPacks(app: FastifyInstance) {
       l.source,l.seed,l.generator_version AS "generatorVersion" FROM published_levels l
       WHERE l.id=$1 AND l.revision=$2 AND l.catalog_visible
         AND NOT EXISTS (SELECT 1 FROM hidden_levels h WHERE h.level_id=l.id)`, [idOf(request), rev])
-    if (!level) throw new HttpError(404, 'This puzzle revision is unavailable.')
+    if (!level) throw new HttpError(404, 'puzzle_revision_unavailable')
     return level
   })
 }

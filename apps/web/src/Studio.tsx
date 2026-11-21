@@ -1,3 +1,5 @@
+import { technique } from './sudoku-copy.js'
+import { knownMessage, useT } from './i18n.js'
 import { useEffect, useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, Cloud, Download, FlaskConical, Plus, Save, Sparkles, Upload } from 'lucide-react'
 import { difficulties, type Difficulty } from '../../../packages/game-sdk/src/index.js'
@@ -18,10 +20,11 @@ const statuses: Record<string, string> = { unique: 'Valid · unique solution', m
   unsolvable: 'Proven unsolvable', invalid: 'Invalid grid', inconclusive: 'Validation incomplete' }
 
 export default function Studio({ account, onPublish }: { account: Account; onPublish: () => void }) {
+  const t = useT()
   const key = 'aviarium:draft:' + account.id
   const [initial] = useState<Partial<Draft>>(() => { try { return JSON.parse(localStorage.getItem(key) ?? '{}') } catch { return {} } })
   const [draft, setDraft] = useState<Draft>()
-  const [title, setTitle] = useState(initial.title ?? 'Untitled puzzle')
+  const [title, setTitle] = useState(initial.title ?? t("Untitled puzzle"))
   const [grid, setGrid] = useState(initial.grid ?? blank)
   const [selected, select] = useState(0)
   const [drafts, setDrafts] = useState<Draft[]>([])
@@ -72,7 +75,7 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
     void task().catch(error => setProblem(errorMessage(error))).finally(() => setBusy(false))
   }
   function load(item?: Draft) {
-    setDraft(item); setTitle(item?.title ?? 'Untitled puzzle'); setGrid(item?.grid ?? blank)
+    setDraft(item); setTitle(item?.title ?? t("Untitled puzzle")); setGrid(item?.grid ?? blank)
     setGeneration(undefined); setPlayback(undefined); setJob(undefined); select(0)
   }
   function edit(digit: number) {
@@ -102,77 +105,77 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
     }
     const digits = parseGrid(content)
     if (!digits) throw new Error('Import a puzzle with 81 digits. Use 0 or a period for blanks.')
-    setDraft(undefined); setGrid(digits.join('')); setTitle(importedTitle || 'Imported puzzle')
-    setGeneration(undefined); setPlayback(undefined); setJob(undefined); setMessage('Puzzle imported as a new draft.')
+    setDraft(undefined); setGrid(digits.join('')); setTitle(importedTitle || t("Imported puzzle"))
+    setGeneration(undefined); setPlayback(undefined); setJob(undefined); setMessage(t("Puzzle imported as a new draft."))
   }
 
   return <section className="editor">
-    <div className="section-heading"><div><div className="eyebrow">SUDOKU</div><h1>Creator studio</h1>
-      <p>Build a puzzle and run the checks before publishing it to the shared catalog.</p></div>
-      <button className="secondary" onClick={() => load()}><Plus size={17}/> New draft</button></div>
-    {problem && <p role="alert" className="error">{problem}</p>}
+    <div className="section-heading"><div><div className="eyebrow">SUDOKU</div><h1>{t("Creator studio")}</h1>
+      <p>{t("Build a puzzle and run the checks before publishing it to the shared catalog.")}</p></div>
+      <button className="secondary" onClick={() => load()}><Plus size={17}/>{" "}{t("New draft")}</button></div>
+    {problem && <p role="alert" className="error">{knownMessage(t, problem)}</p>}
     {message && <p role="status" className="feedback">{message}</p>}
     <div className="studio-layout">
       <div className="studio-board sudoku-theme">
-        <label>Draft title<input value={title} maxLength={100} onChange={event => { setTitle(event.target.value); setPlayback(undefined) }}/></label>
+        <label>{t("Draft title")}<input value={title} maxLength={100} onChange={event => { setTitle(event.target.value); setPlayback(undefined) }}/></label>
         <Grid entries={board} selected={selected} select={select} enter={edit} errors={playback === undefined ? conflicts(board) : undefined}
           disabled={busy || playback !== undefined}/>
         <div className="number-pad">{Array.from({ length: 9 }, (_, index) =>
           <button key={index} disabled={busy || playback !== undefined} onClick={() => edit(index + 1)}>{index + 1}</button>)}</div>
         <div className="button-bar">
-          <button className="secondary" disabled={busy || playback !== undefined} onClick={() => edit(0)}>Erase given</button>
-          <label className="secondary file-label"><Upload size={16}/> Import<input type="file" accept=".json,.txt,text/plain,application/json" onChange={event => {
+          <button className="secondary" disabled={busy || playback !== undefined} onClick={() => edit(0)}>{t("Erase given")}</button>
+          <label className="secondary file-label"><Upload size={16}/>{" "}{t("Import")}<input type="file" accept=".json,.txt,text/plain,application/json" onChange={event => {
             const file = event.target.files?.[0]; event.target.value = ''
             if (file) doTask(async () => { if (file.size > 100_000) throw new Error('Puzzle file is too large.'); importGrid(await file.text()) })
           }}/></label>
-          <button className="secondary" onClick={() => downloadFile('sudoku-puzzle.json', JSON.stringify({ title, grid, ruleset: 1 }, null, 2))}><Download size={16}/> Export</button>
+          <button className="secondary" onClick={() => downloadFile('sudoku-puzzle.json', JSON.stringify({ title, grid, ruleset: 1 }, null, 2))}><Download size={16}/>{" "}{t("Export")}</button>
         </div>
       </div>
       <div className="studio-side">
-        <section className="panel padded"><h2>Drafts</h2>
-          <select aria-label="Saved drafts" value={draft?.id ?? ''} onChange={event => load(drafts.find(item => item.id === event.target.value))}>
-            <option value="">New draft</option>{drafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
+        <section className="panel padded"><h2>{t("Drafts")}</h2>
+          <select aria-label={t("Saved drafts")} value={draft?.id ?? ''} onChange={event => load(drafts.find(item => item.id === event.target.value))}>
+            <option value="">{t("New draft")}</option>{drafts.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
           <div className="button-bar">
-            <button className="secondary" disabled={busy} onClick={() => doTask(async () => { await save(); setMessage('Draft saved.') })}><Save size={16}/> Save draft</button>
+            <button className="secondary" disabled={busy} onClick={() => doTask(async () => { await save(); setMessage(t("Draft saved.")) })}><Save size={16}/>{" "}{t("Save draft")}</button>
             <button className="primary" disabled={busy} onClick={() => doTask(async () => {
               const saved = await save(); await submit({ kind: 'validate', draftId: saved.id, version: saved.version })
-            })}><FlaskConical size={16}/> Test on server</button>
+            })}><FlaskConical size={16}/>{" "}{t("Test on server")}</button>
           </div>
-          {validateJob && <p className="feedback" role="status">{result?.kind ? statuses[result.kind] : validateJob.status}
-            {result?.difficulty ? ' · ' + result.difficulty : solvable ? ' · Needs review' : ''}
-            {result?.reason ? ' · ' + result.reason : ''}</p>}
-          {Boolean(result?.extremeFamilies?.length) && <p>Extreme techniques · {result?.extremeFamilies?.join(', ')}</p>}
+          {validateJob && <p className="feedback" role="status">{result?.kind ? knownMessage(t, statuses[result.kind]) : knownMessage(t, validateJob.status)}
+            {result?.difficulty ? ' · ' + t(result.difficulty) : solvable ? ' · ' + t('Needs review') : ''}
+            {result?.reason ? ' · ' + knownMessage(t, result.reason) : ''}</p>}
+          {Boolean(result?.extremeFamilies?.length) && <p>{t('Extreme techniques')} · {result?.extremeFamilies?.map(family => knownMessage(t, family)).join(', ')}</p>}
           {allowPublish && <div className="button-bar">
-            <button className="secondary" onClick={() => setPlayback(result?.steps?.length ?? 0)}>Show solution</button>
-            <button className="secondary" onClick={() => setPlayback(0)}>Step through</button>
+            <button className="secondary" onClick={() => setPlayback(result?.steps?.length ?? 0)}>{t("Show solution")}</button>
+            <button className="secondary" onClick={() => setPlayback(0)}>{t("Step through")}</button>
             <button className="primary" disabled={busy} onClick={() => doTask(async () => {
               const published = await api<{revision: number}>('/drafts/' + draft!.id + '/publish', json('POST', { jobId: validateJob!.id }), account.id)
-              setMessage('Published revision ' + published.revision + ' to the shared catalog.'); onPublish()
-            })}><Check size={16}/> Publish</button>
+              setMessage(t('Published revision {revision} to the shared catalog.', { revision: published.revision })); onPublish()
+            })}><Check size={16}/>{" "}{t("Publish")}</button>
           </div>}
           {playback !== undefined && result?.steps && <div className="playback">
-            <button className="icon-button" aria-label="Previous step" disabled={!playback} onClick={() => setPlayback(playback - 1)}><ChevronLeft size={18}/></button>
-            <span>{playback} / {result.steps.length}{playback > 0 ? ' · ' + result.steps[playback - 1].label : ''}</span>
-            <button className="icon-button" aria-label="Next step" disabled={playback >= result.steps.length} onClick={() => setPlayback(playback + 1)}><ChevronRight size={18}/></button>
-            <button className="text-button" onClick={() => setPlayback(undefined)}>Edit grid</button>
+            <button className="icon-button" aria-label={t("Previous step")} disabled={!playback} onClick={() => setPlayback(playback - 1)}><ChevronLeft size={18}/></button>
+            <span>{playback} / {result.steps.length}{playback > 0 ? ' · ' + technique(t, result.steps[playback - 1]) : ''}</span>
+            <button className="icon-button" aria-label={t("Next step")} disabled={playback >= result.steps.length} onClick={() => setPlayback(playback + 1)}><ChevronRight size={18}/></button>
+            <button className="text-button" onClick={() => setPlayback(undefined)}>{t("Edit grid")}</button>
           </div>}
         </section>
-        <section className="panel padded"><h2>Generate a puzzle</h2>
-          <div className="form-row"><label>Seed<input value={seed} maxLength={100} onChange={event => setSeed(event.target.value)}/></label>
-            <label>Difficulty<select value={difficulty} onChange={event => setDifficulty(event.target.value as Difficulty)}>
-              {difficulties.map(value => <option key={value}>{value}</option>)}</select></label></div>
-          <button className="secondary" disabled={busy || !seed.trim()} onClick={() => doTask(() => submit({ kind: 'generate', options: { seed, difficulty, unique: true } }))}><Sparkles size={16}/> Generate on server</button>
+        <section className="panel padded"><h2>{t("Generate a puzzle")}</h2>
+          <div className="form-row"><label>{t("Seed")}<input value={seed} maxLength={100} onChange={event => setSeed(event.target.value)}/></label>
+            <label>{t("Difficulty")}<select value={difficulty} onChange={event => setDifficulty(event.target.value as Difficulty)}>
+              {difficulties.map(value => <option key={value} value={value}>{t(value)}</option>)}</select></label></div>
+          <button className="secondary" disabled={busy || !seed.trim()} onClick={() => doTask(() => submit({ kind: 'generate', options: { seed, difficulty, unique: true } }))}><Sparkles size={16}/>{" "}{t("Generate on server")}</button>
         </section>
-        <section className="panel padded"><h2><Cloud size={19}/> Server jobs</h2>
-          {jobs.length ? <select aria-label="Server jobs" value={shown?.id ?? ''} onChange={event => setJob(event.target.value)}>
-            <option value="">Select job</option>{jobs.map(job => <option value={job.id} key={job.id}>{job.kind} · {job.status} · {job.id.slice(0, 8)}</option>)}</select>
-            : <p>No jobs yet.</p>}
-          {shown?.result?.error && <p className="error">{shown.result.error}</p>}
-          {shown?.kind === 'validate' && shown.result?.kind && shown !== validateJob && <p className="feedback">{statuses[shown.result.kind]}</p>}
+        <section className="panel padded"><h2><Cloud size={19}/>{" "}{t("Server jobs")}</h2>
+          {jobs.length ? <select aria-label={t("Server jobs")} value={shown?.id ?? ''} onChange={event => setJob(event.target.value)}>
+            <option value="">{t("Select job")}</option>{jobs.map(job => <option value={job.id} key={job.id}>{t(job.kind)} · {knownMessage(t, job.status)} · {job.id.slice(0, 8)}</option>)}</select>
+            : <p>{t("No jobs yet.")}</p>}
+          {shown?.result?.error && <p className="error">{knownMessage(t, shown.result.error)}</p>}
+          {shown?.kind === 'validate' && shown.result?.kind && shown !== validateJob && <p className="feedback">{knownMessage(t, statuses[shown.result.kind])}</p>}
           {shown?.kind === 'generate' && shown.result?.grid && <button className="secondary" onClick={() => {
-            if (!confirm('Open this generated puzzle as a new draft?')) return
-            load(); setGrid(shown.result!.grid!); setTitle('Generated ' + shown.result?.difficulty); setGeneration(shown.id); setJob(shown.id)
-          }}>Open generated grid</button>}
+            if (!confirm(t("Open this generated puzzle as a new draft?"))) return
+            load(); setGrid(shown.result!.grid!); setTitle(t('Generated {difficulty}', { difficulty: shown.result?.difficulty ? t(shown.result.difficulty) : '' })); setGeneration(shown.id); setJob(shown.id)
+          }}>{t("Open generated grid")}</button>}
         </section>
       </div>
     </div>

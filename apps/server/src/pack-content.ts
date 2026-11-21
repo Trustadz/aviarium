@@ -16,7 +16,7 @@ function readImage(image: string) {
     : extension === 'jpg' ? bytes.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex'))
       : extension === 'webp' && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
   if (!extension || bytes.length > packImageBytes || !valid)
-    throw new HttpError(422, 'Pack artwork must be a PNG, JPEG, or WebP no larger than 512 KB.')
+    throw new HttpError(422, 'pack_art_invalid')
   return { bytes, extension }
 }
 
@@ -28,13 +28,13 @@ export function readPackDraft(input: unknown) {
 }
 
 export function gradePack(draft: PackDraftData): GradedPack {
-  if (!draft.puzzles.length) throw new HttpError(422, 'Add at least one puzzle before publishing.')
+  if (!draft.puzzles.length) throw new HttpError(422, 'pack_empty')
   const puzzles = draft.puzzles.map(puzzle => {
     const grid = Array.from(puzzle.grid, Number)
     if (validate(grid, 65_000).kind !== 'unique')
-      throw new HttpError(422, `“${puzzle.title}” needs a verified unique solution.`)
+      throw new HttpError(422, 'pack_puzzle_unverified', { title: puzzle.title })
     const { difficulty } = gradePuzzle(grid)
-    if (!difficulty) throw new HttpError(422, `“${puzzle.title}” needs review. No complete logical solve was found.`)
+    if (!difficulty) throw new HttpError(422, 'pack_puzzle_review', { title: puzzle.title })
     return { ...puzzle, difficulty }
   })
   return gradedPackSchema.parse({ ...draft, puzzles })
@@ -56,7 +56,7 @@ export function exportPack(data: PackDraftData) {
 }
 
 export function importPack(bytes: Uint8Array) {
-  if (bytes.length > packUploadBytes) throw new HttpError(413, 'This pack exceeds the upload limit.')
+  if (bytes.length > packUploadBytes) throw new HttpError(413, 'pack_upload_limit')
   let files: Record<string, Uint8Array>
   try {
     const members = new Set<string>()
@@ -70,13 +70,13 @@ export function importPack(bytes: Uint8Array) {
       return true
     } })
   } catch {
-    throw new HttpError(422, 'This file is not a valid Aviarium pack archive.')
+    throw new HttpError(422, 'pack_archive_invalid')
   }
   let manifest: unknown
   try {
     manifest = JSON.parse(Buffer.from(files['manifest.json']).toString('utf8'))
   } catch {
-    throw new HttpError(422, 'The pack manifest is missing or malformed.')
+    throw new HttpError(422, 'pack_manifest_invalid')
   }
   const draft: PackDraftData = packManifestSchema.parse(manifest)
   for (const key of artwork) {

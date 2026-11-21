@@ -1,3 +1,4 @@
+import { isLocale, locales } from '../../../packages/game-sdk/src/locales.js'
 import pg from 'pg'
 
 const loginFlag = process.env.LOGIN_ENABLED ?? 'true'
@@ -45,3 +46,8 @@ export async function transaction<T>(run: (client: pg.PoolClient) => Promise<T>)
     client.release()
   }
 }
+
+const configuredLocales = (process.env.AVIARIUM_ENABLED_LOCALES ?? locales.join(',')).split(',').map(value => value.trim())
+if (!configuredLocales.every(isLocale) || new Set(configuredLocales).size !== configuredLocales.length)
+  throw new Error('AVIARIUM_ENABLED_LOCALES must list one or both of en and nl without duplicates')
+export const enabledLocales = configuredLocales

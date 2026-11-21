@@ -1,3 +1,4 @@
+import { useT } from './i18n.js'
 import { useRef, type KeyboardEvent } from 'react'
 import { bit, box, cells, column, row } from '../../../packages/sudoku/src/rules.js'
 
@@ -26,6 +27,7 @@ export function SudokuPreview({ grid, entries }: { grid?: string; entries?: read
 
 export function Grid({ entries, givens, notes, selected, select, enter, activate = select, highlightedDigit,
   hintCell, hintCells, errors, disabled, related = true }: GridProps) {
+  const t = useT()
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   function key(event: KeyboardEvent<HTMLButtonElement>, cell: number) {
     if (event.ctrlKey || event.metaKey || event.altKey) return
@@ -39,7 +41,7 @@ export function Grid({ entries, givens, notes, selected, select, enter, activate
       enter(Number(event.key) || 0)
     }
   }
-  return <div className="board" aria-label="Sudoku board">
+  return <div className="board" aria-label={t("Sudoku board")}>
     {cells.map(cell => {
       const value = entries[cell], mask = notes?.[cell] ?? 0
       const matching = Boolean(value && value === highlightedDigit)
@@ -47,7 +49,8 @@ export function Grid({ entries, givens, notes, selected, select, enter, activate
       const classes = cellClasses(cell, selected, Boolean(givens?.[cell]), related, errors?.has(cell))
       return <button key={cell} type="button" className={classes + (matching ? ' matching' : '') + (hinted ? ' hinted' : '')} ref={element => { buttons.current[cell] = element }}
         tabIndex={selected === cell ? 0 : -1} aria-pressed={selected === cell} disabled={disabled}
-        aria-label={`Row ${row(cell) + 1}, column ${column(cell) + 1}, ${value || 'empty'}${givens?.[cell] ? ', given' : ''}${hinted ? ', hint target' : ''}`}
+        aria-label={[t('Row {row}, column {column}, {value}', { row: row(cell) + 1, column: column(cell) + 1, value: value || t('empty') }),
+          givens?.[cell] && t('given'), hinted && t('hint target')].filter(Boolean).join(', ')}
         onFocus={() => select(cell)} onClick={() => activate(cell)} onKeyDown={event => key(event, cell)}>
         {value || (mask ? <span className="cell-notes">{Array.from({ length: 9 }, (_, i) =>
           <span key={i}>{mask & bit(i + 1) ? i + 1 : ''}</span>)}</span> : '')}

@@ -31,7 +31,7 @@ export function registerLevels(app: FastifyInstance) {
     const id = recordId(request)
     const { hidden } = z.object({ hidden: z.boolean() }).parse(request.body)
     const result = await pool.query(`SELECT 1 FROM published_levels WHERE id=$1 AND source <> 'Built-in' LIMIT 1`, [id])
-    if (!result.rowCount) throw new HttpError(404, 'Published level was not found.')
+    if (!result.rowCount) throw new HttpError(404, 'level_not_found')
     if (hidden) await pool.query('INSERT INTO hidden_levels(level_id,hidden_by) VALUES($1,$2) ON CONFLICT DO NOTHING', [id, user.id])
     else await pool.query('DELETE FROM hidden_levels WHERE level_id=$1', [id])
     return { hidden }
@@ -57,7 +57,7 @@ export function registerLevels(app: FastifyInstance) {
       generator_version=CASE WHEN $5::int IS NOT NULL THEN $5 WHEN grid=$2 THEN generator_version END
       WHERE id=$6 AND owner_id=$7 AND version=$3 RETURNING id,title,grid,version,seed`,
     [input.title, input.grid, input.version, metadata?.seed, metadata?.generatorVersion, recordId(request), user.id])
-    if (!result.rowCount) throw new HttpError(409, 'Draft changed or is unavailable. Reopen it before saving.')
+    if (!result.rowCount) throw new HttpError(409, 'draft_save_conflict')
     return result.rows[0]
   })
   app.get('/api/jobs', async request => {
@@ -74,12 +74,12 @@ export function registerLevels(app: FastifyInstance) {
       await db.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [user.id])
       const { rows: [count] } = await db.query(`SELECT count(*)::int AS total FROM puzzle_jobs
         WHERE owner_id=$1 AND status IN ('queued','running')`, [user.id])
-      if (count.total >= 8) throw new HttpError(429, 'Wait for an existing puzzle job to finish.')
+      if (count.total >= 8) throw new HttpError(429, 'job_limit')
       let payload: object
       if (input.kind === 'validate') {
         const draft = (await db.query<Draft>('SELECT * FROM drafts WHERE id=$1 AND owner_id=$2 AND version=$3',
           [input.draftId, user.id, input.version])).rows[0]
-        if (!draft) throw new HttpError(409, 'Save and reopen the current draft before testing.')
+        if (!draft) throw new HttpError(409, 'draft_test_conflict')
         payload = { grid: draft.grid }
       } else payload = input.options
       const result = await db.query(`INSERT INTO puzzle_jobs(owner_id,kind,input,draft_id,draft_version)
@@ -94,12 +94,12 @@ export function registerLevels(app: FastifyInstance) {
     const id = recordId(request)
     return transaction(async db => {
       const draft = (await db.query<Draft>('SELECT * FROM drafts WHERE id=$1 AND owner_id=$2 FOR UPDATE', [id, user.id])).rows[0]
-      if (!draft) throw new HttpError(404, 'Draft was not found.')
+      if (!draft) throw new HttpError(404, 'draft_not_found')
       const job = (await db.query(`SELECT result FROM puzzle_jobs WHERE id=$1 AND owner_id=$2 AND draft_id=$3
         AND draft_version=$4 AND kind='validate' AND status='complete'`, [jobId, user.id, id, draft.version])).rows[0]
       const result = job?.result
       if (!result?.difficulty || (result.kind !== 'unique' && result.kind !== 'multiple'))
-        throw new HttpError(409, 'This exact draft needs a complete logical solve before publication.')
+        throw new HttpError(409, 'draft_publish_unverified')
       const previous = (await db.query(`SELECT revision,title,grid,seed FROM published_levels WHERE id=$1
         ORDER BY revision DESC LIMIT 1`, [id])).rows[0]
       if (previous?.title === draft.title && previous.grid === draft.grid && previous.seed === draft.seed)
@@ -118,6 +118,6 @@ async function generation(owner: string, input: z.infer<typeof draftInput>) {
   if (!input.generationJob) return undefined
   const { rows: [job] } = await pool.query(`SELECT result FROM puzzle_jobs WHERE id=$1 AND owner_id=$2
     AND kind='generate' AND status='complete'`, [input.generationJob, owner])
-  if (job?.result?.grid !== input.grid) throw new HttpError(400, 'The grid differs from the generation result.')
+  if (job?.result?.grid !== input.grid) throw new HttpError(400, 'draft_generated_grid_changed')
   return job.result as { seed: string; generatorVersion: number }
 }

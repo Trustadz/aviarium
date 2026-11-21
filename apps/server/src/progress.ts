@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { locales } from '../../../packages/game-sdk/src/locales.js'
 import { savedGameLimit } from '../../../packages/game-sdk/src/index.js'
 import { mutationSchema, preferenceSchema, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import { rules } from '../../../packages/sudoku/src/rules.js'
@@ -9,6 +10,7 @@ import { digest, HttpError, requireUser, userFields, type User } from './auth.js
 import { pool, transaction } from './config.js'
 
 const fields = 'id,revision,data,parent_id AS "parentId",archived,floor(extract(epoch FROM updated_at) * 1000)::double precision AS "updatedAt"'
+const preferencesPatch = preferenceSchema.extend({ locale: z.enum(locales) }).partial()
 const continueOrder = 'updated_at DESC NULLS LAST, revision DESC, id DESC'
 
 export function registerProgress(app: FastifyInstance) {
@@ -34,38 +36,38 @@ export function registerProgress(app: FastifyInstance) {
       const receipt = (await db.query('SELECT fingerprint,result FROM sync_receipts WHERE owner_id=$1 AND id=$2',
         [user.id, mutation.mutationId])).rows[0]
       if (receipt) {
-        if (receipt.fingerprint !== fingerprint) throw new HttpError(409, 'This mutation ID was already used.')
+        if (receipt.fingerprint !== fingerprint) throw new HttpError(409, 'mutation_conflict')
         return receipt.result as StoredSession
       }
       const level = (await db.query<{grid: string; ruleset: number; pack: { id: string; stop: number } | null; packRules: PackRules | null}>(
         `SELECT l.grid,l.ruleset,l.pack,p.data->'rules' AS "packRules" FROM published_levels l
         LEFT JOIN sudoku_pack_revisions p ON p.pack_id=l.pack->>'id' AND p.revision=l.revision
         WHERE l.id=$1 AND l.revision=$2`, [mutation.data.level, mutation.data.levelRevision])).rows[0]
-      if (!level || level.ruleset !== mutation.data.ruleset) throw new HttpError(422, 'That level version is unavailable.')
+      if (!level || level.ruleset !== mutation.data.ruleset) throw new HttpError(422, 'level_version_unavailable')
       if (level.pack && level.packRules?.inOrder && level.pack.stop > 1) {
         const previous = packLevelId(level.pack.id, level.pack.stop - 1)
         const unlocked = (await db.query(`SELECT 1 FROM completions
           WHERE owner_id=$1 AND level_id=$2 AND level_revision=$3`, [user.id, previous, mutation.data.levelRevision])).rowCount
-        if (!unlocked) throw new HttpError(422, 'Solve the previous stop in this pack first.')
+        if (!unlocked) throw new HttpError(422, 'pack_stop_locked')
       }
       const limit = level.packRules?.lives
       const lives = mutation.data.lives
       if (limit ? lives === undefined || lives > limit || (lives === 0 && mutation.data.completed) : lives !== undefined)
-        throw new HttpError(422, 'The number of lives does not match this puzzle’s rules.')
+        throw new HttpError(422, 'lives_rule_mismatch')
       const givens = Array.from(level.grid, Number)
       for (const board of [mutation.data.board, ...mutation.data.undo, ...mutation.data.redo]) {
         if (givens.some((given, cell) => given && board.entries[cell] !== given))
-          throw new HttpError(422, 'The save modifies fixed givens.')
+          throw new HttpError(422, 'fixed_digits_changed')
       }
       if (mutation.data.completed && !rules.verify(givens, mutation.data.board.entries))
-        throw new HttpError(422, 'This save does not contain a valid solution.')
+        throw new HttpError(422, 'saved_solution_invalid')
       const existing = (await db.query<StoredSession>(`SELECT ${fields} FROM saves WHERE id=$1 AND owner_id=$2`,
         [mutation.sessionId, user.id])).rows[0]
       if (existing && (existing.data.level !== mutation.data.level || existing.data.levelRevision !== mutation.data.levelRevision))
-        throw new HttpError(422, 'A saved attempt is bound to one level revision.')
+        throw new HttpError(422, 'attempt_level_mismatch')
       if (existing?.revision === mutation.baseRevision && existing.data.lives !== undefined &&
           lives !== undefined && lives > existing.data.lives)
-        throw new HttpError(422, 'Start a new attempt to reset lives.')
+        throw new HttpError(422, 'attempt_reset_required')
       let saved: StoredSession
       const now = Date.now()
       const updatedAt = new Date(Math.min(mutation.updatedAt ?? now, now))
@@ -82,7 +84,7 @@ export function registerProgress(app: FastifyInstance) {
         saved = (await db.query<StoredSession>(`INSERT INTO saves(id,owner_id,data,parent_id,archived,updated_at)
           VALUES(COALESCE($1::uuid,gen_random_uuid()),$2,$3,$4,$5,$6) ON CONFLICT(id) DO NOTHING RETURNING ${fields}`,
         [existing ? null : mutation.sessionId, user.id, mutation.data, existing?.id, mutation.archived, updatedAt])).rows[0]
-        if (!saved) throw new HttpError(409, 'The session ID is already in use.')
+        if (!saved) throw new HttpError(409, 'session_id_conflict')
       }
       if (!saved.archived && !saved.data.completed && saved.data.lives !== 0) {
         const expired = await db.query<StoredSession>(`UPDATE saves SET archived=true,revision=revision+1
@@ -100,7 +102,7 @@ export function registerProgress(app: FastifyInstance) {
   })
   app.patch('/api/preferences', async request => {
     const user = await requireUser(request)
-    const patch = preferenceSchema.partial().parse(request.body)
+    const patch = preferencesPatch.parse(request.body)
     const { rows: [result] } = await pool.query(`INSERT INTO preferences(owner_id,data,revision) VALUES($1,$2,1)
       ON CONFLICT (owner_id) DO UPDATE SET data=preferences.data || excluded.data,revision=preferences.revision+1
       RETURNING revision,data`, [user.id, patch])
@@ -118,10 +120,10 @@ export function registerProgress(app: FastifyInstance) {
       z.strictObject({ editor: z.literal(sudoku.id), enabled: z.boolean() }),
     ]).parse(request.body)
     if ('role' in patch && id === admin.id && patch.role !== 'admin')
-      throw new HttpError(409, 'Another admin must change your role.')
+      throw new HttpError(409, 'admin_role_self_change')
     return transaction(async db => {
       const found = await db.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [id])
-      if (!found.rowCount) throw new HttpError(404, 'Account was not found.')
+      if (!found.rowCount) throw new HttpError(404, 'account_not_found')
       if ('role' in patch) await db.query('UPDATE users SET role=$1 WHERE id=$2', [patch.role, id])
       else if (patch.enabled) await db.query('INSERT INTO game_editors (user_id,game_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, patch.editor])
       else await db.query('DELETE FROM game_editors WHERE user_id=$1 AND game_id=$2', [id, patch.editor])

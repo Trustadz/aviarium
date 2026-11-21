@@ -9,3 +9,9 @@ For a local Compose smoke test, install Chromium or run `npx playwright install 
 Before a household deployment, verify the real flow against the existing Pocket ID provider. Try sign-in and sign-out and confirm Player, Creator, and Admin permissions. Independently confirm that two accounts see the same level and grade after publishing. Install and play offline on iOS, Android, and the target BOOX device. Restore a backup into a temporary database and check the relevant published level, player save, and completion. Browser storage is device-dependent, so test download, airplane mode, and reopen on the actual devices.
 
 Run `npm run test:oidc` with `AVIARIUM_OIDC_TEST_DATABASE_URL` pointing at a disposable PostgreSQL database. This test uses Chromium and a local HTTPS OIDC fixture to check PKCE sign-in, switching between two identities, account isolation, and sign-out.
+
+Run `npm run test:localization` after building, with
+`AVIARIUM_I18N_TEST_DATABASE_URL` pointing at a disposable PostgreSQL database.
+The test starts a local app with a simulated translation provider and checks
+admin review, bilingual publication, shared likes, and resuming a saved Sudoku
+puzzle after an offline language change. Set `AVIARIUM_CHROMIUM` to use a system Chromium.

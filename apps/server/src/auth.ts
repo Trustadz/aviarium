@@ -1,3 +1,4 @@
+import { apiMessages, type ApiCode } from '../../../packages/game-sdk/src/api-messages.js'
 import { createHash, randomBytes } from 'node:crypto'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import * as openid from 'openid-client'
@@ -21,7 +22,9 @@ const profileInput = z.strictObject({
 export const userFields = `u.id,COALESCE(u.display_name,u.name) AS name,u.role,
   ARRAY(SELECT game_id FROM game_editors WHERE user_id=u.id ORDER BY game_id) AS "editorGames"`
 export class HttpError extends Error {
-  constructor(readonly statusCode: number, message: string) { super(message) }
+  constructor(readonly statusCode: number, readonly code: ApiCode, readonly values: Record<string, string> = {}) {
+    super(apiMessages[code].replace(/\{(\w+)\}/g, (placeholder, key) => values[key] ?? placeholder))
+  }
 }
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex')
 const token = () => randomBytes(32).toString('base64url')
@@ -51,18 +54,18 @@ export async function currentUser(request: FastifyRequest, withProfile = false):
 
 export async function requireUser(request: FastifyRequest, permission?: 'admin'): Promise<User> {
   const user = await currentUser(request)
-  if (!user) throw new HttpError(401, 'Sign in to continue.')
+  if (!user) throw new HttpError(401, 'sign_in_required')
   if (request.headers["x-aviarium-account"] && request.headers["x-aviarium-account"] !== user.id)
-    throw new HttpError(409, "The active account changed. Refresh and sign in again.")
+    throw new HttpError(409, 'active_account_changed')
   if (permission === 'admin' && user.role !== 'admin')
-    throw new HttpError(403, 'Your account does not have this permission.')
+    throw new HttpError(403, 'permission_denied')
   return user
 }
 
 export async function requireGameEditor(request: FastifyRequest, game: string): Promise<User> {
   const user = await requireUser(request)
   if (user.role !== 'admin' && !user.editorGames.includes(game))
-    throw new HttpError(403, 'Your account cannot edit this game.')
+    throw new HttpError(403, 'game_edit_denied')
   return user
 }
 
@@ -70,7 +73,7 @@ export const pocketAvatarOrigin = oidc ? URL.parse(oidc.issuer)?.origin : undefi
 
 let discovery: Promise<openid.Configuration> | undefined
 function provider() {
-  if (!oidc) throw new HttpError(503, 'Pocket ID is not configured.')
+  if (!oidc) throw new HttpError(503, 'oidc_unconfigured')
   discovery ??= openid.discovery(new URL(oidc.issuer), oidc.id, oidc.secret).then(config => {
     // Require cryptographic signature validation on the token endpoint's ID token.
     openid.enableNonRepudiationChecks(config)
@@ -101,7 +104,7 @@ export function registerAuth(app: FastifyInstance) {
           WHERE s.token_hash=$1 AND s.expires_at>now() AND u.issuer=$2 FOR UPDATE OF u`, [digest(cookie), testIssuer])).rows[0] : undefined
         const expectedId = request.headers['x-aviarium-account']
         if (expectedId && current?.id !== expectedId)
-          throw new HttpError(409, 'The test session changed. Refresh and try again.')
+          throw new HttpError(409, 'test_session_changed')
         const accountRole = role === 'admin' ? 'admin' : 'user'
         const user = current ?? (await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role)
           VALUES($1,$2,'Test user',$3) RETURNING id`, [testIssuer, token(), accountRole])).rows[0]
@@ -141,18 +144,18 @@ export function registerAuth(app: FastifyInstance) {
   app.get('/api/auth/callback', async (request, reply) => {
     const cookie = request.cookies['aviarium-login']
     reply.clearCookie('aviarium-login', cookies)
-    if (!cookie) throw new HttpError(400, 'This sign-in request expired. Start again.')
+    if (!cookie) throw new HttpError(400, 'sign_in_expired')
     const attempt = (await pool.query<{verifier: string; state: string; nonce: string}>(`DELETE FROM login_attempts
       WHERE token_hash=$1 AND expires_at>now() RETURNING verifier,state,nonce`, [digest(cookie)])).rows[0]
-    if (!attempt) throw new HttpError(400, 'This sign-in request expired. Start again.')
+    if (!attempt) throw new HttpError(400, 'sign_in_expired')
     const config = await provider()
     const url = new URL(callback)
     url.search = new URL(request.url, origin).search
     const result = await openid.authorizationCodeGrant(config, url, {
       pkceCodeVerifier: attempt.verifier, expectedState: attempt.state, expectedNonce: attempt.nonce, idTokenExpected: true,
-    }).catch(() => { throw new HttpError(400, 'Pocket ID sign-in failed. Start again.') })
+    }).catch(() => { throw new HttpError(400, 'sign_in_failed') })
     const claims = result.claims()
-    if (!claims?.sub) throw new HttpError(400, 'Pocket ID returned no user identity.')
+    if (!claims?.sub) throw new HttpError(400, 'sign_in_missing_identity')
     let picture: string | null = null
     if (typeof claims.picture === 'string' && claims.picture.length <= 2048) {
       const candidate = URL.parse(claims.picture)

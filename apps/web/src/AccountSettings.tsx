@@ -1,3 +1,4 @@
+import { knownMessage, useLanguageSelectionAvailable, useT } from './i18n.js'
 import { useEffect, useId, useRef, useState } from 'react'
 import { ChevronUp, Info, Settings2, Shield, UserRound } from 'lucide-react'
 import { api, errorMessage, json, type SessionAccount } from './api.js'
@@ -17,6 +18,8 @@ export function AccountMenu({ account, open, administration, about }: {
   administration?: () => void
   about: () => void
 }) {
+  const t = useT()
+  const canChooseLanguage = useLanguageSelectionAvailable()
   const [expanded, setExpanded] = useState(false)
   const menu = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -43,22 +46,24 @@ export function AccountMenu({ account, open, administration, about }: {
         trigger.current?.focus()
       }
     }}>
-    <button ref={trigger} className="account-trigger" aria-label={account ? 'Account menu for ' + account.name : 'Device menu'} title={account?.name}
+    <button ref={trigger} className="account-trigger" aria-label={account ? t('Account menu for {name}', { name: account.name }) : t("Device menu")} title={account?.name}
       aria-expanded={expanded} aria-controls={options} onClick={() => setExpanded(value => !value)}>
       {account ? <Avatar name={account.name} src={account.avatar}/> : <Settings2 size={21}/>}
-      <span>{account?.name ?? 'Device'}</span><ChevronUp className="account-chevron" size={13} aria-hidden="true"/>
+      <span>{account?.name ?? t("Device")}</span><ChevronUp className="account-chevron" size={13} aria-hidden="true"/>
     </button>
     <div id={options} className="account-options" hidden={!expanded}>
-      <button className="text-button" onClick={() => select('display')}><Settings2 size={17}/> Device settings</button>
-      {account && <button className="text-button" onClick={() => select('account')}><UserRound size={17}/> Account settings</button>}
+      <button className="text-button" onClick={() => select('display')}><Settings2 size={17}/>{" "}{t("Device settings")}</button>
+      {(account || canChooseLanguage) && <button className="text-button" onClick={() => select('account')}>
+        <UserRound size={17}/>{" "}{t(account ? 'Account settings' : 'Player settings')}
+      </button>}
       {administration && <button className="text-button" onClick={() => {
         setExpanded(false)
         administration()
-      }}><Shield size={17}/> Administration</button>}
+      }}><Shield size={17}/>{" "}{t("Administration")}</button>}
       <button className="text-button" onClick={() => {
         setExpanded(false)
         about()
-      }}><Info size={17}/> About</button>
+      }}><Info size={17}/>{" "}{t("About")}</button>
     </div>
   </div>
 }
@@ -85,6 +90,7 @@ export function ProfileForm({ account, online, refresh }: {
   online: boolean
   refresh: () => Promise<void>
 }) {
+  const t = useT()
   const [name, setName] = useState(account.name)
   const [avatar, setAvatar] = useState<string | null>()
   const [busy, setBusy] = useState(false)
@@ -101,12 +107,12 @@ export function ProfileForm({ account, online, refresh }: {
       await refresh()
       setName(name.trim())
       setAvatar(undefined)
-      setStatus('Profile saved.')
+      setStatus(t("Profile saved."))
     }).catch(error => setError(errorMessage(error))).finally(() => setBusy(false))
   }}>
     <div className="profile-avatar">
       <Avatar name={name} src={image}/>
-      <label>Avatar <input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled} onChange={event => {
+      <label>{t("Avatar")}{" "}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled} onChange={event => {
         const file = event.target.files?.[0]
         event.target.value = ''
         if (!file) return
@@ -118,14 +124,14 @@ export function ProfileForm({ account, online, refresh }: {
     </div>
     {(typeof avatar === 'string' || avatar === undefined && account.customAvatar) &&
       <button type="button" className="text-button" disabled={disabled} onClick={() => { setAvatar(null); setStatus('') }}>
-        {account.testRole ? 'Use test avatar' : account.pocketAvatar ? 'Use Pocket ID avatar' : 'Use initials'}
+        {account.testRole ? t("Use test avatar") : account.pocketAvatar ? t("Use Pocket ID avatar") : t("Use initials")}
       </button>}
-    <label>Display name<input value={name} required maxLength={120} disabled={disabled} onChange={event => {
+    <label>{t("Display name")}<input value={name} required maxLength={120} disabled={disabled} onChange={event => {
       setName(event.target.value); setStatus('')
     }}/></label>
-    <button className="primary" disabled={disabled || !name.trim() || (name === account.name && avatar === undefined)}>Save profile</button>
-    {error && <p role="alert" className="error">{error}</p>}
+    <button className="primary" disabled={disabled || !name.trim() || (name === account.name && avatar === undefined)}>{t("Save profile")}</button>
+    {error && <p role="alert" className="error">{knownMessage(t, error)}</p>}
     {status && <p role="status">{status}</p>}
-    {!online && <p>Reconnect to edit your profile.</p>}
+    {!online && <p>{t("Reconnect to edit your profile.")}</p>}
   </form>
 }

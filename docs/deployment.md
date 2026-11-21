@@ -84,3 +84,25 @@ SQL
 ```
 
 Keep the original database available. For a production cutover, have users export any newer local saves they want to retain. Stop `app`, switch `DATABASE_URL` to the verified restored database, and start the services. Sign in again and import newer local saves if needed. A save referencing a revision published after the archive was taken needs that level restored before it can sync. Rotate secrets independently if the incident involved credential exposure.
+
+## Languages and announcement translation
+
+Set `AVIARIUM_ENABLED_LOCALES` to `en,nl`, `en`, or `nl` and recreate the app
+container to change which interface languages visitors can select. The first
+configured language is the fallback for visitors whose browser languages are
+unavailable. Both interface catalogs ship with Aviarium for offline use.
+Players choose their language under **Account settings**. The choice follows
+their account across browsers and syncs after reconnecting. Local play uses
+**Player settings**.
+
+Official announcements require English and Dutch even when only one language is
+enabled. Set `OPENAI_API_KEY` and `AVIARIUM_TRANSLATION_MODEL` in the app's
+environment to enable AI draft generation in the admin news editor. Choose a
+model that supports structured outputs in the Responses API. The worker sends
+the source announcement text and optional image description to OpenAI. Admins
+can review or replace the draft before publishing, or enter both versions
+manually without configuring AI.
+
+The migration translates the bundled release announcements and preserves
+existing site-authored posts. Use **Edit translations** on any older
+English-only announcement to review and publish its Dutch version.

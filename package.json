@@ -1,6 +1,6 @@
 {
   "name": "aviarium",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -16,7 +16,8 @@
     "worker": "node dist/apps/server/src/worker.js",
     "migrate": "node dist/apps/server/src/migrate.js",
     "test:smoke": "node tests/smoke.mjs",
-    "test:oidc": "node tests/oidc-smoke.mjs"
+    "test:oidc": "node tests/oidc-smoke.mjs",
+    "test:localization": "node tests/localization-smoke.mjs"
   },
   "engines": {
     "node": ">=24"
@@ -33,6 +34,7 @@
     "pg": "^8.16.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-intl": "^12.2.0",
     "sudoku-core": "4.1.1",
     "zod": "^4.1.0"
   },

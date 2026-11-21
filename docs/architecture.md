@@ -31,3 +31,18 @@ The platform ships Sudoku, player accounts and roles, draft review and publishin
 ## Release announcements
 
 Bundle user-facing release announcements in a new SQL migration when preparing a feature release. Add one News post for the live environment and one for the test environment, using the release's public version and date. The first startup on an updated server applies the migration once, so the announcement appears automatically and existing local posts and likes stay in place.
+
+## Localization
+
+React Intl loads the selected English or Dutch catalog from the offline shell.
+Language is an account preference that syncs through the existing preferences
+API. The browser caches it for offline use and remembers the last known list
+of enabled locales. Built-in Sudoku content uses stable puzzle IDs for translated text.
+Creator-authored text is displayed as entered.
+
+Official announcements store both language versions under one news ID.
+Fastify validates both versions and writes them in one transaction. The feed
+returns the requested enabled locale or an available version for legacy posts.
+Admins can queue AI drafts from either language using the PostgreSQL-backed
+translation worker. Draft results are editable and publication requires an
+explicit admin action.

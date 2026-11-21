@@ -105,16 +105,18 @@ try {
   issuer = 'https://127.0.0.1:' + provider.address().port
   const env = { ...process.env, NODE_EXTRA_CA_CERTS: cert, PORT: port, HOST: '127.0.0.1',
     PUBLIC_ORIGIN: origin, DATABASE_URL: database, OIDC_ISSUER: issuer, OIDC_CLIENT_ID: clientId,
+    AVIARIUM_ENABLED_LOCALES: 'en',
     OIDC_CLIENT_SECRET: 'aviarium-fixture', OIDC_ADMIN_SUBJECT: first.id, OIDC_CALLBACK_URL: '' }
   delete env.LOGIN_ENABLED
   delete env.TEST_ENVIRONMENT
   execFileSync(process.execPath, ['dist/apps/server/src/migrate.js'], { env, stdio: 'inherit' })
   await startApp(env)
   browser = await chromium.launch({ executablePath: process.env.AVIARIUM_CHROMIUM, args: ['--no-sandbox'] })
-  const context = await browser.newContext({ ignoreHTTPSErrors: true, colorScheme: 'dark' })
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, colorScheme: 'dark', locale: 'en-US' })
   const page = await context.newPage()
   await page.goto(origin)
   await page.locator('.login-page[data-theme=dark]').waitFor()
+  assert.deepEqual((await (await context.request.get(origin + '/api/locales')).json()).enabled, ['en'])
   await page.getByRole('link', { name: 'Login with Pocket ID', exact: true }).click()
   await page.getByRole('button', { name: 'Account menu' }).filter({ hasText: first.name }).waitFor()
   const who = async () => (await (await context.request.get(origin + '/api/me')).json()).user
@@ -141,16 +143,24 @@ try {
   await page.getByLabel('Header image (optional)', { exact: true }).setInputFiles({
     name: 'header.png', mimeType: 'image/png', buffer: avatarFixture,
   })
-  await page.getByLabel('Image description (optional)').fill('Aviarium artwork')
-  await page.getByLabel('Title', { exact: true }).fill('A new Sudoku pack')
-  await page.getByLabel('Intro paragraph').fill('Three new puzzles are ready.')
-  await page.getByLabel('More text (optional)').fill('Start with the easiest puzzle in the pack.')
+  const postTitle = 'A new Sudoku pack ' + first.id.slice(0, 8)
+  const english = page.getByRole('group', { name: 'English' })
+  const dutch = page.getByRole('group', { name: 'Nederlands' })
+  await dutch.waitFor()
+  await english.getByLabel('Image description (optional)').fill('Aviarium artwork')
+  await english.getByLabel('Title', { exact: true }).fill(postTitle)
+  await english.getByLabel('Intro paragraph').fill('Three new puzzles are ready.')
+  await english.getByLabel('More text (optional)').fill('Start with the easiest puzzle in the pack.')
+  await dutch.getByLabel('Image description (optional)').fill('Aviarium-illustratie')
+  await dutch.getByLabel('Title', { exact: true }).fill('Een nieuw sudokupakket')
+  await dutch.getByLabel('Intro paragraph').fill('Er staan drie nieuwe puzzels klaar.')
+  await dutch.getByLabel('More text (optional)').fill('Begin met de makkelijkste puzzel in het pakket.')
   await page.getByRole('button', { name: 'Publish announcement' }).click()
-  const publishedPost = page.getByRole('article').filter({ hasText: 'A new Sudoku pack' })
-  await publishedPost.getByRole('heading', { name: 'A new Sudoku pack' }).waitFor()
-  await page.getByRole('img', { name: 'Aviarium artwork' }).evaluate(image => image.decode())
-  await page.getByText('Three new puzzles are ready.').waitFor()
-  const fullText = page.getByText('Start with the easiest puzzle in the pack.')
+  const publishedPost = page.getByRole('article').filter({ hasText: postTitle })
+  await publishedPost.getByRole('heading', { name: postTitle }).waitFor()
+  await publishedPost.getByRole('img', { name: 'Aviarium artwork' }).evaluate(image => image.decode())
+  await publishedPost.getByText('Three new puzzles are ready.').waitFor()
+  const fullText = publishedPost.getByText('Start with the easiest puzzle in the pack.')
   assert.equal(await fullText.isVisible(), false)
   await publishedPost.getByText('Read more', { exact: true }).click()
   await fullText.waitFor()
@@ -189,7 +199,7 @@ try {
   assert.deepEqual(beta.editorGames, [])
   assert.equal(observedPrompts.at(-1), 'select_account')
   await page.getByRole('link', { name: 'News', exact: true }).click()
-  await page.getByRole('heading', { name: 'A new Sudoku pack' }).waitFor()
+  await page.getByRole('heading', { name: postTitle }).waitFor()
   assert.equal(await page.getByRole('button', { name: 'New announcement' }).count(), 0)
   assert.equal(await publishedPost.getByRole('button', { name: 'Like announcement' }).locator('span').textContent(), '1')
   await page.getByRole('link', { name: 'Library', exact: true }).click()
@@ -379,7 +389,7 @@ try {
   await page.getByRole('button', { name: 'Close' }).click()
   await page.getByRole('link', { name: 'News', exact: true }).click()
   await page.getByRole('heading', { name: releaseTitle }).waitFor()
-  assert.equal(await page.getByRole('heading', { name: 'A new Sudoku pack' }).count(), 0)
+  assert.equal(await page.getByRole('heading', { name: postTitle }).count(), 0)
   await page.getByRole('link', { name: 'Library', exact: true }).click()
 
   const get = path => context.request.get(origin + path)

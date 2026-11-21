@@ -1,3 +1,4 @@
+import { useT } from './i18n.js'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight, Ellipsis, Trash2 } from 'lucide-react'
 
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function ContinueGames({ games, resume, remove }: Props) {
+  const t = useT()
   const heading = useId()
   const [openOptions, setOpenOptions] = useState<string>()
   const options = useRef<HTMLDivElement>(null)
@@ -31,7 +33,7 @@ export function ContinueGames({ games, resume, remove }: Props) {
 
   if (!games.length) return null
   return <section className="continue-games" aria-labelledby={heading}>
-    <h2 id={heading}>Continue</h2>
+    <h2 id={heading}>{t("Continue")}</h2>
     <ul className="continue-track" aria-labelledby={heading} tabIndex={0}>
       {games.map(game => <li key={game.id} className="continue-card">
         <div className="continue-card-summary">
@@ -52,7 +54,7 @@ export function ContinueGames({ games, resume, remove }: Props) {
               event.currentTarget.querySelector('button')?.focus()
               setOpenOptions(undefined)
             }}>
-            <button className="icon-button" aria-label={`More options for ${game.title}`} title="Saved game options"
+            <button className="icon-button" aria-label={t('More options for {game}', { game: game.title })} title={t("Saved game options")}
               aria-expanded={openOptions === game.id}
               onClick={() => setOpenOptions(openOptions === game.id ? undefined : game.id)}><Ellipsis size={20}/></button>
             {openOptions === game.id && <div className="continue-options-panel">
@@ -60,10 +62,10 @@ export function ContinueGames({ games, resume, remove }: Props) {
                 event.currentTarget.closest('.continue-options')?.querySelector('button')?.focus()
                 setOpenOptions(undefined)
                 remove(game.id)
-              }}><Trash2 size={15}/> Delete save</button>
+              }}><Trash2 size={15}/>{" "}{t("Delete save")}</button>
             </div>}
           </div>
-          <button className="primary" disabled={!game.canResume} onClick={() => resume(game.id)}>Resume <ChevronRight size={17}/></button>
+          <button className="primary" disabled={!game.canResume} onClick={() => resume(game.id)}>{t("Resume")}{" "}<ChevronRight size={17}/></button>
         </div>
       </li>)}
     </ul>
