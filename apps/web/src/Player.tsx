@@ -14,6 +14,8 @@ import { Grid } from './Grid.js'
 import { PuzzleShare } from './SudokuMenu.js'
 import type { LocalSession } from './storage.js'
 
+export { createQuickPlayLevel } from './quick-play.js'
+
 export function createSave(level: PublishedLevel, pack?: PublishedPack): SudokuSave {
   return { game: 'sudoku', level: level.id, levelRevision: level.revision, ruleset: 1, format: 1,
     board: rules.create(Array.from(level.grid, Number)), undo: [], redo: [], elapsedMs: 0, completed: false,

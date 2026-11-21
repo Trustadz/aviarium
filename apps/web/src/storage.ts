@@ -1,7 +1,7 @@
 import { Dexie, type EntityTable } from 'dexie'
 import type { Locale } from '../../../packages/game-sdk/src/locales.js'
 import { savedGameLimit, type PublishedLevel } from '../../../packages/game-sdk/src/index.js'
-import { defaults, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
+import { defaults, quickPlayVersion, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
 import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { api, json } from './api.js'
 
@@ -144,13 +144,19 @@ async function synchronize(profile: string) {
   // Earlier completions unlock later stops in an ordered pack.
   const dirty = (await listSessions(profile)).filter(session => session.dirty || session.sent).reverse()
   for (const pending of dirty) {
-    const mutation = await db.transaction('rw', db.sessions, async () => {
+    const mutation = await db.transaction('rw', db.sessions, db.levels, async () => {
       const current = await db.sessions.get(pending.id)
       if (!current?.dirty && !current?.sent) return undefined
       if (current.sent) return current.sent
       const mutation: Mutation = { sessionId: current.id, mutationId: crypto.randomUUID(),
         baseRevision: current.revision, data: current.data, archived: current.archived, updatedAt: current.updated,
         archiveIfUnchanged: current.expired }
+      if (current.data.level.startsWith('quick-')) {
+        const stored = await db.levels.get(levelKey(current.data.level, current.data.levelRevision))
+        const level = stored?.level
+        if (level?.seed && level.generatorVersion === quickPlayVersion)
+          mutation.quickPlay = { seed: level.seed, difficulty: level.difficulty, version: quickPlayVersion }
+      }
       await db.sessions.put({ ...current, sent: mutation, dirty: false })
       return mutation
     })

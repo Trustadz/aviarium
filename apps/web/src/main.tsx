@@ -516,9 +516,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           const level = await api<PublishedLevel>(`/sudoku/level/${encodeURIComponent(sharedId)}/${encodeURIComponent(sharedRevision)}`, undefined, accountId)
           await open(level)
         })}>{t("Play shared puzzle")}</button>}
-        <QuickPlay online={online} profile={profile} generate={async (difficulty, seed, version) => {
-          const level = await api<PublishedLevel>('/sudoku/quick-play', json('POST', { difficulty, seed, version }), accountId)
-          await open(level)
+        <QuickPlay canPlay={canPlay} profile={profile} generate={async (difficulty, seed, version) => {
+          const { createQuickPlayLevel } = await featuredGame.player()
+          await open(await createQuickPlayLevel(difficulty, seed, version))
         }}/>
         <PackCards packs={packs} completed={completed} open={pack => go(packPath(pack))}/>
       </section>

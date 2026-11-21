@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { generateQuickPuzzle } from '../dist/packages/sudoku/src/quick-play.js'
+import { generateQuickPuzzle, quickPlayVersion } from '../dist/packages/sudoku/src/quick-play.js'
+import { formatSeedCode, quickPlayId } from '../dist/packages/sudoku/src/seed-code.js'
 import { validate } from '../dist/packages/sudoku/src/solver.js'
 import { rules } from '../dist/packages/sudoku/src/rules.js'
 
@@ -115,6 +117,10 @@ if (adminToken && playerToken) {
   const save = (data, baseRevision) => ({ data, sessionId, baseRevision, mutationId: crypto.randomUUID(), archived: false })
   const push = (body, expected = 200) => request('/api/progress', { headers: playerHeaders, method: 'POST', body, expected })
   const raw = save(initial, 0)
+  const wrongQuickId = { ...initial, level: 'quick-' + '0'.repeat(36) }
+  const wrongQuick = await push({ ...save(wrongQuickId, 0),
+    quickPlay: { seed: 'mismatched-seed', difficulty: 'Easy', version: quickPlayVersion } }, 422)
+  assert.equal(wrongQuick.code, 'level_version_unavailable')
   assert.equal((await push(raw)).revision, 1)
   assert.equal((await push(raw)).revision, 1)
   await push({ ...raw, data: { ...initial, elapsedMs: 10 } }, 409)
@@ -394,6 +400,59 @@ try {
     await first.close()
     await second.close()
   }
+  const quickPlayContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await quickPlayContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
+  const quickPlayPage = await quickPlayContext.newPage()
+  const serverGenerations = []
+  quickPlayPage.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/sudoku/quick-play')
+      serverGenerations.push(request.url())
+  })
+  await quickPlayPage.goto(origin + '/games/sudoku')
+  await quickPlayPage.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
+  await until(() => quickPlayPage.evaluate(async () =>
+    Boolean(await caches.match('/__aviarium/last-played', { cacheName: 'aviarium-game-sudoku' }))), 'Sudoku offline download')
+  await quickPlayContext.setOffline(true)
+  await quickPlayPage.reload()
+  await quickPlayPage.getByRole('button', { name: 'New puzzle', exact: true }).click()
+  await quickPlayPage.getByRole('heading', { name: 'Quick Play', level: 1 }).waitFor()
+  await quickPlayPage.getByRole('button', { name: 'Game menu', exact: true }).click()
+
+  const descriptor = { seed: 'offline-smoke-' + crypto.randomUUID(), difficulty: 'Medium', version: quickPlayVersion }
+  const quickId = await quickPlayId(descriptor)
+  const oldId = 'quick-' + createHash('sha256').update(JSON.stringify([descriptor.version, descriptor.difficulty, descriptor.seed]))
+    .digest('hex').slice(0, 36)
+  assert.equal(quickId, oldId)
+  const quickGrid = generateQuickPuzzle(descriptor.seed, descriptor.difficulty)
+  const solutionValues = validate(Array.from(quickGrid, Number)).solution
+  const blank = quickGrid.indexOf('0')
+  const quickCell = `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, `
+  await quickPlayPage.getByRole('button', { name: 'Enter seed', exact: true }).click()
+  await quickPlayPage.getByLabel('Puzzle seed', { exact: true }).fill(formatSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version))
+  await quickPlayPage.getByRole('button', { name: 'Play seed', exact: true }).click()
+  const quickBoard = quickPlayPage.getByLabel('Sudoku board', { exact: true })
+  await quickBoard.waitFor()
+  assert.equal((await quickBoard.getByRole('button').allTextContents()).map(digit => digit.trim() || '0').join(''), quickGrid)
+  await quickPlayPage.getByRole('button', { name: quickCell + 'empty', exact: true }).press(String(solutionValues[blank]))
+  await quickPlayPage.getByRole('button', { name: 'Game menu', exact: true }).click()
+  await quickPlayPage.reload()
+  await quickPlayPage.getByRole('button', { name: 'Resume', exact: true }).first().click()
+  await quickPlayPage.getByRole('button', { name: quickCell + solutionValues[blank], exact: true }).waitFor()
+  await quickPlayContext.setOffline(false)
+  await quickPlayPage.getByRole('button', { name: 'Game menu', exact: true }).click()
+  const playbackHeaders = playerToken ? playerHeaders : adminHeaders
+  await until(async () => {
+    const progress = await request('/api/progress', { headers: playbackHeaders })
+    return progress.levels.some(level => level.id === quickId && level.grid === quickGrid) &&
+      progress.sessions.some(item => item.data.level === quickId && item.data.board.entries[blank] === solutionValues[blank])
+  }, 'offline Quick Play progress and puzzle sync')
+  assert.deepEqual(serverGenerations, [])
+  const legacyQuickPlay = await request('/api/sudoku/quick-play', { method: 'POST', headers: playbackHeaders, body: descriptor })
+  assert.equal(legacyQuickPlay.id, quickId)
+  assert.equal(legacyQuickPlay.grid, quickGrid)
+  await quickPlayContext.close()
+  console.info('Quick Play checks passed: random and shared seed offline, reload and resume, and sync after reconnecting.')
+
   console.info('Browser checks passed: mobile controls, notes, history, keyboard, pause, e-reader, offline reload and resume', adminToken ? ', studio and admin' : '', playerToken ? ', two-browser sync' : '')
 } finally {
   await browser.close()
