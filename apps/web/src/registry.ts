@@ -33,7 +33,7 @@ export const games = [{
   Preview: SudokuPreview, player: () => import('./Player.js'), guide: sudokuGuide,
 }, {
   id: 'nonograms', title: 'Nonograms', description: 'Use row and column clues to reveal a picture.',
-  tags: ['Logic', 'Picross'], eReader: true, url: '/games/nonograms', theme: 'sudoku-theme nonogram-theme',
+  tags: ['Logic', 'Picross'], eReader: true, url: '/games/nonograms', theme: 'nonogram-theme',
   Preview: NonogramsPreview, player: () => import('./Nonograms.js'),
   guide: [
     {

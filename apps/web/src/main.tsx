@@ -64,7 +64,7 @@ function AppleInstallHelp() {
   </details>
 }
 
-function setBrowserTheme(element: HTMLElement | null, property: '--surface' | '--sudoku-page') {
+function setBrowserTheme(element: HTMLElement | null, property: '--surface' | '--sudoku-page' | '--nonogram-page') {
   if (!element) return
   const color = getComputedStyle(element).getPropertyValue(property).trim()
   if (!color) return
@@ -426,8 +426,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const inShell = !inGame
   const surface = openGame?.id ?? (inStudio ? 'studio' : 'library')
   const app = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => setBrowserTheme(app.current, (surface === 'sudoku' || surface === 'nonograms') ? '--sudoku-page' : '--surface'),
-    [reader, surface, theme])
+  const browserTheme = surface === 'nonograms' ? '--nonogram-page' : surface === 'sudoku' ? '--sudoku-page' : '--surface'
+  useLayoutEffect(() => setBrowserTheme(app.current, browserTheme), [reader, surface, browserTheme, theme])
   const sharedPuzzle = new URLSearchParams(location.search)
   const sharedId = sharedPuzzle.get('puzzle')
   const sharedRevision = sharedPuzzle.get('revision')

@@ -120,7 +120,7 @@ export default function Nonograms({ profile, path, navigate, onActivity }: {
         play: () => openStop(id, puzzle),
       }
     })
-    return <section className="catalog pack-roadmap pack-meadow">
+    return <section className="catalog pack-roadmap pack-cockatoos">
       <div className="game-navigation">
         <button className="text-button back" onClick={() => navigate(menuPath)}><ArrowLeft size={17}/> {t('Nonograms menu')}</button>
       </div>
@@ -176,7 +176,7 @@ export default function Nonograms({ profile, path, navigate, onActivity }: {
     <section className="sudoku-packs" aria-labelledby="nonogram-packs-title">
       <h2 id="nonogram-packs-title">{t('Packs')}</h2>
       <div className="pack-cards">
-        <button className="pack-card pack-meadow" onClick={() => navigate(roadmapPath)}>
+        <button className="pack-card pack-cockatoos" onClick={() => navigate(roadmapPath)}>
           <img className="pack-cover nonogram-pack-cover" src={cockatoosCover} alt=""/>
           <div className="pack-card-copy">
             <span className="pack-card-title">{t(starterPack.title)}<ArrowRight size={18}/></span>
@@ -297,7 +297,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, savedCells, onMove }: {
     }
   }
 
-  return <section className={pack ? 'play-page nonogram-play pack-play pack-meadow' : 'play-page nonogram-play'}
+  return <section className={pack ? 'play-page nonogram-play pack-play pack-cockatoos' : 'play-page nonogram-play'}
     aria-labelledby="nonogram-puzzle-title">
     {pack && <img className="pack-play-art" src={cockatoosCover} alt=""/>}
     <div className="game-navigation">
