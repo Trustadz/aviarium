@@ -23,4 +23,4 @@ To run the browser suites together, build the app and point the runner at a disp
 AVIARIUM_BROWSER_TEST_DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/postgres npm run test:browser
 ```
 
-The runner creates and removes separate databases for the OIDC, localization, and signed-in smoke tests. GitHub runs the same suite on pull requests, pushes to `main`, and manual releases.
+The runner creates and removes separate databases for the OIDC, localization, and signed-in smoke tests. The **Verify** workflow runs the same suite on pull requests and pushes to `main`. **Publish container** calls it again when you start a manual release.
