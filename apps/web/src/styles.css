@@ -1,13 +1,14 @@
 :root {
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   color: #3d405b;
-  background: #f4f1de;
+  --window-background: #fffdf2;
+  background: var(--window-background);
   font-synthesis: none;
   --radius: 18px;
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; }
+body { margin: 0; background: var(--window-background); }
 button, input, select { font: inherit; }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button, a { touch-action: manipulation; }
@@ -545,8 +546,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
     padding: 4px; font-size: .78rem; line-height: 1.18; white-space: nowrap;
   }
   .app-destinations a { flex: 1; }
-  .app-rail .account-menu { flex: 0 1 clamp(72px, 24vw, 132px); border-inline-start: 1px solid var(--border); }
-  .app-rail .account-menu { padding-inline-start: 4px; }
+  .app-rail .account-menu { flex: 0 1 clamp(72px, 24vw, 132px); }
   .account-trigger > span:not(.account-avatar) { width: 100%; text-align: center; }
   .account-chevron { position: absolute; right: 8px; top: 11px; }
   .account-trigger .account-avatar { width: 23px; height: 23px; }

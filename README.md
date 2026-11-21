@@ -35,6 +35,14 @@ npm run build
 
 `npm run dev` serves the frontend with the API proxied to the local Compose application. For write operations from the Vite origin, set the application's `PUBLIC_ORIGIN` to the Vite origin while developing. Use the Compose production build to test PWA installation and offline reopens. `npm run test:smoke` exercises the running production build with Chromium. See [verification](docs/testing.md).
 
+## Publish a release
+
+1. Open a draft PR from a feature branch. Test the local preview and wait for the GitHub checks.
+2. When the change is approved, make sure its PR includes the next unused version in `package.json` and `package-lock.json`. Use `npm version 0.1.16 --no-git-tag-version` with the version you intend to release. Merge the approved PR.
+3. In GitHub, go to **Actions → Publish container → Run workflow**, choose **main**, enter the package version without the `v` prefix, and run it. The workflow reruns the checks, creates the Git version tag, and publishes the public version and `latest` images.
+
+From a terminal with the GitHub CLI, the same release command is `gh workflow run container.yml --ref main -f version=0.1.16`. Substitute the version on `main`. A repository maintainer can run either method with their regular GitHub access.
+
 ## Architecture
 
 - `apps/web` holds the launcher, creator studio, admin screens, IndexedDB, and PWA.

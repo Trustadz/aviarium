@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+const { version: appVersion } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
+
 export default defineConfig({
+  define: { 'import.meta.env.VITE_AVIARIUM_VERSION': JSON.stringify(appVersion) },
   root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [react(), {
     name: 'aviarium-offline',

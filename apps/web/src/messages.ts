@@ -6,6 +6,7 @@ export const dutch = {
   "A saved attempt is bound to one level revision.": "Een opgeslagen poging hoort bij één puzzelversie.",
   "About": "Over Aviarium",
   "About Aviarium": "Over Aviarium",
+  "Version {version}": "Versie {version}",
   "Access required": "Toegang vereist",
   "Account menu for {name}": "Accountmenu van {name}",
   "Account settings": "Accountinstellingen",

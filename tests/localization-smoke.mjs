@@ -156,7 +156,7 @@ try {
     storageState: { cookies: await admin.cookies(), origins: [] } })
   const anotherPage = await anotherDevice.newPage()
   await anotherPage.goto(origin + '/news')
-  await anotherPage.getByRole('heading', { name: 'What’s new' }).waitFor()
+  await anotherPage.getByRole('heading', { name: 'What’s new', level: 1, exact: true }).waitFor()
   assert.equal(await anotherPage.locator('html').getAttribute('lang'), 'en')
   console.log('Passed bilingual publication, AI review, shared likes, edit conflicts, and offline language switching.')
 } finally {
