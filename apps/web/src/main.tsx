@@ -1,11 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, ArrowRight, BookOpen, Check, Heart, History, LogIn, LogOut,
-  Search, Settings2, Shield, Trash2, Users, WifiOff, Wrench } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, Heart, History, LogIn, LogOut, Newspaper,
+  Pencil, Search, Settings2, Trash2, Users, WifiOff } from 'lucide-react'
 import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, type Preferences, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { packLevelId, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
+import { AccountMenu, ProfileForm } from './AccountSettings.js'
+import { News } from './News.js'
 import { ContinueGames } from './ContinueGames.js'
 import { registerOffline, useGameDownloads } from './offline.js'
 import { games } from './registry.js'
@@ -118,6 +120,7 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
   const [completions, setCompletions] = useState<string[]>([])
   const [prefs, setPrefs] = useState(defaults)
   const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
+  const [manageInstalls, setManageInstalls] = useState(() => localStorage.getItem('aviarium:manage-installs') === 'on')
   const [active, setActive] = useState<{ session: LocalSession; level: PublishedLevel; head: LocalSession; pack?: PublishedPack }>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
@@ -335,44 +338,58 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
   const completed = new Set([...completions, ...sessions.filter(item => item.data.completed)
     .map(item => levelKey(item.data.level, item.data.levelRevision))])
 
-  const canEditSudoku = online && account && (account.role === 'admin' || account.editorGames.includes(featuredGame.id))
+  const editableGames = account && online ? games.filter(game =>
+    account.role === 'admin' || account.editorGames.includes(game.id)) : []
+  const canEditSudoku = Boolean(account && editableGames.some(game => game.id === featuredGame.id))
   const preview = catalog.find(level => level.id === 'first-light') ?? catalog[0]
   const inLibrary = path === '/'
+  const inNews = path === '/news'
+  const inStudio = path === '/studio' || path === '/studio/sudoku' || path === '/studio/packs'
+  const inAdmin = path === '/admin'
   const inGame = Boolean(openGame)
-  const surface = inGame || path === '/studio' || path === '/studio/packs' ? 'sudoku' : 'library'
+  const inShell = !inGame
+  const surface = inGame ? 'sudoku' : inStudio ? 'studio' : 'library'
   const sharedPuzzle = new URLSearchParams(location.search)
   const sharedId = sharedPuzzle.get('puzzle')
   const sharedRevision = sharedPuzzle.get('revision')
 
-  return <div className={reader ? 'app reader' : 'app'} data-theme={theme} data-surface={surface}>
-    {inLibrary && <header className="site-header"><div className="frame header-frame">
-      <a className="brand" href="/" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/><span>Aviarium</span></a>
-      {canEditSudoku && <nav aria-label="Main navigation" className="main-nav">
-        <a href="/studio" onClick={event => link(event, '/studio')}><Wrench size={16}/> Studio</a>
-        {online && account?.role === 'admin' && <a href="/admin" onClick={event => link(event, '/admin')}><Shield size={16}/> Admin</a>}
-      </nav>}
-      <div className="header-actions">
+  return <div className={'app' + (reader ? ' reader' : '') + (inShell ? ' app-shell' : '')} data-theme={theme} data-surface={surface}>
+    {inShell && <>
+      <header className="site-header"><div className="frame header-frame">
+        <a className="brand" href="/" aria-label="Aviarium home" onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/>
+          <span>{inStudio ? 'Studio' : inNews ? 'News' : inAdmin ? 'Administration' : 'Aviarium'}</span>
+        </a>
         {!online && <span className="offline-tag"><WifiOff size={16}/> Offline</span>}
-        <button className="icon-button" aria-label="Settings" title="Display settings" onClick={() => showDialog('display')}><Settings2 size={19}/></button>
-        {account && !account.testRole && <button className="account-button" onClick={() => showDialog('account')}><Users size={16}/><span>{account.name}</span></button>}
+      </div></header>
+      <div className="app-rail">
+        <nav aria-label="Main navigation" className="app-destinations">
+          <a href="/" aria-current={inLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>Library</span></a>
+          {editableGames.length > 0 && <a href="/studio" aria-current={inStudio ? 'page' : undefined}
+            onClick={event => link(event, '/studio')}><Pencil size={21}/><span>Studio</span></a>}
+          <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>News</span></a>
+        </nav>
+        <AccountMenu account={account} open={showDialog}
+          administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
       </div>
-    </div></header>}
-    <main className={(inGame ? 'game-frame' : 'frame main-frame') + (surface === 'sudoku' ? ' sudoku-theme' : '')}>
+    </>}
+    <main className={(inGame ? 'game-frame' : 'frame main-frame') + (inGame ? ' sudoku-theme' : '')}>
       {notice && <div className="notice" role="alert">{notice}<button onClick={() => setNotice('')}>Dismiss</button></div>}
       {inLibrary && networkNotice && <p role="status" className="network-notice">Sync delayed. {networkNotice}</p>}
       {inLibrary && online && activate && <div className="notice">An Aviarium update is ready.<button onClick={activate}>Reload</button></div>}
       <Suspense fallback={<p role="status">Loading…</p>}>
-      {path === '/' ? <>
+      {inLibrary ? <>
+        {continueRow()}
         <section className="hero">
           <div className="hero-content">
             <p className="hero-kicker"><span/> PUZZLE LIBRARY</p>
             <h1>Aviarium</h1>
             <p>A quiet place to play. Find your next puzzle<br className="wide-only"/> or pick up where you left off.</p>
-            <button className="primary hero-action" onClick={() => go('/games/sudoku')}>Explore Sudoku <ArrowRight size={17}/></button>
+            <div className="hero-actions">
+              <button className="primary hero-action" onClick={() => go('/games/sudoku')}>Explore Sudoku <ArrowRight size={17}/></button>
+            </div>
           </div>
           {preview && <div className={'hero-art ' + featuredGame.theme} aria-hidden="true"><featuredGame.Preview grid={preview.grid}/></div>}
         </section>
-        {continueRow()}
         <section className="library">
           <div className="section-heading"><div><h2>Game library</h2><p>Browse by category or open your favorites.</p></div>
             <label className="search"><Search size={18}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search games" aria-label="Search games"/></label>
@@ -388,7 +405,7 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
               <p>{game.description}</p>
               <div className="card-footer"><span className="badge">Logic</span><span className="badge e-ink"><BookOpen size={13}/> E-reader</span>
                 <a className="text-button" href={game.url} onClick={event => link(event, game.url)}>Play <ArrowRight size={16}/></a></div>
-              {installed.includes(game.id) && <div className="game-download">
+              {manageInstalls && installed.includes(game.id) && <div className="game-download">
                 <span><Check size={15}/> Installed on this device</span>
                 <button className="secondary" aria-label={'Remove ' + game.title + ' download'}
                   onClick={() => perform(() => remove(game.id))}><Trash2 size={15}/> Remove download</button>
@@ -439,18 +456,36 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
         }}/>
         <PackCards packs={packs} completed={completed} open={pack => go(packPath(pack))}/>
       </section>
-      : (path === '/studio' || path === '/studio/packs') && canEditSudoku ? <>
-        <div className="game-navigation"><button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
+      : inNews ? <News account={account} online={online}/>
+      : inStudio && account && editableGames.length > 0 ? path === '/studio' ? <section className="creator-home" aria-labelledby="studio-heading">
+        <h1 id="studio-heading">Studio</h1>
+        <div className="game-list">{editableGames.map(game => <article className="game-card" key={game.id}>
+          <a className={'game-card-image ' + game.theme} aria-label={'Create for ' + game.title}
+            href={'/studio/' + game.id} onClick={event => link(event, '/studio/' + game.id)}>
+            {preview && <game.Preview grid={preview.grid}/>}
+          </a>
+          <div className="game-card-body">
+            <h2>{game.title}</h2>
+            <a className="primary" href={'/studio/' + game.id} onClick={event => link(event, '/studio/' + game.id)}>
+              Open workspace <ArrowRight size={16}/>
+            </a>
+          </div>
+        </article>)}</div>
+      </section> : canEditSudoku ? <>
+        <div className="studio-tools">
+          <label>Studio game<select value={featuredGame.id} onChange={event => go(event.target.value ? '/studio/' + event.target.value : '/studio')}>
+            <option value="">All games</option>
+            {editableGames.map(game => <option value={game.id} key={game.id}>{game.title}</option>)}
+          </select></label>
           <div className="tabs" aria-label="Studio sections">
-            <button aria-pressed={path === '/studio'} onClick={() => go('/studio')}>Puzzles</button>
+            <button aria-pressed={path === '/studio/sudoku'} onClick={() => go('/studio/sudoku')}>Puzzles</button>
             <button aria-pressed={path === '/studio/packs'} onClick={() => go('/studio/packs')}>Packs</button>
-          </div></div>
-        {path === '/studio' ? <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
-          : <PackStudio key={account.id} account={account} levels={catalog}
-            onPublish={() => perform(() => refreshPacks())}/>}
-      </>
-      : path === '/admin' && online && account?.role === 'admin' ? <>
-        <button className="text-button back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to library</button>
+          </div>
+        </div>
+        {path === '/studio/sudoku' ? <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
+          : <PackStudio key={account.id} account={account} levels={catalog} onPublish={() => perform(() => refreshPacks())}/>}
+      </> : <section className="panel"><h1>Access required</h1><a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>Studio games</a></section>
+      : inAdmin && online && account?.role === 'admin' ? <>
         <Admin key={account.id} account={account} onCatalogChange={() => { void refreshCatalog() }}/>
       </>
       : <section className="panel"><h1>Access required</h1><p>Sign in with an authorized account.</p><button className="secondary" onClick={() => go('/')}>Return to library</button></section>}
@@ -460,7 +495,7 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
       <section className={'settings-panel' + (dialog === 'sudoku' ? ' sudoku-theme' : '')}
         role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={event => event.stopPropagation()}>
         <div className="section-heading"><h2 id="settings-title">
-          {dialog === 'display' ? 'Display settings' : dialog === 'sudoku' ? 'Sudoku settings' : 'Account'}
+          {dialog === 'display' ? 'Device settings' : dialog === 'sudoku' ? 'Sudoku settings' : 'Account settings'}
         </h2><button autoFocus className="secondary" onClick={() => showDialog(undefined)}>Close</button></div>
         {dialog === 'display' && <>
           <label className="setting-row">Theme<select value={preference}
@@ -469,6 +504,11 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
           </select></label>
           <label className="setting-row">E-reader mode<input type="checkbox" checked={reader} onChange={event => {
             localStorage.setItem('aviarium:reader', event.target.checked ? 'on' : 'off'); setReader(event.target.checked)
+          }}/></label>
+          <label className="setting-row">Manage installs<input type="checkbox" checked={manageInstalls} onChange={event => {
+            const enabled = event.target.checked
+            localStorage.setItem('aviarium:manage-installs', enabled ? 'on' : 'off')
+            setManageInstalls(enabled)
           }}/></label>
           <p className="muted">These settings apply to this device.</p>
           {account?.testRole && <>
@@ -484,9 +524,8 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
           .map(([key, label]) => <label className="setting-row" key={key}>{label}<input type="checkbox" checked={prefs[key]}
             onChange={event => changePrefs({ [key]: event.target.checked })}/></label>)}
         {dialog === 'account' && account && <>
-          <h3>{account.name}</h3>
-          <p className="muted">Your progress syncs when you’re online.</p>
-          {online ? <div className="button-bar settings-actions">
+          <ProfileForm account={account} online={online} refresh={refreshSession}/>
+          {!account.testRole && (online ? <div className="button-bar settings-actions">
             <a className="primary" href="/api/auth/login?switch=1" onClick={event => {
               event.preventDefault()
               perform(async () => {
@@ -502,12 +541,12 @@ function Library({ account, online, activate, refreshSession, signOut, theme, pr
               go('/')
               signOut()
             })}><LogOut size={16}/> Sign out</button>
-          </div> : <p>Reconnect to switch accounts or sign out.</p>}
+          </div> : <p>Reconnect to switch accounts or sign out.</p>)}
           <AppleInstallHelp/>
         </>}
       </section>
     </div>}
-    {inLibrary && <footer className="frame footer"><span>Aviarium</span><span>Play at your own pace.</span></footer>}
+    {inShell && <footer className="frame footer"><span>Aviarium</span><span>Play at your own pace.</span></footer>}
   </div>
 }
 

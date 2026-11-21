@@ -10,6 +10,12 @@ const playerToken = process.env.AVIARIUM_TEST_PLAYER
 const adminHeaders = adminToken ? { Cookie: 'aviarium=' + adminToken } : {}
 const playerHeaders = playerToken ? { Cookie: 'aviarium=' + playerToken } : {}
 
+async function openSettings(page, name) {
+  const account = page.getByRole('button', { name: 'Account menu' })
+  if (await account.isVisible()) await account.click()
+  await page.getByRole('button', { name, exact: true }).click()
+}
+
 async function request(path, { method = 'GET', body, headers = {}, expected = 200 } = {}) {
   const response = await fetch(origin + path, { method, headers: { Origin: origin, ...headers,
     ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
@@ -184,12 +190,11 @@ try {
   await page.getByRole('button', { name: 'Favorites', exact: true }).click()
   await page.getByRole('link', { name: 'Sudoku', exact: true }).waitFor()
   if (process.env.AVIARIUM_SCREENSHOTS) await page.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/library-mobile.png', fullPage: true })
-  const playbackAccount = (await request('/api/me', { headers: playerToken ? playerHeaders : adminHeaders })).user
-  await page.getByRole('button', { name: playbackAccount.name }).click()
-  await page.getByRole('dialog', { name: 'Account' }).waitFor()
+  await openSettings(page, 'Account settings')
+  await page.getByRole('dialog', { name: 'Account settings' }).waitFor()
   assert.equal(await page.getByText(/(export|import) saves/i).count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await openSettings(page, 'Device settings')
   await page.getByLabel('Theme').selectOption('dark')
   assert.equal(await page.locator('.app').getAttribute('data-theme'), 'dark')
   assert.equal(await page.getByLabel('Show timer').count(), 0)
@@ -231,8 +236,8 @@ try {
   await page.getByRole('button', { name: 'Exit to library' }).tap()
   await page.getByRole('banner').waitFor()
   await page.waitForFunction(() => caches.has('aviarium-game-sudoku'))
-  await page.getByRole('button', { name: 'Remove Sudoku download' }).waitFor()
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  assert.equal(await page.getByRole('button', { name: 'Remove Sudoku download' }).count(), 0)
+  await openSettings(page, 'Device settings')
   await page.getByLabel('E-reader mode').check()
   await page.getByRole('button', { name: 'Close' }).tap()
   await page.getByRole('button', { name: 'Explore Sudoku' }).tap()
@@ -262,6 +267,7 @@ try {
     const adminPage = await desktop.newPage()
     await adminPage.goto(origin)
     await adminPage.getByRole('link', { name: 'Studio' }).click()
+    await adminPage.getByRole('link', { name: 'Open workspace' }).click()
     await adminPage.getByRole('heading', { name: 'Creator studio' }).waitFor()
     await adminPage.getByLabel('Draft title').fill('Browser check')
     await adminPage.getByRole('button', { name: 'Test on server' }).click()
@@ -276,9 +282,8 @@ try {
     await adminPage.getByRole('button', { name: 'Next step' }).click()
     await adminPage.getByText(/^1 \/ \d+/).waitFor()
     if (process.env.AVIARIUM_SCREENSHOTS) await adminPage.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/studio-desktop.png', fullPage: true })
-    assert.equal(await adminPage.getByRole('banner').count(), 0)
-    await adminPage.getByRole('button', { name: 'Back to library' }).click()
-    await adminPage.getByRole('link', { name: 'Admin' }).click()
+    await adminPage.getByRole('navigation', { name: 'Main navigation' }).waitFor()
+    await openSettings(adminPage, 'Administration')
     await adminPage.getByRole('heading', { name: 'Administration' }).waitFor()
     await adminPage.getByRole('button', { name: 'Run now' }).waitFor()
     if (playerToken) {
@@ -296,8 +301,10 @@ try {
       const editorPage = await editorContext.newPage()
       await editorPage.goto(origin)
       await editorPage.getByRole('link', { name: 'Studio' }).click()
+      await editorPage.getByRole('link', { name: 'Open workspace' }).click()
       await editorPage.getByRole('heading', { name: 'Creator studio' }).waitFor()
-      assert.equal(await editorPage.getByRole('link', { name: 'Admin' }).count(), 0)
+      await editorPage.getByRole('button', { name: 'Account menu' }).click()
+      assert.equal(await editorPage.getByRole('button', { name: 'Administration' }).count(), 0)
       await editorContext.close()
       await grant.click()
       await until(async () => {
@@ -316,7 +323,7 @@ try {
     for (const context of [first, second]) await context.addCookies([{ name: 'aviarium', value: playerToken, url: origin }])
     const deviceA = await first.newPage()
     await deviceA.goto(origin)
-    await deviceA.getByRole('button', { name: 'Test Player' }).waitFor()
+    await deviceA.getByRole('button', { name: 'Account menu' }).filter({ hasText: 'Test Player' }).waitFor()
     await deviceA.goto(`${origin}/games/sudoku?puzzle=${quiet.id}&revision=${quiet.revision}`)
     await deviceA.getByRole('button', { name: 'Play shared puzzle' }).click()
     const label = `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, `

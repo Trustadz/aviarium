@@ -170,7 +170,7 @@ export default function PackStudio({ account, levels, onPublish }: { account: Ac
               }}><Trash2 size={16}/></button>
           </div></li>)}</ol>
         {previewIndex !== undefined && data.puzzles[previewIndex] &&
-          <div className="pack-editor-preview"><SudokuPreview grid={data.puzzles[previewIndex].grid}/></div>}
+          <div className="pack-editor-preview sudoku-theme"><SudokuPreview grid={data.puzzles[previewIndex].grid}/></div>}
         <div className="button-bar">
           <button className="secondary" disabled={busy || !data.title.trim()} onClick={() => task(async () => {
             await save(); setMessage('Pack draft saved.')

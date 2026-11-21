@@ -113,7 +113,7 @@ export default function Studio({ account, onPublish }: { account: Account; onPub
     {problem && <p role="alert" className="error">{problem}</p>}
     {message && <p role="status" className="feedback">{message}</p>}
     <div className="studio-layout">
-      <div className="studio-board">
+      <div className="studio-board sudoku-theme">
         <label>Draft title<input value={title} maxLength={100} onChange={event => { setTitle(event.target.value); setPlayback(undefined) }}/></label>
         <Grid entries={board} selected={selected} select={select} enter={edit} errors={playback === undefined ? conflicts(board) : undefined}
           disabled={busy || playback !== undefined}/>

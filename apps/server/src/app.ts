@@ -3,10 +3,11 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import staticFiles from '@fastify/static'
 import { ZodError } from 'zod'
-import { HttpError, registerAuth } from './auth.js'
+import { HttpError, pocketAvatarOrigin, registerAuth } from './auth.js'
 import { runBackups } from './backup-runner.js'
 import { registerBackups } from './backups.js'
 import { listenHost, origin, pool } from './config.js'
+import { registerNews } from './news.js'
 import { registerLevels } from './levels.js'
 import { registerPacks } from './packs.js'
 import { registerProgress } from './progress.js'
@@ -27,7 +28,7 @@ export async function makeApp() {
   await app.register(cookie)
   app.addHook('onRequest', async (request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'same-origin')
-    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; worker-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:" + (pocketAvatarOrigin ? ' ' + pocketAvatarOrigin : '') + "; worker-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
     if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store')
     if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.headers.origin !== origin)
       throw new HttpError(403, 'Request origin is not allowed.')
@@ -48,6 +49,7 @@ export async function makeApp() {
   })
   registerAuth(app)
   registerLevels(app)
+  registerNews(app)
   registerPacks(app)
   registerProgress(app)
   registerBackups(app)
@@ -58,7 +60,7 @@ export async function makeApp() {
     },
   })
   app.setNotFoundHandler((request, reply) => {
-    if (request.method === 'GET' && /^\/(?:games\/sudoku(?:\/history|\/packs\/[a-z0-9-]+\/\d+)?|studio(?:\/packs)?|admin)?\/?$/.test(request.url.split('?')[0]))
+    if (request.method === 'GET' && /^\/(?:games\/sudoku(?:\/history|\/packs\/[a-z0-9-]+\/\d+)?|news|studio(?:\/(?:sudoku|packs))?|admin)?\/?$/.test(request.url.split('?')[0]))
       return reply.sendFile('index.html')
     return reply.code(404).send({ error: 'Not found.' })
   })

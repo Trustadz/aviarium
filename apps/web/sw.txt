@@ -2,7 +2,7 @@ const version = '__VERSION__'
 const shellCache = 'aviarium-' + version
 const gameAssets = __GAME_ASSETS__
 const shellAssets = __SHELL_ASSETS__
-const routes = /^(?:\/|\/(?:games\/sudoku(?:\/history|\/packs\/[a-z0-9-]+\/\d+)?|studio(?:\/packs)?|admin)\/?)$/
+const routes = /^(?:\/|\/(?:games\/sudoku(?:\/history|\/packs\/[a-z0-9-]+\/\d+)?|news|studio(?:\/(?:sudoku|packs))?|admin)\/?)$/
 const lastPlayedKey = '/__aviarium/last-played'
 const maxIdle = 30 * 24 * 60 * 60 * 1000
 const gameCache = game => 'aviarium-game-' + game

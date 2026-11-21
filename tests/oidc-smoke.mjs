@@ -31,6 +31,7 @@ function send(res, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(data))
 }
+const avatarFixture = await readFile('apps/web/public/icon-192.png')
 const provider = createServer({ key: await readFile(key), cert: await readFile(cert) }, async (req, res) => {
   const url = new URL(req.url, issuer)
   if (url.pathname === '/.well-known/openid-configuration') return send(res, {
@@ -38,6 +39,11 @@ const provider = createServer({ key: await readFile(key), cert: await readFile(c
     response_types_supported: ['code'], subject_types_supported: ['public'], id_token_signing_alg_values_supported: ['RS256'],
     code_challenge_methods_supported: ['S256'],
   })
+  if (url.pathname === '/avatar.png') {
+    res.writeHead(200, { 'Content-Type': 'image/png' })
+    res.end(avatarFixture)
+    return
+  }
   if (url.pathname === '/jwks') return send(res, { keys: [jwk] })
   if (url.pathname === '/authorize') {
     const params = url.searchParams
@@ -62,13 +68,19 @@ const provider = createServer({ key: await readFile(key), cert: await readFile(c
     const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
     const now = Math.floor(Date.now() / 1000)
     const data = encode({ alg: 'RS256', kid: jwk.kid }) + '.' + encode({
-      iss: issuer, sub: attempt.person.id, aud: clientId, iat: now, exp: now + 120, nonce: attempt.nonce, name: attempt.person.name,
+      iss: issuer, sub: attempt.person.id, aud: clientId, iat: now, exp: now + 120, nonce: attempt.nonce, name: attempt.person.name, picture: issuer + '/avatar.png',
     })
     return send(res, { access_token: randomUUID(), token_type: 'Bearer',
       id_token: data + '.' + sign('sha256', Buffer.from(data), signing.privateKey).toString('base64url') })
   }
   return send(res, { error: 'not_found' }, 404)
 })
+async function openSettings(page, name) {
+  const account = page.getByRole('button', { name: 'Account menu' })
+  if (await account.isVisible()) await account.click()
+  await page.getByRole('button', { name, exact: true }).click()
+}
+
 let app, browser
 async function stopApp() {
   if (!app || app.exitCode != null) return
@@ -104,14 +116,53 @@ try {
   await page.goto(origin)
   await page.locator('.login-page[data-theme=dark]').waitFor()
   await page.getByRole('link', { name: 'Login with Pocket ID', exact: true }).click()
-  await page.getByRole('button', { name: first.name }).waitFor()
+  await page.getByRole('button', { name: 'Account menu' }).filter({ hasText: first.name }).waitFor()
   const who = async () => (await (await context.request.get(origin + '/api/me')).json()).user
   const alpha = await who()
   assert.equal(alpha.role, 'admin')
+  assert.equal(alpha.avatar, issuer + '/avatar.png')
+  const accountAvatar = page.getByRole('button', { name: 'Account menu' }).locator('img')
+  await accountAvatar.waitFor()
+  await accountAvatar.evaluate(image => image.decode())
+  await openSettings(page, 'Account settings')
+  await page.getByLabel('Display name').fill('Alpha Aviary')
+  await page.getByLabel('Avatar').setInputFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: avatarFixture })
+  await page.getByRole('button', { name: 'Save profile' }).click()
+  await page.getByText('Profile saved.').waitFor()
+  const customized = await who()
+  assert.equal(customized.name, 'Alpha Aviary')
+  assert.match(customized.avatar, /^data:image\/(webp|png);base64,/)
+  await page.getByRole('button', { name: 'Close' }).click()
+  await page.getByRole('link', { name: 'News', exact: true }).click()
+  await page.getByRole('button', { name: 'New announcement' }).click()
+  await page.getByLabel('Category').selectOption('content')
+  await page.getByLabel('Header image (optional)', { exact: true }).setInputFiles({
+    name: 'header.png', mimeType: 'image/png', buffer: avatarFixture,
+  })
+  await page.getByLabel('Image description (optional)').fill('Aviarium artwork')
+  await page.getByLabel('Title', { exact: true }).fill('A new Sudoku pack')
+  await page.getByLabel('Intro paragraph').fill('Three new puzzles are ready.')
+  await page.getByLabel('More text (optional)').fill('Start with the easiest puzzle in the pack.')
+  await page.getByRole('button', { name: 'Publish announcement' }).click()
+  await page.getByRole('heading', { name: 'A new Sudoku pack' }).waitFor()
+  await page.getByRole('img', { name: 'Aviarium artwork' }).evaluate(image => image.decode())
+  await page.getByText('Three new puzzles are ready.').waitFor()
+  const fullText = page.getByText('Start with the easiest puzzle in the pack.')
+  assert.equal(await fullText.isVisible(), false)
+  await page.getByText('Read more', { exact: true }).click()
+  await fullText.waitFor()
+  await page.getByText('Show less', { exact: true }).click()
+  await fullText.waitFor({ state: 'hidden' })
+  await page.getByRole('button', { name: 'Like announcement' }).click()
+  await page.getByRole('button', { name: 'Unlike announcement' }).waitFor()
+  await page.reload()
+  await page.getByRole('button', { name: 'Unlike announcement' }).waitFor()
+  await page.getByRole('link', { name: 'Library', exact: true }).click()
+
   const adminExport = await context.request.get(origin + '/api/packs/budgies/1/export')
   assert.equal(adminExport.status(), 200)
   const packArchive = await adminExport.body()
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await openSettings(page, 'Device settings')
   const theme = page.getByLabel('Theme')
   assert.equal(await theme.inputValue(), 'auto')
   await page.locator('.app[data-theme=dark]').waitFor()
@@ -125,19 +176,25 @@ try {
   await page.getByLabel('E-reader mode').check()
   await page.getByRole('button', { name: 'Close' }).click()
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
-  await page.getByRole('button', { name: first.name }).click()
+  await openSettings(page, 'Account settings')
   selected = second
   await page.getByRole('link', { name: 'Switch account' }).click()
-  await page.getByRole('button', { name: second.name }).waitFor()
+  await page.getByRole('button', { name: 'Account menu' }).filter({ hasText: second.name }).waitFor()
   const beta = await who()
   assert.notEqual(beta.id, alpha.id)
   assert.equal(beta.role, 'user')
   assert.deepEqual(beta.editorGames, [])
   assert.equal(observedPrompts.at(-1), 'select_account')
+  await page.getByRole('link', { name: 'News', exact: true }).click()
+  await page.getByRole('heading', { name: 'A new Sudoku pack' }).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'New announcement' }).count(), 0)
+  assert.equal(await page.getByRole('button', { name: 'Like announcement' }).locator('span').textContent(), '1')
+  await page.getByRole('link', { name: 'Library', exact: true }).click()
+
   assert.equal(await page.getByRole('button', { name: 'Add Sudoku to favorites' }).count(), 1)
   assert.equal(await page.locator('.app.reader[data-theme=dark]').count(), 1)
   assert.equal(await page.getByRole('link', { name: 'Admin' }).count(), 0)
-  await page.getByRole('button', { name: second.name }).click()
+  await openSettings(page, 'Account settings')
   const otherTab = await context.newPage()
   await otherTab.goto(origin + '/games/sudoku')
   await otherTab.getByRole('heading', { name: 'Sudoku', exact: true }).waitFor()
@@ -150,7 +207,7 @@ try {
   console.info('OIDC smoke passed: real callback and PKCE, role bootstrap, account selection, isolated preferences, device display, logout.')
   await otherTab.close()
   await page.getByRole('link', { name: 'Login with Pocket ID', exact: true }).click()
-  await page.getByRole('button', { name: second.name }).waitFor()
+  await page.getByRole('button', { name: 'Account menu' }).filter({ hasText: second.name }).waitFor()
   const localEnv = { ...env, LOGIN_ENABLED: 'false', OIDC_ISSUER: '', OIDC_CLIENT_ID: '', OIDC_CLIENT_SECRET: '' }
   await startApp(localEnv)
 
@@ -179,7 +236,7 @@ try {
   })
   await page.goto(origin)
   await page.getByRole('heading', { name: 'Game library' }).waitFor()
-  assert.equal(await page.getByRole('button', { name: second.name }).count(), 0)
+  assert.equal(await page.getByRole('button', { name: 'Account menu' }).count(), 0)
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
   await page.getByRole('button', { name: 'Explore Sudoku' }).click()
   await page.getByRole('button', { name: /^Budgies/ }).click()
@@ -214,8 +271,21 @@ try {
   assert.equal(await page.getByRole('banner').getByRole('link', { name: 'Library', exact: true }).count(), 0)
   const remove = page.getByRole('button', { name: 'Remove Sudoku download' })
   const cachedGame = () => page.evaluate(() => caches.has('aviarium-game-sudoku'))
+  await page.waitForFunction(() => caches.has('aviarium-game-sudoku'))
+  assert.equal(await remove.count(), 0)
+  const manageInstalls = async enabled => {
+    await openSettings(page, 'Device settings')
+    const toggle = page.getByRole('checkbox', { name: 'Manage installs' })
+    assert.equal(await toggle.isChecked(), !enabled)
+    await toggle.setChecked(enabled)
+    await page.getByRole('button', { name: 'Close' }).click()
+  }
+  await manageInstalls(true)
   await remove.waitFor()
+  await manageInstalls(false)
+  await remove.waitFor({ state: 'hidden' })
   assert.equal(await cachedGame(), true)
+  await manageInstalls(true)
 
   const backgroundGame = await context.newPage()
   await backgroundGame.goto(origin + '/games/sudoku')
@@ -278,7 +348,7 @@ try {
 
   await startApp(env)
   await page.goto(origin)
-  await page.getByRole('button', { name: second.name }).waitFor()
+  await page.getByRole('button', { name: 'Account menu' }).filter({ hasText: second.name }).waitFor()
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).waitFor()
   const progress = await (await context.request.get(origin + '/api/progress')).json()
   assert.deepEqual(progress.sessions, [])
@@ -297,6 +367,17 @@ try {
   const testUser = await who()
   assert.notEqual(testUser.id, beta.id)
   assert.equal(testUser.testRole, 'user')
+  assert.equal(testUser.avatar, '/aviarium.svg')
+  await openSettings(page, 'Account settings')
+  await page.getByLabel('Display name').fill('Preview Player')
+  await page.getByRole('button', { name: 'Save profile' }).click()
+  await page.getByText('Profile saved.').waitFor()
+  assert.equal((await who()).name, 'Preview Player')
+  await page.getByRole('button', { name: 'Close' }).click()
+  await page.getByRole('link', { name: 'News', exact: true }).click()
+  await page.getByText('No announcements yet.').waitFor()
+  await page.getByRole('link', { name: 'Library', exact: true }).click()
+
   const get = path => context.request.get(origin + path)
   assert.equal((await get('/api/drafts')).status(), 403)
   assert.equal((await get('/api/admin/users')).status(), 403)
@@ -306,7 +387,7 @@ try {
   })
   assert.equal((await importPack()).status(), 403)
 
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await openSettings(page, 'Device settings')
   const testRole = page.getByLabel('Test user role')
   assert.equal(await testRole.inputValue(), 'user')
   await testRole.selectOption('editor')
@@ -332,19 +413,25 @@ try {
   assert.equal((await get(ownedExport)).status(), 200)
   await page.getByRole('button', { name: 'Close', exact: true }).click()
   await studio.click()
+  await page.getByRole('heading', { name: 'Studio', exact: true }).waitFor()
+  await page.getByRole('link', { name: 'Open workspace' }).click()
   await page.getByRole('heading', { name: 'Creator studio', exact: true }).waitFor()
-  await page.getByRole('button', { name: 'Back to library', exact: true }).click()
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Packs', exact: true }).click()
+  await page.getByRole('heading', { name: 'Pack studio', exact: true }).waitFor()
+  await page.getByLabel('Studio game').selectOption('')
+  await page.getByRole('heading', { name: 'Studio', exact: true }).waitFor()
+  await page.getByRole('link', { name: 'Library', exact: true }).click()
+  await openSettings(page, 'Device settings')
   await testRole.selectOption('admin')
-  const admin = page.getByRole('link', { name: 'Admin', exact: true })
-  await admin.waitFor()
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await openSettings(page, 'Administration')
+  await page.getByRole('heading', { name: 'Administration', exact: true }).waitFor()
   assert.equal((await get('/api/admin/users')).status(), 200)
   await page.reload()
-  await admin.waitFor()
+  await page.getByRole('heading', { name: 'Administration', exact: true }).waitFor()
   assert.equal((await who()).id, testUser.id)
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await openSettings(page, 'Device settings')
   await testRole.selectOption('user')
-  await admin.waitFor({ state: 'hidden' })
   await studio.waitFor({ state: 'hidden' })
   assert.equal((await get('/api/drafts')).status(), 403)
   assert.equal((await get(ownedExport)).status(), 403)
@@ -353,7 +440,7 @@ try {
 
   await startApp(env)
   await page.reload()
-  await page.getByRole('button', { name: second.name }).waitFor()
+  await page.getByRole('button', { name: 'Account menu' }).filter({ hasText: second.name }).waitFor()
   assert.equal((await who()).id, beta.id)
   const replay = await fetch(origin + '/api/me', { headers: { Cookie: 'aviarium=' + testCookie.value } })
   assert.equal((await replay.json()).user, null)

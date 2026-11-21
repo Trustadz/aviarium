@@ -7,8 +7,18 @@ import { callback, loginEnabled, oidc, origin, pool, testEnvironment, transactio
 
 export interface User { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
 const testRoleSchema = z.enum(['user', 'editor', 'admin'])
-interface SessionUser extends User { expiresAt: Date; testRole?: z.infer<typeof testRoleSchema> }
-export const userFields = `u.id,u.name,u.role,
+interface SessionUser extends User {
+  expiresAt: Date
+  testRole?: z.infer<typeof testRoleSchema>
+  avatar?: string | null
+  pocketAvatar?: string | null
+  customAvatar?: boolean
+}
+const profileInput = z.strictObject({
+  name: z.string().trim().min(1).max(120),
+  avatar: z.string().max(120_000).regex(/^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/).nullable().optional(),
+})
+export const userFields = `u.id,COALESCE(u.display_name,u.name) AS name,u.role,
   ARRAY(SELECT game_id FROM game_editors WHERE user_id=u.id ORDER BY game_id) AS "editorGames"`
 export class HttpError extends Error {
   constructor(readonly statusCode: number, message: string) { super(message) }
@@ -21,14 +31,21 @@ const cookieName = testEnvironment ? 'aviarium-test' : 'aviarium'
 const sessionCookie = secure ? '__Host-' + cookieName : cookieName
 const cookies = { path: '/', httpOnly: true, secure, sameSite: 'lax' as const }
 
-export async function currentUser(request: FastifyRequest): Promise<SessionUser | undefined> {
+export async function currentUser(request: FastifyRequest, withProfile = false): Promise<SessionUser | undefined> {
   const cookie = request.cookies[sessionCookie]
   if ((!loginEnabled && !testEnvironment) || !cookie) return undefined
-  const result = await pool.query<SessionUser>(`SELECT ${userFields}, s.expires_at AS "expiresAt" FROM users u JOIN auth_sessions s
+  const result = await pool.query<SessionUser>(`SELECT ${userFields}, s.expires_at AS "expiresAt"
+    ${withProfile ? ', COALESCE(u.custom_avatar,u.pocket_avatar) AS avatar, u.pocket_avatar AS "pocketAvatar", (u.custom_avatar IS NOT NULL) AS "customAvatar"' : ''}
+    FROM users u JOIN auth_sessions s
     ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() AND (u.issuer=$2)=$3`, [digest(cookie), testIssuer, testEnvironment])
   const user = result.rows[0]
-  if (user && testEnvironment)
+  if (user && testEnvironment) {
     user.testRole = user.role === 'admin' ? 'admin' : user.editorGames.includes(sudoku.id) ? 'editor' : 'user'
+    if (withProfile) {
+      user.pocketAvatar = '/aviarium.svg'
+      user.avatar ??= user.pocketAvatar
+    }
+  }
   return user
 }
 
@@ -49,6 +66,8 @@ export async function requireGameEditor(request: FastifyRequest, game: string): 
   return user
 }
 
+export const pocketAvatarOrigin = oidc ? URL.parse(oidc.issuer)?.origin : undefined
+
 let discovery: Promise<openid.Configuration> | undefined
 function provider() {
   if (!oidc) throw new HttpError(503, 'Pocket ID is not configured.')
@@ -62,8 +81,17 @@ function provider() {
 
 export function registerAuth(app: FastifyInstance) {
   app.get('/api/me', async request => ({
-    user: await currentUser(request) ?? null, signIn: Boolean(oidc), loginEnabled, testEnvironment,
+    user: await currentUser(request, true) ?? null, signIn: Boolean(oidc), loginEnabled, testEnvironment,
   }))
+  if (loginEnabled || testEnvironment) {
+    app.patch('/api/me/profile', async (request, reply) => {
+      const user = await requireUser(request)
+      const { name, avatar } = profileInput.parse(request.body)
+      if (avatar === undefined) await pool.query('UPDATE users SET display_name=$1 WHERE id=$2', [name, user.id])
+      else await pool.query('UPDATE users SET display_name=$1,custom_avatar=$2 WHERE id=$3', [name, avatar, user.id])
+      return reply.code(204).send()
+    })
+  }
   if (testEnvironment) {
     app.post('/api/auth/test-role', async (request, reply) => {
       const { role } = z.object({ role: testRoleSchema }).parse(request.body)
@@ -125,14 +153,20 @@ export function registerAuth(app: FastifyInstance) {
     }).catch(() => { throw new HttpError(400, 'Pocket ID sign-in failed. Start again.') })
     const claims = result.claims()
     if (!claims?.sub) throw new HttpError(400, 'Pocket ID returned no user identity.')
+    let picture: string | null = null
+    if (typeof claims.picture === 'string' && claims.picture.length <= 2048) {
+      const candidate = URL.parse(claims.picture)
+      if (candidate && candidate.origin === pocketAvatarOrigin && !candidate.username && !candidate.password)
+        picture = candidate.href
+    }
     const name = [claims.name, claims.preferred_username].find(value => typeof value === 'string')
     const session = token()
     const initialRole = claims.sub === process.env.OIDC_ADMIN_SUBJECT ? 'admin' : 'user'
     await transaction(async db => {
-      const { rows: [user] } = await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role) VALUES($1,$2,$3,$4)
-        ON CONFLICT (issuer,subject) DO UPDATE SET name=excluded.name,
+      const { rows: [user] } = await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role,pocket_avatar) VALUES($1,$2,$3,$4,$5)
+        ON CONFLICT (issuer,subject) DO UPDATE SET name=excluded.name,pocket_avatar=excluded.pocket_avatar,
           role=CASE WHEN excluded.role='admin' THEN 'admin' ELSE users.role END RETURNING id`,
-      [claims.iss, claims.sub, typeof name === 'string' ? name.slice(0, 120) : 'Player', initialRole])
+      [claims.iss, claims.sub, typeof name === 'string' ? name.slice(0, 120) : 'Player', initialRole, picture])
       await db.query('DELETE FROM auth_sessions WHERE expires_at<=now() OR token_hash=$1', [digest(request.cookies[sessionCookie] ?? '')])
       await db.query(`INSERT INTO auth_sessions(token_hash,user_id,expires_at)
         VALUES($1,$2,now()+interval '14 days')`, [digest(session), user.id])
