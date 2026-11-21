@@ -5,11 +5,6 @@ on:
   push:
     branches: [main]
   workflow_call:
-    inputs:
-      version:
-        description: Release version to validate when called by Publish container
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -37,17 +32,11 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Validate release input
-        if: github.event_name == 'workflow_dispatch' || inputs.version != ''
-        env:
-          VERSION: ${{ inputs.version }}
+      - name: Verify release branch
+        if: github.event_name == 'workflow_dispatch'
         run: |
           if [[ "$GITHUB_REF" != refs/heads/main ]]; then
             echo "Publish from main after merging the approved pull request."
-            exit 1
-          fi
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || "$VERSION" != "$(node -p "require('./package.json').version")" ]]; then
-            echo "Enter the exact package.json version, without a v prefix."
             exit 1
           fi
       - run: npm ci

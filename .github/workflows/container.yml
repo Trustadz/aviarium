@@ -2,10 +2,15 @@ name: Publish container
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: Version from package.json, without the v prefix
+      bump:
+        description: Patch for fixes, minor for features, or major for breaking changes
         required: true
-        type: string
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: read
@@ -13,8 +18,6 @@ permissions:
 jobs:
   verify:
     uses: ./.github/workflows/verify.yml
-    with:
-      version: ${{ inputs.version }}
 
   publish:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -30,10 +33,20 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Choose release version
+        id: release
+        env:
+          RELEASE_BUMP: ${{ inputs.bump }}
+        run: |
+          git fetch --tags origin
+          node .github/scripts/release-version.mjs >> "$GITHUB_OUTPUT"
       - name: Publish version and latest
         env:
           IMAGE: ghcr.io/trustadz/aviarium
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ensure_current_main() {
@@ -46,9 +59,9 @@ jobs:
           }
           ensure_current_main
           tag="v$VERSION"
-          existing=$(git ls-remote origin "refs/tags/$tag" | cut -f1)
+          existing=$(git rev-parse --verify --quiet "refs/tags/$tag^{commit}" || true)
           if [[ -n "$existing" && "$existing" != "$GITHUB_SHA" ]]; then
-            echo "$tag already belongs to a different commit. Bump the version before publishing."
+            echo "$tag already belongs to a different commit."
             exit 1
           fi
 
@@ -57,6 +70,7 @@ jobs:
             docker pull "$IMAGE:$tag"
           else
             docker build --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.version=$VERSION" --build-arg "AVIARIUM_RELEASE_VERSION=$VERSION" \
               -t "$IMAGE:$tag" .
             docker push "$IMAGE:$tag"
             git tag "$tag" "$GITHUB_SHA"
@@ -68,7 +82,8 @@ jobs:
           docker push "$IMAGE:latest"
       - name: Create GitHub Release
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.release.outputs.previous_tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
@@ -82,10 +97,8 @@ jobs:
             exit 0
           fi
 
-          previous=$(git tag --merged "$GITHUB_SHA" --sort=-version:refname --list 'v*' |
-            awk -v current="$tag" '$0 == current { found=1; next } found && /^v[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')
           notes=(--generate-notes)
-          if [[ -n "$previous" ]]; then
-            notes+=(--notes-start-tag "$previous")
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            notes+=(--notes-start-tag "$PREVIOUS_TAG")
           fi
           gh release create "$tag" --verify-tag --latest --title "Aviarium $tag" "${notes[@]}"
