@@ -38,12 +38,14 @@ npm run build
 ## Publish a release
 
 1. Open a draft PR from a feature branch. Test the local preview when applicable and wait for the automatic **Verify** checks.
-2. When the change is approved, make sure its PR includes the next unused version in `package.json` and `package-lock.json`. Use `npm version 0.1.16 --no-git-tag-version` with the version you intend to release. Merge the approved PR.
-3. In GitHub, go to **Actions → Publish container → Run workflow**, choose **main**, enter the package version without the `v` prefix, and run it. The workflow reruns the checks, creates the Git version tag, and publishes the public version and `latest` images. It then creates a GitHub Release with notes covering the merged PRs since the previous version. GitHub supplies the source ZIP and tarball.
+2. Merge all the approved PRs you want to ship together.
+3. On GitHub, go to **Actions → Publish container → Run workflow**. Under **Use workflow from**, select **main**. Leave the release type on **patch** for fixes, or select **minor** for features or **major** for breaking changes. Click **Run workflow**.
+
+The workflow reruns verification and calculates the next version from the latest stable Git tag. For example, from `v0.1.16`, patch yields `v0.1.17`, minor yields `v0.2.0`, and major yields `v1.0.0`. It sets the version in the Docker build so it appears on the About page, publishes both image tags, and creates a GitHub Release with generated notes and source downloads. Running it again on the same tagged commit reuses that release number.
 
 Use a separate PR for each change and merge all the PRs you want in the same release before running the workflow. Label PRs `enhancement` or `feature` for **Added**, and `bug` or `fix` for **Fixed**. Unlabeled PRs appear under **Other changes**. You can edit the generated notes on the repository's **Releases** page.
 
-From a terminal with the GitHub CLI, the same release command is `gh workflow run container.yml --ref main -f version=0.1.16`. Substitute the version on `main`. A repository maintainer can run either method with their regular GitHub access.
+From a terminal with the GitHub CLI, use `gh workflow run container.yml --ref main` for a patch release or add `-f bump=minor` or `-f bump=major`.
 
 ## Architecture
 

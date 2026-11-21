@@ -25,12 +25,13 @@ it specifies a narrower scope or a different workflow.
 
 ## Release
 
-- Keep version bumps with the changes intended to ship or in a release PR.
-  Create a News announcement only when the user explicitly requests one.
+- Create a News announcement only when the user explicitly requests one.
 - **Verify** runs automatically on PRs and pushes to `main`. Shipping uses
   the separate, manual **Publish container** workflow on `main`, which reruns
   verification. Trigger publishing only when the user authorizes it. The
-  owner can start it directly in GitHub Actions.
+  owner can start it directly in GitHub Actions. Publishing calculates the
+  next version from the latest stable Git tag using the selected patch, minor,
+  or major increment and sets that version in the Docker build.
 - Use `enhancement` or `feature` for PRs that add features and `bug` or `fix`
   for PRs that fix bugs so the generated release notes group them correctly.
 - After publishing, verify that the version and `latest` image tags match and
