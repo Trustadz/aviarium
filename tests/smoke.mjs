@@ -351,6 +351,11 @@ try {
   assert.equal(await page.locator('.pack-trail > li').count(), 5)
   assert.equal(await page.getByRole('button', { name: 'Play Nest Hollow' }).isDisabled(), true)
   await page.getByRole('button', { name: 'Play Cockatoo Egg' }).tap()
+  const artwork = page.locator('.nonogram-play .pack-play-art')
+  assert.deepEqual(await artwork.evaluate(image => {
+    const { x, y, width, height } = image.getBoundingClientRect()
+    return [x, y, width, height]
+  }), [0, 0, 320, 700])
   const nonogramCells = page.getByRole('group', { name: 'Puzzle grid' }).getByRole('button')
   assert.equal(await nonogramCells.count(), 25)
   await nonogramCells.first().scrollIntoViewIfNeeded()

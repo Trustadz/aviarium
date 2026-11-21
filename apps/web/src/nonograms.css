@@ -35,3 +35,4 @@
 }
 
 .nonogram-pack-cover { object-position: center 70%; }
+.nonogram-play .pack-play-art { position: fixed; border-radius: 0; }
