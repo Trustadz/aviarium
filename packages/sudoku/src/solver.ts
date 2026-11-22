@@ -1,17 +1,21 @@
 import type { Difficulty, Validation } from '../../game-sdk/src/index.js'
-import { bit, box, candidateMasks, cells, column, conflicts, FULL, row, units } from './rules.js'
+import { bit, box, candidateMasks, cells, column, conflicts, diagonals, FULL, row, units } from './rules.js'
 
 const counts = Array.from({ length: FULL + 1 }, (_, value) => value.toString(2).replace(/0/g, '').length)
 const digitOf = (mask: number) => 32 - Math.clz32(mask)
 
-export function validate(input: readonly number[], budget = 150_000): Validation<number[]> {
+export function validate(input: readonly number[], budget = 150_000, diagonal = false): Validation<number[]> {
   if (input.length !== 81 || !cells.every(cell => Number.isInteger(input[cell]) && input[cell] >= 0 && input[cell] <= 9))
     return { kind: 'invalid', reason: 'Enter exactly 81 digits using 0 for blanks.' }
-  if (conflicts(input).size) return { kind: 'invalid', reason: 'The givens repeat a digit in a row, column, or box.' }
+  if (conflicts(input, diagonal).size) return { kind: 'invalid', reason: diagonal ? 'The givens repeat a digit in a row, column, box, or diagonal.' : 'The givens repeat a digit in a row, column, or box.' }
 
   const grid = [...input]
-  const masks = Array<number>(27).fill(0)
-  const indexes = cells.map(cell => [row(cell), 9 + column(cell), 18 + box(cell)])
+  const masks = Array<number>(diagonal ? 29 : 27).fill(0)
+  const indexes = cells.map(cell => {
+    const indexes = [row(cell), 9 + column(cell), 18 + box(cell)]
+    if (diagonal) diagonals.forEach((unit, index) => { if (unit.includes(cell)) indexes.push(27 + index) })
+    return indexes
+  })
   const options = (cell: number) => FULL & ~indexes[cell].reduce((mask, index) => mask | masks[index], 0)
   let solution: number[] | undefined
   let found = 0

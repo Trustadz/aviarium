@@ -40,6 +40,7 @@ const digest = value => createHash('sha256').update(value).digest('hex')
 
 await admin.connect()
 try {
+  await run('tests/studio-migration.mjs', { AVIARIUM_STUDIO_TEST_DATABASE_URL: await isolatedDatabase() })
   await run('tests/oidc-smoke.mjs', { AVIARIUM_OIDC_TEST_DATABASE_URL: await isolatedDatabase(), TEST_ENVIRONMENT: 'false' })
   await run('tests/localization-smoke.mjs', { AVIARIUM_I18N_TEST_DATABASE_URL: await isolatedDatabase() })
 

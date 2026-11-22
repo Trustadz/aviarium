@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { difficulties } from '../../game-sdk/src/index.js'
+import { difficulties, type Difficulty, type GameLevel } from '../../game-sdk/src/index.js'
+import { attemptIdentity, attemptOutcome, mutationIdentity, mutationStatus, packRevisionField, type SavedAttempt } from '../../game-sdk/src/progress.js'
+
+export interface PublishedLevel extends GameLevel {
+  grid: string
+  difficulty: Difficulty
+}
 
 export const gridSchema = z.string().regex(/^[0-9]{81}$/)
 export const difficultySchema = z.enum(difficulties)
@@ -13,18 +19,15 @@ const board = z.object({
   notes: z.array(z.number().int().min(0).max(511)).length(81),
 })
 export const saveSchema = z.object({
-  game: z.literal('sudoku'),
-  level: z.string().min(1).max(64),
-  levelRevision: z.number().int().positive(),
-  ruleset: z.literal(1),
+  game: z.literal('sudoku'), ...attemptIdentity,
+  ruleset: z.union([z.literal(1), z.literal(2)]),
   format: z.literal(1),
   board,
   undo: z.array(board).max(40),
   redo: z.array(board).max(40),
-  elapsedMs: z.number().int().min(0).max(365 * 86400_000),
-  completed: z.boolean(),
-  completedAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  ...attemptOutcome,
   lives: z.number().int().min(0).max(9).optional(),
+  packRevision: packRevisionField,
 })
 export type SudokuSave = z.infer<typeof saveSchema>
 export const preferenceSchema = z.object({
@@ -37,14 +40,9 @@ export const defaults: Preferences = {
 }
 
 export const mutationSchema = z.object({
-  mutationId: z.uuid(), sessionId: z.uuid(), baseRevision: z.number().int().nonnegative(),
-  data: saveSchema, archived: z.boolean(),
-  updatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-  archiveIfUnchanged: z.literal(true).optional(),
+  ...mutationIdentity, data: saveSchema, ...mutationStatus,
   quickPlay: quickPlayDescriptorSchema.optional(),
 })
 export type Mutation = z.infer<typeof mutationSchema>
-export interface StoredSession {
-  id: string; revision: number; data: SudokuSave; parentId?: string; archived: boolean; updatedAt?: number | null
-}
+export type StoredSession = SavedAttempt<SudokuSave>
 export const generationSchema = z.object({ seed: z.string().trim().min(1).max(100), difficulty: difficultySchema, unique: z.boolean() })

@@ -1,6 +1,6 @@
 import { TACTICS, TACTIC_ID, type GridState, type SolvingStep, type TacticId } from 'sudoku-core'
 import type { Difficulty } from '../../game-sdk/src/index.js'
-import { bit, candidateMasks, conflicts, peers, rules } from './rules.js'
+import { bit, candidateMasks, conflicts, diagonals, peerGroups, rulesFor } from './rules.js'
 
 const easy = new Set<TacticId>([TACTIC_ID.OPEN_SINGLES, TACTIC_ID.HIDDEN_SINGLE, TACTIC_ID.NAKED_SINGLE])
 const medium = new Set<TacticId>([TACTIC_ID.POINTING_ELIMINATION, TACTIC_ID.NAKED_PAIR, TACTIC_ID.HIDDEN_PAIR])
@@ -22,9 +22,14 @@ const labels: Partial<Record<TacticId, string>> = {
   [TACTIC_ID.NAKED_SINGLE]: 'Naked single', [TACTIC_ID.HIDDEN_SINGLE]: 'Hidden single',
   [TACTIC_ID.OPEN_SINGLES]: 'Last empty cell', [TACTIC_ID.POINTING_ELIMINATION]: 'Locked candidates',
 }
-export type LogicalStep = SolvingStep & { label: string; id: TacticId }
+export type LogicalStep = SolvingStep & { label: string; id: TacticId; diagonal?: boolean }
 
-function nextStep(state: GridState) {
+function nextStep(state: GridState, diagonal: boolean): LogicalStep | undefined {
+  if (diagonal) for (const unit of diagonals) for (let digit = 1; digit <= 9; digit++) {
+    const matches = unit.filter(cell => state.candidates[cell] & bit(digit))
+    if (matches.length === 1) return { id: TACTIC_ID.HIDDEN_SINGLE, label: 'Hidden single', strategy: 'Hidden single',
+      diagonal: true, type: 'value', updates: [{ index: matches[0], filledValue: digit }] }
+  }
   for (const tactic of ordered) {
     const step = tactic.find(state)
     if (step?.updates.some(update => update.filledValue ? !state.values[update.index]
@@ -34,18 +39,19 @@ function nextStep(state: GridState) {
   }
 }
 
-export function logicalHint(entries: readonly number[], excluded: readonly number[] = []) {
-  if (conflicts(entries).size) return
-  return nextStep({ values: [...entries], candidates: candidateMasks(entries).map((mask, cell) => mask & ~(excluded[cell] ?? 0)) })
+export function logicalHint(entries: readonly number[], excluded: readonly number[] = [], diagonal = false) {
+  if (conflicts(entries, diagonal).size) return
+  return nextStep({ values: [...entries], candidates: candidateMasks(entries, diagonal).map((mask, cell) => mask & ~(excluded[cell] ?? 0)) }, diagonal)
 }
 
-export function gradePuzzle(entries: readonly number[]) {
-  const state: GridState = { values: [...entries], candidates: candidateMasks(entries) }
+export function gradePuzzle(entries: readonly number[], diagonal = false) {
+  const state: GridState = { values: [...entries], candidates: candidateMasks(entries, diagonal) }
+  const groups = peerGroups(diagonal)
   const steps: LogicalStep[] = []
   const families = new Set<string>()
   let hardest = 0
   for (let count = 0; count < 810 && state.values.includes(0); count++) {
-    const step = nextStep(state)
+    const step = nextStep(state, diagonal)
     if (!step) break
     steps.push(step)
     const family = extreme.get(step.id)
@@ -56,11 +62,11 @@ export function gradePuzzle(entries: readonly number[]) {
       if (filledValue) {
         state.values[index] = filledValue
         state.candidates[index] = 0
-        for (const peer of peers[index]) state.candidates[peer] &= ~bit(filledValue)
+        for (const peer of groups[index]) state.candidates[peer] &= ~bit(filledValue)
       } else if (eliminatedCandidate) state.candidates[index] &= ~bit(eliminatedCandidate)
     }
   }
-  const solved = rules.verify(entries, state.values)
+  const solved = rulesFor(diagonal).verify(entries, state.values)
   const grades: Difficulty[] = ['Easy', 'Medium', 'Hard', 'Extreme']
   return { steps, extremeFamilies: [...families], difficulty: solved ? (families.size >= 3 ? 'Genius' : grades[hardest]) : undefined }
 }

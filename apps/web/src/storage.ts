@@ -1,21 +1,32 @@
 import { Dexie, type EntityTable } from 'dexie'
 import type { Locale } from '../../../packages/game-sdk/src/locales.js'
-import { savedGameLimit, type PublishedLevel } from '../../../packages/game-sdk/src/index.js'
-import { defaults, quickPlayVersion, type Mutation, type Preferences, type StoredSession } from '../../../packages/sudoku/src/contracts.js'
-import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
+import type { PackCompletion, PackDraftRecord, PackRevision } from '../../../packages/game-sdk/src/packs.js'
+import { isResumable, levelKey, savedGameLimit, type AttemptMutation, type GameAttempt, type SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
+export { isResumable, levelKey } from '../../../packages/game-sdk/src/progress.js'
 import { api, json } from './api.js'
 
 export const localProfile = 'local-play'
 
-export type LocalSession = StoredSession & {
-  profile: string; updated: number; dirty: boolean; sent?: Mutation; expired?: true
+type QueuedMutation = AttemptMutation & Record<string, unknown>
+export type MutationExtras = (game: string, level: GameLevel | undefined) => Record<string, unknown> | undefined
+
+export type LocalSession<Attempt extends GameAttempt = GameAttempt> = SavedAttempt<Attempt> & {
+  profile: string; updated: number; dirty: boolean; sent?: QueuedMutation; expired?: true
 }
-type ProfilePreferences = Preferences & { locale?: Locale }
+export type ProfilePreferences = Record<string, string | boolean | number | null | undefined> & { locale?: Locale }
 interface LocalPrefs { profile: string; data: ProfilePreferences; pending: Partial<ProfilePreferences>; revision?: number }
 interface RemotePreferences { revision: number; data: Partial<ProfilePreferences> }
-interface StoredLevel { key: string; level: PublishedLevel }
+interface StoredLevel { key: string; level: GameLevel }
 interface Completion { key: string; profile: string; level: string; revision: number }
-interface StoredPack { key: string; pack: PublishedPack }
+export interface StudioPack {
+  key: string
+  scope: string
+  draft: PackDraftRecord
+  dirty: boolean
+  localEdit?: string
+}
+interface StoredPack { key: string; pack: PackRevision }
 
 export const db = new Dexie('aviarium') as Dexie & {
   sessions: EntityTable<LocalSession, 'id'>
@@ -23,12 +34,26 @@ export const db = new Dexie('aviarium') as Dexie & {
   levels: EntityTable<StoredLevel, 'key'>
   completions: EntityTable<Completion, 'key'>
   packs: EntityTable<StoredPack, 'key'>
+  studioPacks: EntityTable<StudioPack, 'key'>
 }
 db.version(1).stores({ sessions: 'id,profile', prefs: 'profile', levels: 'key', completions: 'key,profile' })
 db.version(2).stores({ packs: 'key' })
+db.version(3).stores({ studioPacks: 'key,scope' })
 
-export const levelKey = (level: string, revision: number) => level + ':' + revision
-export async function cacheLevels(levels: PublishedLevel[]) {
+export function packCompletionEvents(completed: ReadonlySet<string>, sessions: readonly SavedAttempt[]): PackCompletion[] {
+  const events = sessions.filter(item => item.data.completed).map(({ data }) => ({
+    level: data.level, revision: data.levelRevision, packRevision: data.packRevision,
+  }))
+  const covered = new Set(events.map(item => levelKey(item.level, item.revision)))
+  for (const id of completed) {
+    if (covered.has(id)) continue
+    const separator = id.lastIndexOf(':')
+    events.push({ level: id.slice(0, separator), revision: Number(id.slice(separator + 1)), packRevision: undefined })
+  }
+  return events
+}
+
+export async function cacheLevels(levels: GameLevel[]) {
   await db.levels.bulkPut(levels.map(level => ({ key: levelKey(level.id, level.revision), level })))
 }
 
@@ -44,9 +69,6 @@ async function trimSavedGames(profile: string) {
   if (expired.length) await db.sessions.bulkPut(expired)
   return sessions
 }
-
-export const isResumable = (session: LocalSession) =>
-  !session.archived && !session.data.completed && session.data.lives !== 0
 
 export function listSessions(profile: string) {
   return db.transaction('rw', db.sessions, () => trimSavedGames(profile))
@@ -91,7 +113,7 @@ export function writeAttempt(expected: LocalSession, data: LocalSession['data'])
 export async function updatePreferences(profile: string, patch: Partial<ProfilePreferences>) {
   return db.transaction('rw', db.prefs, async () => {
     const current = await db.prefs.get(profile)
-    const data = { ...defaults, ...current?.data, ...patch }
+    const data = { ...current?.data, ...patch }
     await db.prefs.put({ profile, ...current, data,
       pending: profile === localProfile ? {} : { ...current?.pending, ...patch } })
     return data
@@ -99,17 +121,17 @@ export async function updatePreferences(profile: string, patch: Partial<ProfileP
 }
 
 interface Progress {
-  sessions: StoredSession[]
+  sessions: SavedAttempt[]
   completions: { level: string; revision: number }[]
   prefs: RemotePreferences
-  levels: PublishedLevel[]
+  levels: GameLevel[]
 }
 const synchronizing = new Map<string, Promise<void>>()
-export function sync(profile: string) {
+export function sync(profile: string, extras: MutationExtras) {
   if (profile === localProfile) return Promise.resolve()
   const current = synchronizing.get(profile)
   if (current) return current
-  const pending = synchronize(profile).finally(() => synchronizing.delete(profile))
+  const pending = synchronize(profile, extras).finally(() => synchronizing.delete(profile))
   synchronizing.set(profile, pending)
   return pending
 }
@@ -135,12 +157,12 @@ async function sendPreferences(profile: string) {
       for (const key of Object.keys(prefs.pending) as (keyof ProfilePreferences)[]) {
         if (pending[key] === prefs.pending[key]) delete pending[key]
       }
-      await db.prefs.put({ profile, revision: saved.revision, data: { ...defaults, ...saved.data, ...pending }, pending })
+      await db.prefs.put({ profile, revision: saved.revision, data: { ...saved.data, ...pending }, pending })
     })
   }
 }
 
-async function synchronize(profile: string) {
+async function synchronize(profile: string, extras: MutationExtras) {
   // Earlier completions unlock later stops in an ordered pack.
   const dirty = (await listSessions(profile)).filter(session => session.dirty || session.sent).reverse()
   for (const pending of dirty) {
@@ -148,20 +170,15 @@ async function synchronize(profile: string) {
       const current = await db.sessions.get(pending.id)
       if (!current?.dirty && !current?.sent) return undefined
       if (current.sent) return current.sent
-      const mutation: Mutation = { sessionId: current.id, mutationId: crypto.randomUUID(),
+      const stored = await db.levels.get(levelKey(current.data.level, current.data.levelRevision))
+      const mutation: QueuedMutation = { sessionId: current.id, mutationId: crypto.randomUUID(),
         baseRevision: current.revision, data: current.data, archived: current.archived, updatedAt: current.updated,
-        archiveIfUnchanged: current.expired }
-      if (current.data.level.startsWith('quick-')) {
-        const stored = await db.levels.get(levelKey(current.data.level, current.data.levelRevision))
-        const level = stored?.level
-        if (level?.seed && level.generatorVersion === quickPlayVersion)
-          mutation.quickPlay = { seed: level.seed, difficulty: level.difficulty, version: quickPlayVersion }
-      }
+        archiveIfUnchanged: current.expired, ...extras(current.data.game, stored?.level) }
       await db.sessions.put({ ...current, sent: mutation, dirty: false })
       return mutation
     })
     if (!mutation) continue
-    const saved = await api<StoredSession>('/progress', json('POST', mutation), profile)
+    const saved = await api<SavedAttempt>('/progress', json('POST', mutation), profile)
     await db.transaction('rw', db.sessions, async () => {
       const current = await db.sessions.get(mutation.sessionId)
       if (current?.sent?.mutationId !== mutation.mutationId) return
@@ -187,7 +204,7 @@ async function synchronize(profile: string) {
     const current = await db.prefs.get(profile)
     if (progress.prefs.revision >= (current?.revision ?? 0)) {
       await db.prefs.put({ profile, revision: progress.prefs.revision,
-        data: { ...defaults, ...progress.prefs.data, ...current?.pending }, pending: current?.pending ?? {} })
+        data: { ...progress.prefs.data, ...current?.pending }, pending: current?.pending ?? {} })
     }
     await db.completions.bulkPut(progress.completions.map(completion =>
       ({ ...completion, profile, key: profile + ':' + levelKey(completion.level, completion.revision) })))

@@ -1,8 +1,6 @@
 import { unzipSync, zipSync } from 'fflate'
-import { gradedPackSchema, packDraftSchema, packImageBytes, packManifestSchema, packUploadBytes,
-  type GradedPack, type PackDraftData } from '../../../packages/sudoku/src/packs.js'
-import { gradePuzzle } from '../../../packages/sudoku/src/logic.js'
-import { validate } from '../../../packages/sudoku/src/solver.js'
+import { authoringPack, maxPackManifestBytes, packImageBytes, packUploadBytes, type PackDocument } from '../../../packages/game-sdk/src/packs.js'
+import type { GamePacks } from './game-runtime.js'
 import { HttpError } from './auth.js'
 
 const assetTypes = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' } as const
@@ -20,30 +18,26 @@ function readImage(image: string) {
   return { bytes, extension }
 }
 
-export function readPackDraft(input: unknown) {
-  const draft = packDraftSchema.parse(input)
+export function readPackDraft(game: GamePacks, input: unknown) {
+  const draft = game.readDraft(input)
   if (draft.cover) readImage(draft.cover)
   if (draft.background) readImage(draft.background)
-  return draft
-}
-
-export function gradePack(draft: PackDraftData): GradedPack {
-  if (!draft.puzzles.length) throw new HttpError(422, 'pack_empty')
-  const puzzles = draft.puzzles.map(puzzle => {
-    const grid = Array.from(puzzle.grid, Number)
-    if (validate(grid, 65_000).kind !== 'unique')
-      throw new HttpError(422, 'pack_puzzle_unverified', { title: puzzle.title })
-    const { difficulty } = gradePuzzle(grid)
-    if (!difficulty) throw new HttpError(422, 'pack_puzzle_review', { title: puzzle.title })
-    return { ...puzzle, difficulty }
-  })
-  return gradedPackSchema.parse({ ...draft, puzzles })
+  const data = authoringPack(draft)
+  packManifest(game, data)
+  return data
 }
 
 const artwork = ['cover', 'background'] as const
-export function exportPack(data: PackDraftData) {
+
+export function packManifest(game: GamePacks, data: PackDocument) {
+  const manifest = Buffer.from(JSON.stringify(game.readManifest(data)))
+  if (manifest.length > maxPackManifestBytes) throw new HttpError(413, 'pack_upload_limit')
+  return manifest
+}
+
+export function exportPack(game: GamePacks, data: PackDocument) {
   const files: Record<string, Uint8Array> = {
-    'manifest.json': Buffer.from(JSON.stringify(packManifestSchema.parse(data), null, 2)),
+    'manifest.json': packManifest(game, data),
   }
   for (const key of artwork) {
     const image = data[key]
@@ -55,7 +49,7 @@ export function exportPack(data: PackDraftData) {
   return Buffer.from(zipSync(files))
 }
 
-export function importPack(bytes: Uint8Array) {
+export function importPack(game: GamePacks, bytes: Uint8Array) {
   if (bytes.length > packUploadBytes) throw new HttpError(413, 'pack_upload_limit')
   let files: Record<string, Uint8Array>
   try {
@@ -64,7 +58,7 @@ export function importPack(bytes: Uint8Array) {
       const match = /^(cover|background)\.(png|jpg|webp)$/.exec(entry.name)
       const manifest = entry.name === 'manifest.json'
       const key = match?.[1] ?? entry.name
-      if ((!manifest && !match) || members.has(key) || entry.originalSize > (manifest ? 32_768 : packImageBytes))
+      if ((!manifest && !match) || members.has(key) || entry.originalSize > (manifest ? maxPackManifestBytes : packImageBytes))
         throw new Error('Invalid ZIP member')
       members.add(key)
       return true
@@ -78,12 +72,12 @@ export function importPack(bytes: Uint8Array) {
   } catch {
     throw new HttpError(422, 'pack_manifest_invalid')
   }
-  const draft: PackDraftData = packManifestSchema.parse(manifest)
+  const draft = game.readManifest(manifest)
   for (const key of artwork) {
     for (const extension of Object.keys(assetTypes) as AssetExtension[]) {
       const image = files[key + '.' + extension]
       if (image) draft[key] = `data:${assetTypes[extension]};base64,${Buffer.from(image).toString('base64')}`
     }
   }
-  return readPackDraft(draft)
+  return readPackDraft(game, draft)
 }

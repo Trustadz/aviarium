@@ -4,28 +4,32 @@ import { Check, LockKeyhole, Timer } from 'lucide-react'
 export interface PackTrailStop {
   id: string
   title: string
-  detail: string
+  detail?: string
   state: 'available' | 'next' | 'solved' | 'locked'
   statusLabel?: string
+  chapter?: string
+  introduction?: string
+  challenge?: string
   actionLabel: string
   actionName: string
   bestTime?: string
   play: () => void
 }
 
-export function PackTrail({ stops, canPlay }: {
+export function PackTrail({ stops, canPlay, scrollToStop = true }: {
   stops: readonly PackTrailStop[]
   canPlay: boolean
+  scrollToStop?: boolean
 }) {
   const trail = useRef<HTMLOListElement>(null)
   useLayoutEffect(() => {
     const list = trail.current
-    if (!list) return
+    if (!list || !scrollToStop) return
     const anchor = location.hash.slice(1)
     const linked = /^stop-\d+$/.test(anchor) ? list.querySelector('#' + anchor) : null
     const stop = linked ?? list.querySelector('[aria-current="step"]') ?? list.lastElementChild
     stop?.scrollIntoView({ block: 'center' })
-  }, [])
+  }, [scrollToStop])
 
   return <ol className="pack-trail" ref={trail} role="list">
     {stops.map((stop, index) => <li id={`stop-${index + 1}`} key={stop.id} data-state={stop.state}
@@ -34,8 +38,11 @@ export function PackTrail({ stops, canPlay }: {
         {stop.state === 'solved' ? <Check size={23}/> : stop.state === 'locked' ? <LockKeyhole size={19}/> : index + 1}
       </span>
       <div className="pack-stop-card">
+        {stop.chapter && <p className="eyebrow">{stop.chapter}</p>}
         <h2>{stop.title}</h2>
-        <p>{stop.detail}</p>
+        {stop.introduction && <p>{stop.introduction}</p>}
+        {stop.detail && <p>{stop.detail}</p>}
+        {stop.challenge && <p>{stop.challenge}</p>}
         {stop.statusLabel && <p className="pack-stop-status">{stop.statusLabel}</p>}
         {stop.bestTime && <p className="pack-best"><Timer size={14} aria-hidden="true"/> {stop.bestTime}</p>}
         <button className={stop.state === 'next' ? 'primary' : 'secondary'}

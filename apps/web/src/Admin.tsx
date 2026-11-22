@@ -10,7 +10,7 @@ interface Backup {
   last_success?: string; last_attempt?: string; next_run?: string; requested_at?: string; error?: string; archives: string[]
 }
 interface Publication { id: string; revision: number; title: string; source: string; hidden: boolean }
-export default function Admin({ account, onCatalogChange }: {account: Account; onCatalogChange: () => void}) {
+export default function Admin({ account, onCatalogChange, openPackStudio }: {account: Account; onCatalogChange: () => void; openPackStudio: (game: string) => void}) {
   const t = useT()
   const { formatDate: format } = useIntl()
   const formatDate = (value?: string) => value ? format(new Date(value), { dateStyle: 'medium', timeStyle: 'short' }) : '—'
@@ -87,6 +87,11 @@ export default function Admin({ account, onCatalogChange }: {account: Account; o
               onChange={event => updateAccount(user.id, { editor: game.id, enabled: event.target.checked })}/>
           </label>)}
         </section>)}
+      </section>
+      <section className="panel padded"><h2>{t("Packs")}</h2>
+        {games.filter(game => game.Studio).map(game => <button key={game.id} className="secondary" onClick={() => openPackStudio(game.id)}>
+          {games.filter(game => game.Studio).length === 1 ? t('Edit as admin') : t('Edit {game} as admin', { game: game.title })}
+        </button>)}
       </section>
       <section className="panel padded"><h2>{t("Published puzzles")}</h2>
         {publications.length === 0 && <p>{t("No creator puzzles published yet.")}</p>}

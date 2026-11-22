@@ -2,7 +2,12 @@ const version = '__VERSION__'
 const shellCache = 'aviarium-' + version
 const gameAssets = __GAME_ASSETS__
 const shellAssets = __SHELL_ASSETS__
-const routes = /^(?:\/|\/(?:games\/sudoku(?:\/(?:history|how-to)|\/packs\/[a-z0-9-]+\/\d+)?|news|about|studio(?:\/(?:sudoku|packs))?|admin)\/?)$/
+function shellRoute(path) {
+  const route = path.replace(/\/$/, '')
+  if (['', '/news', '/about', '/studio', '/studio/packs', '/admin'].includes(route)) return true
+  const game = /^\/(?:games|studio)\/([a-z0-9-]+)(?:\/|$)/.exec(route)?.[1]
+  return Boolean(game && Object.hasOwn(gameAssets, game))
+}
 const lastPlayedKey = '/__aviarium/last-played'
 const maxIdle = 30 * 24 * 60 * 60 * 1000
 const gameCache = game => 'aviarium-game-' + game
@@ -133,7 +138,7 @@ self.addEventListener('message', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url)
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return
-  if (event.request.mode === 'navigate' && routes.test(url.pathname)) {
+  if (event.request.mode === 'navigate' && shellRoute(url.pathname)) {
     event.respondWith(caches.open(shellCache).then(cache => cache.match('/index.html')).then(hit => hit || fetch(event.request)))
   } else if (url.pathname.startsWith('/assets/') || url.pathname.endsWith('.png') || url.pathname === '/aviarium.svg' || url.pathname === '/manifest.webmanifest') {
     event.respondWith((async () => {

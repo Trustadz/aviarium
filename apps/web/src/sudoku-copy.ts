@@ -1,4 +1,4 @@
-import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
+import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
 import type { LogicalStep } from '../../../packages/sudoku/src/logic.js'
 import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { type Translate } from './i18n.js'
