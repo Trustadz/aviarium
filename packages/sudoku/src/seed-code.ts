@@ -1,4 +1,5 @@
-import type { Difficulty, PublishedLevel } from '../../game-sdk/src/index.js'
+import type { PublishedLevel } from './contracts.js'
+import type { Difficulty } from '../../game-sdk/src/index.js'
 import type { QuickPlayDescriptor } from './contracts.js'
 
 export async function quickPlayId({ seed, difficulty, version }: QuickPlayDescriptor) {

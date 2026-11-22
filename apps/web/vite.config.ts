@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { offlineGames } from './game-assets.js'
 
 const { version: appVersion } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
 
@@ -32,16 +33,20 @@ export default defineConfig({
         const chunk = bundle[name]
         return chunk.type === 'chunk' && chunk.isEntry
       }))
-      const gameAssets = Object.fromEntries(Object.entries({ sudoku: '/src/Player.tsx' }).map(([id, entry]) => {
-        const files = assets(names.filter(name => {
-          const chunk = bundle[name]
-          return chunk.type === 'chunk' && chunk.facadeModuleId?.endsWith(entry)
-        }))
-        if (!files.size) throw new Error('Missing offline player assets for ' + id)
-        if (id === 'sudoku') {
-          // Vite emits the worker URL outside the player's static import graph.
-          const worker = names.find(name => /^assets\/quick-play-worker-[\w-]+\.js$/.test(name))
-          if (!worker) throw new Error('Missing offline Sudoku Quick Play worker')
+      const gameAssets = Object.fromEntries(offlineGames.map(({ id, entries, workers }) => {
+        const roots = entries.map(entry => {
+          const name = names.find(name => {
+            const chunk = bundle[name]
+            return chunk.type === 'chunk' &&
+              (chunk.facadeModuleId?.endsWith(entry) || Object.keys(chunk.modules).some(module => module.endsWith(entry)))
+          })
+          if (!name) throw new Error('Missing offline entry for ' + id + ': ' + entry)
+          return name
+        })
+        const files = assets(roots)
+        for (const entry of workers) {
+          const worker = names.find(name => name.startsWith('assets/' + entry + '-') && name.endsWith('.js'))
+          if (!worker) throw new Error('Missing offline worker for ' + id + ': ' + entry)
           files.add(worker)
         }
         return [id, [...files].filter(name => !shell.has(name)).map(name => '/' + name)]

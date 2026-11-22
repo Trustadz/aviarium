@@ -1,4 +1,4 @@
-import type { PublishedLevel } from "../../game-sdk/src/index.js"
+import type { PublishedLevel } from './contracts.js'
 
 export const starterCatalog: PublishedLevel[] = [
   {

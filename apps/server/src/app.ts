@@ -10,7 +10,7 @@ import { registerBackups } from './backups.js'
 import { enabledLocales, listenHost, origin, pool } from './config.js'
 import { registerNews } from './news.js'
 import { runNewsTranslations } from './news-translation.js'
-import { registerLevels } from './levels.js'
+import { serverGames } from './games.js'
 import { registerPacks } from './packs.js'
 import { registerProgress } from './progress.js'
 import { migrate } from './migrate.js'
@@ -55,9 +55,12 @@ export async function makeApp() {
     catch { return reply.code(503).send({ status: 'unavailable' }) }
   })
   registerAuth(app)
-  registerLevels(app)
   registerNews(app)
-  registerPacks(app)
+  for (const game of serverGames.values()) {
+    game.routes(app)
+    registerPacks(app, game, '/api/games/' + game.id)
+    if (game.id === 'sudoku') registerPacks(app, game, '/api')
+  }
   registerProgress(app)
   registerBackups(app)
   await app.register(staticFiles, {
@@ -67,7 +70,10 @@ export async function makeApp() {
     },
   })
   app.setNotFoundHandler((request, reply) => {
-    if (request.method === 'GET' && /^\/(?:games\/sudoku(?:\/(?:history|how-to)|\/packs\/[a-z0-9-]+\/\d+)?|news|about|studio(?:\/(?:sudoku|packs))?|admin)?\/?$/.test(request.url.split('?')[0]))
+    const path = request.url.split('?')[0].replace(/\/$/, '')
+    const game = /^\/(?:games|studio)\/([a-z0-9-]+)(?:\/|$)/.exec(path)?.[1]
+    const standalonePage = ['', '/news', '/about', '/studio', '/studio/packs', '/admin'].includes(path)
+    if (request.method === 'GET' && (standalonePage || (game && serverGames.has(game))))
       return reply.sendFile('index.html')
     return reply.code(404).send({ error: apiMessages.not_found, code: 'not_found' })
   })
