@@ -24,6 +24,9 @@ Configure Pocket ID in `.env`, open [http://localhost:4173](http://localhost:417
 
 ## Develop and verify
 
+See the [development workflow](docs/development.md) for an isolated local setup,
+parallel changes, and draft PR handoff.
+
 Node 24 and npm are required for host-side tooling.
 
 ```sh

@@ -1,5 +1,67 @@
 # Aviarium architecture
 
+## Runtime and code map
+
+Aviarium is an npm-workspaces TypeScript application. Vite builds a React
+frontend, and TypeScript compiles the Fastify server and the shared modules.
+The production server serves the compiled frontend and API from one origin.
+One Aviarium process applies migrations, serves requests, and runs background
+loops alongside a separate PostgreSQL service. This keeps deployment to two
+services and allows browser requests, session cookies, and PWA routes to share
+an origin.
+
+| Area | Start here | When changing it |
+| --- | --- | --- |
+| Navigation and library | [main.tsx](../apps/web/src/main.tsx), [session.ts](../apps/web/src/session.ts), [api.ts](../apps/web/src/api.ts) | Check direct navigation, refresh, signed-out and offline states. For new paths, check the React route handling, Fastify's HTML fallback, and the service worker navigation list. |
+| Sudoku play | [Player.tsx](../apps/web/src/Player.tsx), [Grid.tsx](../apps/web/src/Grid.tsx), [rules.ts](../packages/sudoku/src/rules.ts), [contracts.ts](../packages/sudoku/src/contracts.ts) | Keep the client, server verification, and persisted saves aligned. Exercise touch and keyboard play for input changes. |
+| Local and synced progress | [storage.ts](../apps/web/src/storage.ts), [progress.ts](../apps/server/src/progress.ts) | Check account isolation, reconnect and retry, concurrent edits, and old saves. |
+| Catalog and creation | [Studio.tsx](../apps/web/src/Studio.tsx), [PackStudio.tsx](../apps/web/src/PackStudio.tsx), [levels.ts](../apps/server/src/levels.ts), [packs.ts](../apps/server/src/packs.ts) | Preserve draft ownership, publication revisions, visibility, and the ability to resume a prior revision. |
+| Downloads and updates | [offline.ts](../apps/web/src/offline.ts), [vite.config.ts](../apps/web/vite.config.ts), [sw.txt](../apps/web/sw.txt) | Verify the generated build. Exercise first install, offline reopen, and upgrades when changing cached assets or routing. |
+| Authentication and roles | [auth.ts](../apps/server/src/auth.ts), [config.ts](../apps/server/src/config.ts) | Use the existing session and permission helpers. Exercise role changes and account switching. |
+| Translation and News | [messages.ts](../apps/web/src/messages.ts), [api-messages.ts](../packages/game-sdk/src/api-messages.ts), [news.ts](../apps/server/src/news.ts), [news-translation.ts](../apps/server/src/news-translation.ts) | Keep English and Dutch messages complete and preserve the shared announcement ID and likes across translations. |
+| Startup, jobs, and persistence | [app.ts](../apps/server/src/app.ts), [migrate.ts](../apps/server/src/migrate.ts), [worker.ts](../apps/server/src/worker.ts), [backup-runner.ts](../apps/server/src/backup-runner.ts) | Check readiness, fresh installs and upgrades, and recovery from failed or interrupted work. |
+
+## Design choices and compatibility
+
+- **A shared, versioned puzzle library.** Published puzzle and pack revisions
+  are immutable because saved attempts refer to exact versions. Draft edits
+  and catalog visibility can change independently of those attempts. Add a
+  revision for changed published content, and keep its identity resolvable.
+- **One Sudoku engine for play and verification.** The renderer-neutral SDK
+  defines common types. Sudoku owns its codecs, rules, and generation. A
+  stable ruleset, save format, and generator version let the browser and
+  server agree on the meaning of older saves and shared seeds. Check the
+  legacy version paths before changing generation or decoding.
+- **Offline play with server-verified sync.** The service worker handles assets
+  and app navigation. IndexedDB stores gameplay data and pending mutations.
+  The API verifies account, puzzle version, and claimed completion when
+  accepting a save. Retried mutations return the stored result for the same
+  ID and payload. Concurrent edits can create a separate attempt. Keep those
+  guarantees when changing either side of synchronization.
+- **The server owns permissions.** Pocket ID supplies identity in the normal
+  login flow. PostgreSQL stores Aviarium sessions and roles. Use
+  `requireUser` or `requireGameEditor` as appropriate and enforce resource
+  ownership in the server operation. Write requests must match the configured
+  origin. Local-only play and loopback test sessions have distinct behavior.
+- **PostgreSQL coordinates durable work.** The puzzle worker claims jobs
+  with a lease and runs expensive solving in a bounded worker thread.
+  Validation results refer to a draft revision. A publish request must
+  still verify the current revision. Backups and optional News translation
+  also run inside the app process.
+- **Schema upgrades travel with the app.** Startup applies the sorted SQL
+  files in [migrations](../apps/server/migrations/) in a transaction under an
+  advisory lock. The ledger records filenames. Add a new numbered file for a
+  schema or data change and preserve files already applied by deployments.
+  Check open PRs for numbering collisions and verify upgrades with existing
+  data when the change affects it. Use the existing transaction helper in
+  `config.ts` for multi-step writes.
+- **Verification and shipping are separate.** [Verify](../.github/workflows/verify.yml)
+  tests PRs and `main`. [Publish container](../.github/workflows/container.yml)
+  runs on explicit dispatch from `main`, verifies again, versions the image
+  from Git tags, and publishes the corresponding release. Use
+  [the release instructions](../README.md#publish-a-release) for a release.
+  In-app News is a separate, owner-requested change.
+
 ## Game registration
 
 The web registry in `apps/web/src/registry.ts` exposes lightweight metadata and a lazy player loader. Sudoku ruleset 1 is used by the player, API completion verification, and the server puzzle worker. The current API and PWA routes are explicitly bound to Sudoku. When a second game is approved, add its registered ruleset, content codecs, optional creator tools, route, and asset graph alongside Sudoku. A game supplies its own validation semantics and rendering technology.

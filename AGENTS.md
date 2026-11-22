@@ -3,6 +3,17 @@
 These instructions apply to Aviarium. Follow the user's current request when
 it specifies a narrower scope or a different workflow.
 
+## Start here
+
+- Use the [development workflow](docs/development.md) for local setup, parallel
+  work, and draft PR handoff. It uses the checkout, Git, and GitHub CLI.
+- Read the [architecture](docs/architecture.md) for code entry points, shipped
+  product choices, and compatibility rules. Use [verification](docs/testing.md)
+  to select checks and [deployment](docs/deployment.md) for runtime operations.
+- Use the target branch and the assigned work as the source of scope. Record
+  lasting decisions in the relevant repository doc and change-specific decisions
+  in the PR so another contributor can continue from the branch and PR.
+
 ## Branch, test, and review
 
 - Use a dedicated branch under `codex/` for each distinct change. Keep
