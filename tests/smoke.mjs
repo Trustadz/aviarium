@@ -860,8 +860,8 @@ try {
     'completion celebration fills the viewport')
   assert.equal(await nonogramPage.evaluate(() => document.querySelector('main')?.getAttribute('aria-hidden')), 'true',
     'completion celebration hides the game from assistive technology')
-  await nonogramPage.getByRole('button', { name: 'Skip celebration' }).tap()
   await nonogramPage.getByRole('heading', { name: 'Puzzle solved' }).waitFor()
+  await nonogramPage.locator('.celebration-overlay[data-phase="results"]').waitFor({ timeout: 5000 })
   await nonogramPage.getByRole('button', { name: 'Back to roadmap' }).tap()
   await nonogramPage.getByRole('button', { name: 'Play Nest Hollow' }).waitFor()
   await until(async () => (await request('/api/progress', { headers: playbackHeaders })).completions
