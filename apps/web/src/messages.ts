@@ -668,6 +668,18 @@ export const dutch = {
   "{solved} of {total} solved": "{solved} van {total} opgelost",
   "“{title}” needs a verified unique solution.": "Controleer of ‘{title}’ precies één oplossing heeft.",
   "“{title}” needs review. No complete logical solve was found.": "Controleer ‘{title}’. Er is geen volledige logische oplossing gevonden.",
+  "A flutter of applause.": "Een gefladder van applaus.",
+  "A visitor from the aviary": "Een bezoeker uit de volière",
+  "Lives left": "Levens over",
+  "New best time": "Nieuwe beste tijd",
+  "Play again": "Opnieuw spelen",
+  "Skip celebration": "Viering overslaan",
+  "Stop {stop} of {total}": "Stop {stop} van {total}",
+  "Time": "Tijd",
+  "View solved puzzle": "Bekijk de opgeloste puzzel",
+  "Auto solve": "Automatisch oplossen",
+  "Celebration preview": "Viering bekijken",
+  "Preview puzzle celebration": "Puzzelviering bekijken",
 } as const satisfies Record<typeof apiMessages[keyof typeof apiMessages], string> & Record<string, string>
 
 export type Message = keyof typeof dutch

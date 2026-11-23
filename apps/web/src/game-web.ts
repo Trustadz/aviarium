@@ -15,6 +15,8 @@ export interface GamePlayerProps {
   session: LocalSession
   preferences: ProfilePreferences
   reader: boolean
+  bestMs?: number
+  testMode?: boolean
   persist: (data: GameAttempt) => Promise<void>
   leave: () => void
   reset: () => void

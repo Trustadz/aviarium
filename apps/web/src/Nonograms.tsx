@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
-import { ArrowLeft, RotateCcw, Settings2, Timer, Undo2 } from 'lucide-react'
+import { ArrowLeft, RotateCcw, Settings2, Timer, Undo2, WandSparkles } from 'lucide-react'
 import { type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
-import { fillsFitClues, matchesClues, type Cell } from '../../../packages/nonograms/src/puzzles.js'
+import { fillsFitClues, matchesClues, solveByDeduction, type Cell } from '../../../packages/nonograms/src/puzzles.js'
 import type { GamePlayerProps } from './game-web.js'
 import { knownMessage, useT } from './i18n.js'
 import { errorMessage } from './api.js'
+import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, trial = false }: GamePlayerProps & { trial?: boolean }) {
+export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false }:
+GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
   const started = useRef(Date.now())
@@ -15,6 +17,7 @@ export default function Nonograms({ level, pack, session, preferences, leave, pe
   const puzzle = (level as NonogramLevel).content
   const previous = useRef(saved)
   const version = useRef(0)
+  const [celebration, setCelebration] = useState<number>()
   const persistRef = useRef(persist)
   persistRef.current = persist
   const [display, setDisplay] = useState(saved.elapsedMs)
@@ -41,9 +44,12 @@ export default function Nonograms({ level, pack, session, preferences, leave, pe
   }
 
   function onMove(board: Cell[], undo: Cell[][]) {
+    const wasCompleted = previous.current.completed
     const completed = matchesClues(puzzle, board)
-    void commit({ ...previous.current, board, undo, completed, elapsedMs: takeElapsed(),
-      completedAt: completed ? Date.now() : undefined })
+    const next: NonogramSave = { ...previous.current, board, undo, completed, elapsedMs: takeElapsed(),
+      completedAt: completed ? Date.now() : undefined }
+    if (completed && !wasCompleted) setCelebration(next.elapsedMs)
+    void commit(next)
   }
 
   // Save the running clock when leaving the puzzle, as Sudoku does, so the
@@ -77,9 +83,29 @@ export default function Nonograms({ level, pack, session, preferences, leave, pe
     }
   }, [saved.completed, showTimer])
 
-  return <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined}
-    leave={exit} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
-    problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove}/>
+  const celebrationStats = celebration !== undefined ? [
+    { label: t('Grid size'), value: puzzle.rows.length + ' × ' + puzzle.columns.length },
+    ...((level as NonogramLevel).difficulty ? [{ label: t('Difficulty'), value: t((level as NonogramLevel).difficulty!) }] : []),
+    ...(pack && level.pack ? [{ label: t('Pack'), value: (pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title) +
+      ' · ' + t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
+  ] : []
+  const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
+    { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
+    ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
+    { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
+  ] : []
+
+  return <>
+    <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} testMode={testMode}
+      leave={exit} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
+      problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove}/>
+    {celebration !== undefined && <CelebrationOverlay reader={reader}
+      result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
+        saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) })
+          : t('Your completion has been saved.'),
+        saveError: Boolean(problem) && !trial }}
+      actions={celebrationActions} onClose={() => setCelebration(undefined)}/>}
+  </>
 }
 
 function markValue(current: Cell, tool: Cell, value: Cell) {
@@ -87,13 +113,14 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committed, undo, problem, trial, elapsedMs, showTimer, onMove }: {
+function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committed, undo, problem, trial, testMode, elapsedMs, showTimer, onMove }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
   leave: () => void
   reset: () => void
   openSettings?: () => void
+  testMode: boolean
   committed: Cell[]
   undo: Cell[][]
   problem: string
@@ -199,13 +226,24 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
     }
   }
 
+  function autoSolve() {
+    if (solved) return
+    const target = solveByDeduction(puzzle)
+    if (!target) return
+    onMove([...target.cells], [...undo.slice(-99), committed])
+  }
   const art = pack?.data.background ?? pack?.data.cover
   return <section className={pack ? 'play-page nonogram-play pack-play pack-' + pack.data.theme : 'play-page nonogram-play'}
     aria-labelledby="nonogram-puzzle-title">
     {art && <img className="pack-play-art" src={art} alt=""/>}
     <div className="game-navigation">
       <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(trial ? 'Back to editor' : 'Game menu')}</button>
-      {openSettings && <button className="icon-button" title={t('Nonogram settings')} aria-label={t('Nonogram settings')} onClick={openSettings}><Settings2 size={18}/></button>}
+      <div className="game-nav-tools">
+        {testMode && !solved && <button className="text-button" onClick={autoSolve} title={t('Test environment')}>
+          <WandSparkles size={17}/> {t('Auto solve')}
+        </button>}
+        {openSettings && <button className="icon-button" title={t('Nonogram settings')} aria-label={t('Nonogram settings')} onClick={openSettings}><Settings2 size={18}/></button>}
+      </div>
     </div>
     <div className="play-heading">
       <div><div className="eyebrow">{pack ? (pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title) : 'Nonograms'}</div><h1 id="nonogram-puzzle-title">{title}</h1></div>

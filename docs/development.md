@@ -57,20 +57,27 @@ docker exec "$AVIARIUM_DEV_DB" pg_isready -h 127.0.0.1 -U postgres
 export AVIARIUM_DEV_DB_URL="postgresql://postgres:aviarium-local-test@$(docker port "$AVIARIUM_DEV_DB" 5432/tcp)/postgres"
 ```
 
-Build and run the same Fastify entry point used by the app container. Choose a
-free loopback port for the preview and keep `PORT` and `PUBLIC_ORIGIN` aligned.
-Port 4183 is reserved by the combined browser suite while it runs.
+Build and run the same Fastify entry point used by the app container. For a
+review preview, listen on all interfaces and set `PUBLIC_ORIGIN` to the URL
+clients will open. Replace the example address with the host's LAN address.
+Choose a free port. The combined browser suite reserves port 4183.
 
 ```sh
 npm run build
 export AVIARIUM_DEV_BACKUP_DIR="$(mktemp -d)"
-DATABASE_URL="$AVIARIUM_DEV_DB_URL" HOST=127.0.0.1 APP_BIND=127.0.0.1 \
-  PORT=4175 PUBLIC_ORIGIN=http://127.0.0.1:4175 BACKUP_ROOT="$AVIARIUM_DEV_BACKUP_DIR" \
-  TEST_ENVIRONMENT=true npm start
+export AVIARIUM_PREVIEW_ORIGIN="http://192.168.1.50:4175"
+DATABASE_URL="$AVIARIUM_DEV_DB_URL" HOST=0.0.0.0 APP_BIND=0.0.0.0 \
+  PORT=4175 PUBLIC_ORIGIN="$AVIARIUM_PREVIEW_ORIGIN" BACKUP_ROOT="$AVIARIUM_DEV_BACKUP_DIR" \
+  TEST_ENVIRONMENT=true TEST_ENVIRONMENT_ALLOW_LAN=true npm start
 ```
 
-Use `http://127.0.0.1:4175/health/ready` to verify startup. Open
-`http://127.0.0.1:4175` and use **Account menu → Device settings → Test user
+Use a trusted network. Anyone who can reach the preview can create a test
+account and switch to Admin. For a host-only session, omit
+`TEST_ENVIRONMENT_ALLOW_LAN`, set `HOST` and `APP_BIND` to `127.0.0.1`, and use
+`http://127.0.0.1:4175` as the origin.
+
+Check `/health/ready` at the configured origin to verify startup. Open
+the preview URL and use **Account menu → Device settings → Test user
 role** for User, Editor, and Admin flows. Use the built app to test
 service worker installation, upgrades, and offline play. Each browser origin
 has its own cookies, IndexedDB, and service worker, so give parallel previews
