@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
-import { ArrowLeft, RotateCcw, Timer, Undo2 } from 'lucide-react'
+import { ArrowLeft, RotateCcw, Settings2, Timer, Undo2 } from 'lucide-react'
 import { type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
 import { fillsFitClues, matchesClues, type Cell } from '../../../packages/nonograms/src/puzzles.js'
 import type { GamePlayerProps } from './game-web.js'
@@ -7,7 +7,7 @@ import { knownMessage, useT } from './i18n.js'
 import { errorMessage } from './api.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, leave, persist, reset, reader, trial = false }: GamePlayerProps & { trial?: boolean }) {
+export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, trial = false }: GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
   const started = useRef(Date.now())
@@ -18,7 +18,7 @@ export default function Nonograms({ level, pack, session, leave, persist, reset,
   const persistRef = useRef(persist)
   persistRef.current = persist
   const [display, setDisplay] = useState(saved.elapsedMs)
-  const showTimer = !reader
+  const showTimer = preferences.nonogramTimer !== false && !reader
   const title = pack?.builtIn || level.source === 'Generated' ? knownMessage(t, level.title) : level.title
 
   function takeElapsed() {
@@ -78,8 +78,8 @@ export default function Nonograms({ level, pack, session, leave, persist, reset,
   }, [saved.completed, showTimer])
 
   return <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined}
-    leave={exit} reset={reset} committed={saved.board} undo={saved.undo} problem={problem} trial={trial}
-    elapsedMs={display} showTimer={showTimer} onMove={onMove}/>
+    leave={exit} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
+    problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove}/>
 }
 
 function markValue(current: Cell, tool: Cell, value: Cell) {
@@ -87,12 +87,13 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, reset, committed, undo, problem, trial, elapsedMs, showTimer, onMove }: {
+function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committed, undo, problem, trial, elapsedMs, showTimer, onMove }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
   leave: () => void
   reset: () => void
+  openSettings?: () => void
   committed: Cell[]
   undo: Cell[][]
   problem: string
@@ -204,6 +205,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, committed, undo, probl
     {art && <img className="pack-play-art" src={art} alt=""/>}
     <div className="game-navigation">
       <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(trial ? 'Back to editor' : 'Game menu')}</button>
+      {openSettings && <button className="icon-button" title={t('Nonogram settings')} aria-label={t('Nonogram settings')} onClick={openSettings}><Settings2 size={18}/></button>}
     </div>
     <div className="play-heading">
       <div><div className="eyebrow">{pack ? (pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title) : 'Nonograms'}</div><h1 id="nonogram-puzzle-title">{title}</h1></div>

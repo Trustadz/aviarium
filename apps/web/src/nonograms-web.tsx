@@ -119,5 +119,8 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
     return parsed.success ? { quickPlay: parsed.data } : undefined
   },
   favorite: 'favoriteNonograms',
+  settings: { title: 'Nonogram settings', toggles: [
+    { key: 'nonogramTimer', label: 'Show timer', default: true },
+  ] },
   history: true,
 }
