@@ -12,6 +12,12 @@
 .nonogram-column-clues::before { content: ''; }
 .nonogram-column-clues > div { display: grid; align-content: end; justify-items: center; padding-bottom: .3em; }
 .nonogram-row-clue { align-self: center; justify-self: end; padding-right: .3em; white-space: nowrap; }
+.nonogram-board [data-conflict=true] {
+  color: var(--error-text);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: .12em;
+}
 .nonogram-cell {
   display: grid; place-items: center; min-width: 0; aspect-ratio: 1; padding: 0;
   border: 0; border-right: var(--grid-rule); border-bottom: var(--grid-rule);

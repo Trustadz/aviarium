@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { clues, matchesClues, randomDifficulties, randomPuzzle, randomSizes, solveByDeduction, starterPack } from './puzzles.js'
+import { clues, fillsFitClues, matchesClues, randomDifficulties, randomPuzzle, randomSizes, solveByDeduction, starterPack } from './puzzles.js'
 
 test('clues encode separate runs and empty lines', () => {
   assert.deepEqual(clues([1, 1, 2, 1, 0]), [2, 1])
   assert.deepEqual(clues([0, 2]), [0])
+})
+
+test('clue feedback detects incompatible fills and ignores blank marks', () => {
+  assert.equal(fillsFitClues([0, 1, 0, 1, 0], [1]), false)
+  assert.equal(fillsFitClues([0, 1, 1, 0, 0], [1, 1]), false)
+  assert.equal(fillsFitClues([2, 1, 2, 1, 2], [1, 1]), true)
+  assert.equal(fillsFitClues([2, 2, 2, 2, 2], [5]), true)
+  assert.equal(fillsFitClues([0, 1, 0, 0, 0], [0]), false)
 })
 
 test('deduction neither guesses at ambiguous clues nor accepts contradictory ones', () => {

@@ -108,6 +108,11 @@ function patterns(size: number, runs: Line): number[] {
   return masks
 }
 
+export function fillsFitClues(line: readonly Cell[], runs: Line) {
+  const fills = line.reduce<number>((mask, cell, index) => cell === 1 ? mask | (1 << index) : mask, 0)
+  return fills === 0 || patterns(line.length, runs).some(mask => (mask & fills) === fills)
+}
+
 // A cell shared by every remaining pattern in a line is forced. If this
 // determines the whole board, every solution must be that board.
 export function solveByDeduction(puzzle: Puzzle) {

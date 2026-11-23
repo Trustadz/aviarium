@@ -1,6 +1,8 @@
 import type { apiMessages } from '../../../packages/game-sdk/src/api-messages.js'
 
 export const dutch = {
+  "Filled squares conflict with the row clues.": "De gevulde vakjes passen niet bij de rijaanwijzingen.",
+  "Filled squares conflict with the column clues.": "De gevulde vakjes passen niet bij de kolomaanwijzingen.",
   "Sulphur-crested Cockatoos": "Grote geelkuifkaketoes",
   "From a tiny egg to a crested cockatoo, follow five puzzles through the eucalyptus canopy.": "Volg vijf puzzels door de eucalyptuskruinen, van een klein ei tot een kaketoe met kuif.",
   "Cockatoo Egg": "Kaketoe-ei",

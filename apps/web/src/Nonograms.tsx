@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import { ArrowLeft, Undo2 } from 'lucide-react'
 import { type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
-import { matchesClues, type Cell } from '../../../packages/nonograms/src/puzzles.js'
+import { fillsFitClues, matchesClues, type Cell } from '../../../packages/nonograms/src/puzzles.js'
 import type { GamePlayerProps } from './game-web.js'
 import { knownMessage, useT } from './i18n.js'
 import { errorMessage } from './api.js'
@@ -56,6 +56,10 @@ function PuzzleBoard({ puzzle, title, pack, leave, committed, undo, problem, tri
   const height = puzzle.rows.length
   const [painted, setPainted] = useState<Cell[]>()
   const cells = painted ?? committed
+  const rowConflicts = puzzle.rows.map((runs, row) =>
+    !fillsFitClues(cells.slice(row * width, (row + 1) * width), runs))
+  const columnConflicts = puzzle.columns.map((runs, column) =>
+    !fillsFitClues(puzzle.rows.map((_, row) => cells[row * width + column]), runs))
   const solved = matchesClues(puzzle, committed)
   const [mode, setMode] = useState<Cell>(1)
   const [focus, setFocus] = useState(0)
@@ -161,14 +165,14 @@ function PuzzleBoard({ puzzle, title, pack, leave, committed, undo, problem, tri
         '--row-clues': Math.max(...puzzle.rows.map(clue => clue.length)),
       } as CSSProperties}>
         <div className="nonogram-column-clues" aria-hidden="true">
-          {puzzle.columns.map((runs, column) => <div key={column}>{runs.map((run, index) => <span key={index}>{run}</span>)}</div>)}
+          {puzzle.columns.map((runs, column) => <div key={column} data-conflict={columnConflicts[column]}>{runs.map((run, index) => <span key={index}>{run}</span>)}</div>)}
         </div>
         <div className="nonogram-cells" role="group" aria-label={t('Puzzle grid')}
           onPointerDown={startStroke} onPointerMove={paint} onPointerUp={endStroke}
           onPointerCancel={endStroke} onLostPointerCapture={endStroke}>
           {puzzle.rows.map((runs, row) => <div className="nonogram-row" key={row} role="group"
             aria-label={t('Row {row}, clues {clues}', { row: row + 1, clues: runs.join(', ') })}>
-            <div className="nonogram-row-clue" aria-hidden="true">{runs.join(' ')}</div>
+            <div className="nonogram-row-clue" data-conflict={rowConflicts[row]} aria-hidden="true">{runs.join(' ')}</div>
             {puzzle.columns.map((columnRuns, column) => {
               const index = row * width + column
               const state = cells[index]
@@ -176,6 +180,10 @@ function PuzzleBoard({ puzzle, title, pack, leave, committed, undo, problem, tri
                 ref={element => { squares.current[index] = element }}
                 type="button" tabIndex={focus === index ? 0 : -1} data-mark={state} data-cell={index}
                 aria-disabled={solved}
+                aria-description={[
+                  rowConflicts[row] && t('Filled squares conflict with the row clues.'),
+                  columnConflicts[column] && t('Filled squares conflict with the column clues.'),
+                ].filter(Boolean).join(' ') || undefined}
                 aria-label={t('Column {column}, clues {clues}, {mark}', {
                   column: column + 1, clues: columnRuns.join(', '),
                   mark: t(state === 1 ? 'filled' : state === 2 ? 'marked blank' : 'unmarked'),
