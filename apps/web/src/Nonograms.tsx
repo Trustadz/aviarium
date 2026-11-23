@@ -1,5 +1,5 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
-import { ArrowLeft, RotateCcw, Undo2 } from 'lucide-react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
+import { ArrowLeft, RotateCcw, Timer, Undo2 } from 'lucide-react'
 import { type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
 import { fillsFitClues, matchesClues, type Cell } from '../../../packages/nonograms/src/puzzles.js'
 import type { GamePlayerProps } from './game-web.js'
@@ -7,7 +7,7 @@ import { knownMessage, useT } from './i18n.js'
 import { errorMessage } from './api.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, leave, persist, reset, trial = false }: GamePlayerProps & { trial?: boolean }) {
+export default function Nonograms({ level, pack, session, leave, persist, reset, reader, trial = false }: GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
   const started = useRef(Date.now())
@@ -15,24 +15,71 @@ export default function Nonograms({ level, pack, session, leave, persist, reset,
   const puzzle = (level as NonogramLevel).content
   const previous = useRef(saved)
   const version = useRef(0)
+  const persistRef = useRef(persist)
+  persistRef.current = persist
+  const [display, setDisplay] = useState(saved.elapsedMs)
+  const showTimer = !reader
   const title = pack?.builtIn || level.source === 'Generated' ? knownMessage(t, level.title) : level.title
 
-  function onMove(board: Cell[], undo: Cell[][]) {
-    const completed = matchesClues(puzzle, board)
-    const next: NonogramSave = { ...previous.current, board, undo, completed,
-      elapsedMs: Math.min(365 * 86400_000, (session.data.elapsedMs ?? 0) + Math.max(0, Date.now() - started.current)),
-      completedAt: completed ? Date.now() : undefined }
+  function takeElapsed() {
+    const now = Date.now()
+    const elapsed = Math.min(365 * 86400_000,
+      previous.current.elapsedMs + Math.max(0, now - started.current))
+    started.current = now
+    return elapsed
+  }
+
+  function commit(next: NonogramSave) {
     previous.current = next
     setSaved(next)
+    setDisplay(next.elapsedMs)
     const attempt = ++version.current
-    void persist(next).then(
+    return persistRef.current(next).then(
       () => { if (attempt === version.current) setProblem('') },
       error => { if (attempt === version.current) setProblem(errorMessage(error)) },
     )
   }
 
+  function onMove(board: Cell[], undo: Cell[][]) {
+    const completed = matchesClues(puzzle, board)
+    void commit({ ...previous.current, board, undo, completed, elapsedMs: takeElapsed(),
+      completedAt: completed ? Date.now() : undefined })
+  }
+
+  // Save the running clock when leaving the puzzle, as Sudoku does, so the
+  // last few seconds are not lost between checkpoints.
+  function exit() {
+    if (!previous.current.completed) void commit({ ...previous.current, elapsedMs: takeElapsed() })
+    leave()
+  }
+
+  useEffect(() => {
+    if (saved.completed) return
+    const tick = showTimer ? setInterval(() => {
+      if (document.hidden || previous.current.completed) return
+      setDisplay(Math.min(365 * 86400_000,
+        previous.current.elapsedMs + Math.max(0, Date.now() - started.current)))
+    }, 1000) : undefined
+    const checkpoint = setInterval(() => {
+      if (!document.hidden && !previous.current.completed)
+        void commit({ ...previous.current, elapsedMs: takeElapsed() })
+    }, 5000)
+    function visibility() {
+      if (previous.current.completed) return
+      if (!document.hidden) { started.current = Date.now(); return }
+      void commit({ ...previous.current, elapsedMs: takeElapsed() })
+    }
+    document.addEventListener('visibilitychange', visibility)
+    return () => {
+      if (tick) clearInterval(tick)
+      clearInterval(checkpoint)
+      document.removeEventListener('visibilitychange', visibility)
+    }
+  }, [saved.completed, showTimer])
+
   return <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined}
-    leave={leave} reset={reset} committed={saved.board} undo={saved.undo} problem={problem} trial={trial} onMove={onMove}/>
+    leave={exit} reset={reset} committed={saved.board} undo={saved.undo} problem={problem} trial={trial}
+    elapsedMs={display} showTimer={showTimer} onMove={onMove}/>
 }
 
 function markValue(current: Cell, tool: Cell, value: Cell) {
@@ -40,7 +87,7 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, reset, committed, undo, problem, trial, onMove }: {
+function PuzzleBoard({ puzzle, title, pack, leave, reset, committed, undo, problem, trial, elapsedMs, showTimer, onMove }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
@@ -50,6 +97,8 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, committed, undo, probl
   undo: Cell[][]
   problem: string
   trial: boolean
+  elapsedMs: number
+  showTimer: boolean
   onMove: (cells: Cell[], undo: Cell[][]) => void
 }) {
   const t = useT()
@@ -62,6 +111,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, committed, undo, probl
   const columnConflicts = puzzle.columns.map((runs, column) =>
     !fillsFitClues(puzzle.rows.map((_, row) => cells[row * width + column]), runs))
   const solved = matchesClues(puzzle, committed)
+  const seconds = Math.floor(elapsedMs / 1000)
   const [mode, setMode] = useState<Cell>(1)
   const [focus, setFocus] = useState(0)
   const squares = useRef<(HTMLButtonElement | null)[]>([])
@@ -157,7 +207,9 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, committed, undo, probl
     </div>
     <div className="play-heading">
       <div><div className="eyebrow">{pack ? (pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title) : 'Nonograms'}</div><h1 id="nonogram-puzzle-title">{title}</h1></div>
-      <div className="play-meta"><span className="badge">{height} × {width}</span></div>
+      <div className="play-meta"><span className="badge">{height} × {width}</span>
+        {showTimer && <span className="clock"><Timer size={17}/>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}
+      </div>
     </div>
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
     <div className="play-layout">
