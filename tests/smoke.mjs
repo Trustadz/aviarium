@@ -50,6 +50,23 @@ const level = Array.from(selected.grid, Number)
 const solution = validate(level).solution
 assert.ok(solution)
 const updatedTitle = 'Smoke check ' + crypto.randomUUID().slice(0, 8)
+const feedHeaders = playerToken ? playerHeaders : adminHeaders
+const englishLaunch = (await request('/api/news?locale=en', { headers: feedHeaders })).posts
+  .filter(post => post.title === 'Nonograms joins the library')
+const dutchLaunch = (await request('/api/news?locale=nl', { headers: feedHeaders })).posts
+  .filter(post => post.title === 'Nonogrammen in de bibliotheek')
+assert.equal(englishLaunch.length, 1)
+assert.equal(dutchLaunch.length, 1)
+assert.equal(englishLaunch[0].id, dutchLaunch[0].id)
+assert.equal(englishLaunch[0].category, 'game')
+assert.equal(englishLaunch[0].hasHeaderImage, true)
+assert.equal(dutchLaunch[0].hasHeaderImage, true)
+assert.match(englishLaunch[0].headerAlt, /cockatoo in flight/)
+assert.match(dutchLaunch[0].headerAlt, /kaketoe vliegt/)
+const launchBanner = await fetch(origin + '/api/news/' + englishLaunch[0].id + '/header-image', { headers: feedHeaders })
+assert.equal(launchBanner.status, 200)
+assert.equal(launchBanner.headers.get('content-type'), 'image/webp')
+assert.equal(Buffer.from(await launchBanner.arrayBuffer()).toString('ascii', 8, 12), 'WEBP')
 
 if (adminToken && playerToken) {
   await request('/api/drafts', { headers: playerHeaders, expected: 403 })
@@ -277,6 +294,32 @@ try {
   await cardPreview.waitFor()
   assert.equal(await cardPreview.locator('.cell').count(), 81)
   assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
+  const featured = page.getByRole('region', { name: 'Featured games' })
+  const nextFeatured = featured.getByRole('button', { name: 'Next featured game' })
+  const sudokuSlide = featured.locator('.hero-slide.hero-sudoku')
+  const sudokuLayout = () => sudokuSlide.evaluate(slide => {
+    const description = slide.querySelector('.hero-content > p:not(.hero-kicker)')
+    return {
+      boardRotation: getComputedStyle(slide.querySelector('.hero-art')).transform,
+      headingSize: getComputedStyle(slide.querySelector('h1')).fontSize,
+      descriptionWidth: description.offsetWidth,
+      descriptionHeight: description.offsetHeight,
+    }
+  })
+  const sudokuAtRest = await sudokuLayout()
+  assert.notEqual(sudokuAtRest.boardRotation, 'none')
+  await nextFeatured.tap()
+  assert.deepEqual(await sudokuLayout(), sudokuAtRest)
+  await featured.getByRole('heading', { name: 'Nonograms' }).waitFor()
+  assert.equal(await featured.getByRole('button', { name: 'Show Nonograms' }).getAttribute('aria-pressed'), 'true')
+  await featured.locator('.hero-cover img').evaluate(image => image.decode())
+  await nextFeatured.press('ArrowLeft')
+  await featured.getByRole('heading', { name: 'Aviarium' }).waitFor()
+  await featured.getByRole('button', { name: 'Show Nonograms' }).tap()
+  await featured.getByRole('button', { name: 'Explore Nonograms' }).tap()
+  await page.waitForURL('**/games/nonograms')
+  await page.getByRole('button', { name: 'Exit to library' }).tap()
+  await featured.getByRole('heading', { name: 'Aviarium' }).waitFor()
   const cardSurface = await page.locator('.game-card').filter({ has: page.getByRole('heading', { name: 'Sudoku', exact: true }) }).evaluate(card => getComputedStyle(card).backgroundColor)
   assert.equal(cardSurface, 'rgb(255, 253, 242)')
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
