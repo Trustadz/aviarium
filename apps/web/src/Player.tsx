@@ -13,7 +13,6 @@ import { validate } from '../../../packages/sudoku/src/solver.js'
 import { Grid } from './Grid.js'
 import { PuzzleShare } from './SudokuMenu.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
-import { drawCelebration, type CelebrationVisitor } from './celebrations.js'
 import type { LocalSession } from './storage.js'
 
 export { createQuickPlayLevel } from './quick-play.js'
@@ -62,7 +61,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
   const [lostLife, setLostLife] = useState<number>()
   const [problem, setProblem] = useState('')
   const [display, setDisplay] = useState(data.elapsedMs)
-  const [celebration, setCelebration] = useState<{ visitor: CelebrationVisitor; elapsedMs: number }>()
+  const [celebration, setCelebration] = useState<number>()
   const started = useRef(Date.now())
   const press = useRef<{ pointer: number; x: number; y: number; timer: ReturnType<typeof setTimeout>; skipClick: boolean } | null>(null)
   useEffect(() => () => { if (press.current) clearTimeout(press.current.timer) }, [])
@@ -79,7 +78,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
       : latest.current.elapsedMs + Math.max(0, now - started.current)
     started.current = now
     setDisplay(elapsedMs)
-    if (completedNow) setCelebration({ visitor: drawCelebration(!trial), elapsedMs })
+    if (completedNow) setCelebration(elapsedMs)
     return commit({ ...next, elapsedMs })
   }
   const gameOver = data.lives === 0
@@ -234,13 +233,13 @@ export default function Player({ session, level, preferences, reader, pack, pers
   }
   const seconds = Math.floor(display / 1000)
   const packArt = pack?.data.background ?? pack?.data.cover
-  const celebrationStats = celebration ? [
+  const celebrationStats = celebration !== undefined ? [
     { label: t('Difficulty'), value: t(level.difficulty) },
     ...(pack && level.pack ? [{ label: t('Pack'), value: packTitle(t, pack) + ' · ' +
       t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
     ...(data.lives !== undefined && lifeLimit ? [{ label: t('Lives left'), value: data.lives + ' / ' + lifeLimit }] : []),
   ] : []
-  const celebrationActions: CelebrationAction[] = celebration ? [
+  const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
     ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
@@ -315,8 +314,8 @@ export default function Player({ session, level, preferences, reader, pack, pers
         <p role="alert" className="error">{problem && t('Save failed. {detail}', { detail: knownMessage(t, problem) })}</p>
       </div>
     </div>
-    {celebration && <CelebrationOverlay visitor={celebration.visitor} reader={reader}
-      result={{ elapsedMs: celebration.elapsedMs, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
+    {celebration !== undefined && <CelebrationOverlay reader={reader}
+      result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
         saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) })
           : t('Your completion has been saved.'),
         saveError: Boolean(problem) && !trial }}

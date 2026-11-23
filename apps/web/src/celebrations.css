@@ -6,16 +6,13 @@
   overflow: hidden;
   isolation: isolate;
   color: var(--text);
-  background: transparent;
 }
+
 .celebration-scrim {
   position: absolute;
-  z-index: 6;
   inset: 0;
   background: rgba(22, 20, 38, .46);
-  transition: opacity .35s ease;
 }
-.celebration-overlay[data-phase=results] .celebration-scrim { opacity: 0; pointer-events: none; }
 .celebration-overlay[data-phase=results] .celebration-glow { opacity: 0; }
 .celebration-glow {
   position: absolute;
@@ -29,12 +26,13 @@
   background: radial-gradient(ellipse at 50% 100%, rgba(242, 204, 143, .34), rgba(242, 204, 143, .08) 38%, transparent 68%);
 }
 .celebration-flock {
+  --heading: 1;
   position: absolute;
-  z-index: 7;
+  z-index: 9;
   inset: 0;
   pointer-events: none;
-  transition: opacity .35s ease;
 }
+.celebration-flock[data-direction=left] { --heading: -1; }
 .celebration-burst {
   position: absolute;
   z-index: 7;
@@ -45,8 +43,7 @@
 .celebration-sparkle { z-index: 8; position: absolute; inset: 0; pointer-events: none; transition: opacity .35s ease; }
 .celebration-sparkle svg { display: block; width: 100%; height: 100%; }
 .celebration-overlay[data-phase=results] .celebration-sparkle { opacity: 0; }
-.celebration-flock svg, .celebration-burst svg { display: block; width: 100%; height: 100%; }
-.celebration-overlay[data-phase=results] .celebration-flock,
+.celebration-burst svg { display: block; width: 100%; height: 100%; }
 .celebration-overlay[data-phase=results] .celebration-burst { opacity: 0; }
 .celebration-flash {
   position: absolute;
@@ -91,13 +88,22 @@
   border-radius: 24px;
   box-shadow: 0 34px 100px #0006;
 }
+.celebration-overlay[data-phase=celebrate] .celebration-results-card {
+  --reveal-fade: .35s;
+  animation: celebration-reveal var(--reveal-fade) ease
+    calc(var(--results-reveal-at) - var(--reveal-fade)) both;
+}
+@keyframes celebration-reveal {
+  from { filter: brightness(.66); }
+  to { filter: none; }
+}
 .celebration-results-card::before {
   content: '';
   position: absolute;
   inset: 0 0 auto;
   height: 6px;
   border-radius: 24px 24px 0 0;
-  background: linear-gradient(90deg, var(--bird-body), var(--bird-accent), var(--bird-detail));
+  background: linear-gradient(90deg, #7fbf5f, #f4d35e, #5a9bb5);
 }
 .celebration-result-head { display: grid; gap: 3px; }
 .celebration-result-head .eyebrow { color: var(--accent-strong); letter-spacing: .12em; text-transform: uppercase; }
@@ -170,82 +176,46 @@
   white-space: normal;
 }
 
-/* The flock flies across the dimmed app. */
 .flock-flight {
-  transform-box: view-box;
-  transform-origin: 0 0;
-  animation-duration: 3.2s;
-  animation-fill-mode: both;
-  animation-timing-function: cubic-bezier(.18, .62, .32, 1);
+  --bird-width: calc(clamp(124px, 13vw, 196px) * var(--size));
+  position: absolute;
+  top: var(--lane);
+  left: calc(-1 * var(--bird-width));
+  width: var(--bird-width);
+  animation: flock-cross var(--flight-duration) linear var(--flight-delay) both;
 }
-.flock-size { transform-origin: 0 0; }
+
+.celebration-flock[data-direction=left] .flock-flight { left: 100%; }
+
+.budgie-art {
+  display: block;
+  width: 100%;
+  animation: flock-rise var(--flight-duration) ease-in-out var(--flight-delay) both;
+}
+
 .budgie-wing {
-  transform-box: fill-box;
-  transform-origin: 88% 82%;
-  animation: budgie-wing var(--flap, .22s) ease-in-out infinite alternate;
+  transform-box: view-box;
+  transform-origin: 103px 64px;
+  animation: budgie-flap var(--flap-duration) ease-in-out var(--flap-phase) infinite;
 }
-.budgie-wing-far { transform-origin: 84% 78%; animation-direction: alternate-reverse; animation-delay: -.08s; }
-.budgie-tail {
-  transform-box: fill-box;
-  transform-origin: 98% 4%;
-  animation: budgie-tail 1.1s ease-in-out infinite alternate;
+
+.budgie-wing-far {
+  animation-delay: calc(var(--flap-phase) - 32ms);
 }
-@keyframes budgie-wing {
-  from { transform: rotate(-29deg); }
-  to { transform: rotate(23deg); }
+
+@keyframes flock-cross {
+  to { transform: translateX(calc((100vw + 100%) * var(--heading))); }
 }
-@keyframes budgie-tail {
-  from { transform: rotate(-2deg); }
-  to { transform: rotate(2.5deg); }
+
+@keyframes flock-rise {
+  0% { transform: translateY(0) rotate(calc(-7deg * var(--heading))) scaleX(var(--heading)); }
+  60% { transform: translateY(-8vh) rotate(calc(-3deg * var(--heading))) scaleX(var(--heading)); }
+  100% { transform: translateY(-10vh) rotate(calc(1deg * var(--heading))) scaleX(var(--heading)); }
 }
-.flight-1 { animation-name: flight-1; animation-duration: 3.25s; }
-.flight-2 { animation-name: flight-2; animation-duration: 3.05s; }
-.flight-3 { animation-name: flight-3; animation-duration: 3.1s; }
-.flight-4 { animation-name: flight-4; animation-duration: 3.35s; }
-.flight-5 { animation-name: flight-5; animation-duration: 3.2s; }
-.flight-6 { animation-name: flight-6; animation-duration: 2.9s; }
-.flight-7 { animation-name: flight-7; animation-duration: 3s; }
-@keyframes flight-1 {
-  0% { transform: translate(-140px, 150px) rotate(-8deg); opacity: 0; }
-  10% { opacity: 1; }
-  50% { transform: translate(520px, 70px) rotate(-4deg); }
-  100% { transform: translate(1420px, 120px) rotate(-2deg); opacity: 1; }
-}
-@keyframes flight-2 {
-  0% { transform: translate(1360px, 200px) rotate(8deg); opacity: 0; }
-  10% { opacity: 1; }
-  50% { transform: translate(780px, 90px) rotate(4deg); }
-  100% { transform: translate(-120px, 150px) rotate(2deg); opacity: 1; }
-}
-@keyframes flight-3 {
-  0% { transform: translate(360px, 900px) rotate(-10deg); opacity: 0; }
-  10% { opacity: 1; }
-  50% { transform: translate(680px, 810px) rotate(-6deg); }
-  100% { transform: translate(1420px, 760px) rotate(-2deg); opacity: 1; }
-}
-@keyframes flight-4 {
-  0% { transform: translate(1340px, 870px) rotate(10deg); opacity: 0; }
-  12% { opacity: 1; }
-  50% { transform: translate(800px, 800px) rotate(5deg); }
-  100% { transform: translate(-120px, 830px) rotate(2deg); opacity: 1; }
-}
-@keyframes flight-5 {
-  0% { transform: translate(280px, 210px) rotate(-5deg); opacity: 0; }
-  12% { opacity: 1; }
-  50% { transform: translate(610px, 80px) rotate(-10deg); }
-  100% { transform: translate(940px, 170px) rotate(-3deg); opacity: 1; }
-}
-@keyframes flight-6 {
-  0% { transform: translate(940px, 900px) rotate(8deg); opacity: 0; }
-  10% { opacity: 1; }
-  50% { transform: translate(620px, 800px) rotate(4deg); }
-  100% { transform: translate(80px, 860px) rotate(1deg); opacity: 1; }
-}
-@keyframes flight-7 {
-  0% { transform: translate(1220px, 190px) rotate(6deg); opacity: 0; }
-  10% { opacity: 1; }
-  50% { transform: translate(690px, 110px) rotate(2deg); }
-  100% { transform: translate(180px, 180px) rotate(-2deg); opacity: 1; }
+
+@keyframes budgie-flap {
+  0%, 100% { transform: rotate(-9deg) scaleY(1); }
+  52% { transform: rotate(10deg) scaleY(-.78); }
 }
 
 /* The confetti cannon fires from below the screen. */
@@ -269,19 +239,19 @@
 }
 
 
-.celebration-overlay[data-reader=true] { background: rgba(0, 0, 0, .4); }
+.celebration-overlay[data-reader=true] .celebration-scrim { background: rgba(0, 0, 0, .4); }
 .celebration-overlay[data-reader=true] .celebration-glow,
 .celebration-overlay[data-reader=true] .celebration-flash { display: none; }
 .celebration-overlay[data-reader=true] .celebration-flock,
 .celebration-overlay[data-reader=true] .celebration-burst,
 .celebration-overlay[data-reader=true] .celebration-sparkle { filter: grayscale(1) contrast(1.18); }
-.celebration-overlay[data-reader=true] .celebration-flock *,
 .celebration-overlay[data-reader=true] .celebration-burst *,
 .celebration-overlay[data-reader=true] .celebration-sparkle * {
   animation-duration: 3s !important;
   animation-timing-function: steps(5, end) !important;
   animation-delay: 0s !important;
 }
+.celebration-overlay[data-reader=true] .budgie-wing { animation: none; }
 .celebration-overlay[data-reader=true] .celebration-results-card { border-width: 2px; box-shadow: none; }
 .celebration-overlay[data-reader=true] .celebration-results-card::before { background: var(--text); }
 

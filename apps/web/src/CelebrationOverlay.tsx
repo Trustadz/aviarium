@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowRight } from 'lucide-react'
-import { BudgieFlock, CelebrationBurst, CelebrationSparkle, celebrationStyleFor, type CelebrationVisitor } from './celebrations.js'
+import { BudgieFlock, CelebrationBurst, CelebrationSparkle } from './celebrations.js'
 import { useT } from './i18n.js'
 import { displayTime } from './SudokuMenu.js'
 import './celebrations.css'
@@ -25,8 +25,9 @@ export interface CelebrationResult {
   saveError?: boolean
 }
 
-export function CelebrationOverlay({ visitor, result, actions, onClose, reader, preview = false }: {
-  visitor: CelebrationVisitor
+const resultsLeadMs = 2500
+
+export function CelebrationOverlay({ result, actions, onClose, reader, preview = false }: {
   result: CelebrationResult
   actions: readonly CelebrationAction[]
   onClose: () => void
@@ -40,7 +41,7 @@ export function CelebrationOverlay({ visitor, result, actions, onClose, reader, 
   const results = useRef<HTMLElement>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
-  const duration = reduced ? 1000 : reader ? 3200 : 3600
+  const duration = reader ? 3200 : 3600
   const title = t(preview ? 'Celebration preview' : 'Puzzle solved')
   const newBest = result.bestMs !== undefined && result.elapsedMs < result.bestMs
 
@@ -98,12 +99,13 @@ export function CelebrationOverlay({ visitor, result, actions, onClose, reader, 
   }, [])
 
   return createPortal(<div ref={overlay} className="celebration-overlay" data-reader={reader}
-    data-species={visitor.id} style={celebrationStyleFor(visitor)} role="dialog" aria-modal="true" data-phase={celebrating ? 'celebrate' : 'results'}
-    aria-label={title} aria-describedby="celebration-visitor">
-    <p id="celebration-visitor" className="sr-only">{t(visitor.name)}. {t(visitor.line)}</p>
+    role="dialog" aria-modal="true" data-phase={celebrating ? 'celebrate' : 'results'}
+    aria-label={title} aria-describedby="celebration-visitor"
+    style={{ '--results-reveal-at': `${duration - resultsLeadMs}ms` } as CSSProperties}>
+    <p id="celebration-visitor" className="sr-only">{t('Budgies')}. {t('A flutter of applause.')}</p>
     <div className="celebration-scrim" aria-hidden="true"/>
     <div className="celebration-glow" aria-hidden="true"/>
-    <div className="celebration-flock" aria-hidden="true"><BudgieFlock/></div>
+    {celebrating && <BudgieFlock/>}
     <div className="celebration-burst" aria-hidden="true"><CelebrationBurst/></div>
     <div className="celebration-sparkle" aria-hidden="true"><CelebrationSparkle/></div>
     <div className="celebration-flash" aria-hidden="true"/>
@@ -112,8 +114,8 @@ export function CelebrationOverlay({ visitor, result, actions, onClose, reader, 
         <div className="celebration-result-head">
           <p className="eyebrow">{t('A visitor from the aviary')}</p>
           <h2 id="celebration-result-title">{title}</h2>
-          <p className="celebration-species">{t(visitor.name)}</p>
-          <p className="celebration-line">{t(visitor.line)}</p>
+          <p className="celebration-species">{t('Budgies')}</p>
+          <p className="celebration-line">{t('A flutter of applause.')}</p>
         </div>
         {!preview && <div className="celebration-time">
           <span>{t('Time')}</span>

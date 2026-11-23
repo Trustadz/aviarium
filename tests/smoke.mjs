@@ -861,7 +861,16 @@ try {
   assert.equal(await nonogramPage.evaluate(() => document.querySelector('main')?.getAttribute('aria-hidden')), 'true',
     'completion celebration hides the game from assistive technology')
   await nonogramPage.getByRole('heading', { name: 'Puzzle solved' }).waitFor()
+  const scrim = nonogramPage.locator('.celebration-scrim')
+  const card = nonogramPage.locator('.celebration-results-card')
+  assert.equal(await scrim.evaluate(element => getComputedStyle(element).opacity), '1')
+  assert.notEqual(await card.evaluate(element => getComputedStyle(element).filter), 'none',
+    'results card starts dimmed at the beginning of the fly-by')
+  await until(() => card.evaluate(element => getComputedStyle(element).filter === 'brightness(1)'), 'results card at full brightness')
+  assert.ok(await nonogramPage.locator('.celebration-flock').count(), 'results card is revealed while the flock is still flying')
   await nonogramPage.locator('.celebration-overlay[data-phase="results"]').waitFor({ timeout: 5000 })
+  assert.equal(await scrim.evaluate(element => getComputedStyle(element).opacity), '1',
+    'the game stays dimmed under the results card')
   await nonogramPage.getByRole('button', { name: 'Back to roadmap' }).tap()
   await nonogramPage.getByRole('button', { name: 'Play Nest Hollow' }).waitFor()
   await until(async () => (await request('/api/progress', { headers: playbackHeaders })).completions

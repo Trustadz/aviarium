@@ -20,7 +20,6 @@ import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
 import { CelebrationOverlay } from './CelebrationOverlay.js'
-import { celebrationVisitors, type CelebrationVisitor } from './celebrations.js'
 import { registerOffline, useGameDownloads } from './offline.js'
 import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
@@ -190,7 +189,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
   const [dialog, showDialog] = useState<'display' | 'game' | 'account'>()
-  const [celebrationPreview, setCelebrationPreview] = useState<CelebrationVisitor>()
+  const [celebrationPreview, setCelebrationPreview] = useState(false)
   const [changingRole, setChangingRole] = useState(false)
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
@@ -290,7 +289,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       showDialog(undefined)
       setPath(location.pathname.replace(/\/$/, '') || '/')
     }
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') showDialog(undefined) }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) showDialog(undefined)
+    }
     window.addEventListener('popstate', locationChanged)
     window.addEventListener('keydown', closeOnEscape)
     return () => {
@@ -584,11 +585,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
               onChange={event => changeTestRole(event.target.value as TestRole)}>
               <option value="user">{t("User")}</option><option value="editor">{t("Editor")}</option><option value="admin">{t("Admin")}</option>
             </select></label>
-            <h3>{t("Celebration previews")}</h3>
-            <p className="muted">{t("Preview each completion celebration without solving a puzzle.")}</p>
-            <div className="celebration-test-grid">{celebrationVisitors.map(visitor =>
-              <button type="button" className="secondary" key={visitor.id}
-                onClick={() => setCelebrationPreview(visitor)}>{t(visitor.name)}</button>)}</div>
+            <h3>{t("Preview puzzle celebration")}</h3>
+            <div className="celebration-test-grid">
+              <button type="button" className="secondary" onClick={() => setCelebrationPreview(true)}>{t("Budgies")}</button>
+            </div>
           </>}
         </>}
         {dialog === 'game' && settings?.toggles.map(setting => <label className="setting-row" key={setting.key}>
@@ -622,10 +622,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         </>}
       </section>
     </div>}
-    {celebrationPreview && <CelebrationOverlay visitor={celebrationPreview} preview reader={reader}
+    {celebrationPreview && <CelebrationOverlay preview reader={reader}
       result={{ elapsedMs: 0, stats: [{ label: t('Test environment'), value: t('Preview') }] }}
-      actions={[{ label: t('Close'), onClick: () => setCelebrationPreview(undefined) }]}
-      onClose={() => setCelebrationPreview(undefined)}/>}
+      actions={[{ label: t('Close'), onClick: () => setCelebrationPreview(false) }]}
+      onClose={() => setCelebrationPreview(false)}/>}
   </div>
 }
 

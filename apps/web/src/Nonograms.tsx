@@ -6,7 +6,6 @@ import type { GamePlayerProps } from './game-web.js'
 import { knownMessage, useT } from './i18n.js'
 import { errorMessage } from './api.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
-import { drawCelebration, type CelebrationVisitor } from './celebrations.js'
 import './nonograms.css'
 
 export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false }:
@@ -18,7 +17,7 @@ GamePlayerProps & { trial?: boolean }) {
   const puzzle = (level as NonogramLevel).content
   const previous = useRef(saved)
   const version = useRef(0)
-  const [celebration, setCelebration] = useState<{ visitor: CelebrationVisitor; elapsedMs: number }>()
+  const [celebration, setCelebration] = useState<number>()
   const persistRef = useRef(persist)
   persistRef.current = persist
   const [display, setDisplay] = useState(saved.elapsedMs)
@@ -49,7 +48,7 @@ GamePlayerProps & { trial?: boolean }) {
     const completed = matchesClues(puzzle, board)
     const next: NonogramSave = { ...previous.current, board, undo, completed, elapsedMs: takeElapsed(),
       completedAt: completed ? Date.now() : undefined }
-    if (completed && !wasCompleted) setCelebration({ visitor: drawCelebration(!trial), elapsedMs: next.elapsedMs })
+    if (completed && !wasCompleted) setCelebration(next.elapsedMs)
     void commit(next)
   }
 
@@ -84,13 +83,13 @@ GamePlayerProps & { trial?: boolean }) {
     }
   }, [saved.completed, showTimer])
 
-  const celebrationStats = celebration ? [
+  const celebrationStats = celebration !== undefined ? [
     { label: t('Grid size'), value: puzzle.rows.length + ' × ' + puzzle.columns.length },
     ...((level as NonogramLevel).difficulty ? [{ label: t('Difficulty'), value: t((level as NonogramLevel).difficulty!) }] : []),
     ...(pack && level.pack ? [{ label: t('Pack'), value: (pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title) +
       ' · ' + t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
   ] : []
-  const celebrationActions: CelebrationAction[] = celebration ? [
+  const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
     ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
@@ -100,8 +99,8 @@ GamePlayerProps & { trial?: boolean }) {
     <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} testMode={testMode}
       leave={exit} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
       problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove}/>
-    {celebration && <CelebrationOverlay visitor={celebration.visitor} reader={reader}
-      result={{ elapsedMs: celebration.elapsedMs, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
+    {celebration !== undefined && <CelebrationOverlay reader={reader}
+      result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
         saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) })
           : t('Your completion has been saved.'),
         saveError: Boolean(problem) && !trial }}

@@ -1,132 +1,90 @@
-import type { CSSProperties } from 'react'
-import type { Message } from './messages.js'
+import { useState, type CSSProperties } from 'react'
 
-export interface CelebrationVisitor {
-  id: string
-  name: Message
-  line: Message
-  palette: { body: string; accent: string; detail: string }
+const budgieColors = {
+  green: { body: '#9bac47', shade: '#73883d', face: '#ffe06a', wing: '#f0c950', ink: '#3d4931', cheek: '#788941' },
+  blue: { body: '#62a9b5', shade: '#408795', face: '#fff0cc', wing: '#ead8b3', ink: '#294e60', cheek: '#508da4' },
+  white: { body: '#faf9f3', shade: '#d9e0e5', face: '#fffdf7', wing: '#e7edf0', ink: '#60778b', cheek: '#8496ad' },
 }
 
-export function celebrationStyleFor(visitor: CelebrationVisitor): CSSProperties {
-  return {
-    '--bird-body': visitor.palette.body,
-    '--bird-accent': visitor.palette.accent,
-    '--bird-detail': visitor.palette.detail,
-  } as CSSProperties
-}
+type BudgieColor = keyof typeof budgieColors
 
-export const celebrationVisitors: readonly CelebrationVisitor[] = [{
-  id: 'budgerigar',
-  name: 'Budgies',
-  line: 'A flutter of applause.',
-  palette: { body: '#7fbf5f', accent: '#f4d35e', detail: '#5a9bb5' },
-}]
+const cereColors = { hen: '#80513e', cock: '#487fb6' }
+type BudgieSex = keyof typeof cereColors
 
-export function drawCelebration(_persist = true): CelebrationVisitor {
-  return celebrationVisitors[0]
-}
-
-interface BudgiePalette {
-  body: string
-  wing: string
-  wingDark: string
-  face: string
-  cheek: string
-  tail: string
-  beak: string
-  eye: string
-  mark: string
-}
-
-const green: BudgiePalette = {
-  body: '#6fa84f', wing: '#3f6f38', wingDark: '#2a4f2c', face: '#e8c84a', cheek: '#5a8fa8',
-  tail: '#2f6a68', beak: '#b98a3a', eye: '#1a241f', mark: '#1a2a1a',
-}
-const blue: BudgiePalette = {
-  body: '#6f9fc0', wing: '#3f6f8a', wingDark: '#2a4f66', face: '#f0eeda', cheek: '#5a8fa8',
-  tail: '#2f5f78', beak: '#b98a3a', eye: '#1a2428', mark: '#1a2a33',
-}
-const yellow: BudgiePalette = {
-  body: '#e0c34a', wing: '#9a8430', wingDark: '#6f5f20', face: '#f5eaa0', cheek: '#5a8fa8',
-  tail: '#7a6a2a', beak: '#b98a3a', eye: '#2a241a', mark: '#4a3a12',
-}
-const white: BudgiePalette = {
-  body: '#e8e6d8', wing: '#b8c4bc', wingDark: '#8a9a90', face: '#f8f6ea', cheek: '#6a94a4',
-  tail: '#96a8a0', beak: '#b98a3a', eye: '#222222', mark: '#5a6a60',
-}
-
-function Budgie({ palette, flap = '.22s' }: { palette: BudgiePalette; flap?: string }) {
-  const style = {
-    '--flap': flap,
-    '--budgie-body': palette.body,
-    '--budgie-wing': palette.wing,
-    '--budgie-wing-dark': palette.wingDark,
-    '--budgie-face': palette.face,
-    '--budgie-cheek': palette.cheek,
-    '--budgie-tail': palette.tail,
-    '--budgie-beak': palette.beak,
-    '--budgie-eye': palette.eye,
-    '--budgie-mark': palette.mark,
-  } as CSSProperties
-  return <g className="budgie" style={style}>
-    <g className="budgie-wing budgie-wing-far">
-      <path d="M118 72 C102 50 80 34 54 26 C64 46 82 64 104 80Z" fill="var(--budgie-wing-dark)"/>
-      <path d="M110 70 C96 52 80 40 62 32 C72 50 86 64 104 78Z" fill="var(--budgie-wing)" opacity=".45"/>
-      <path d="M58 32 C70 48 86 64 102 78" fill="none" stroke="var(--budgie-mark)" strokeWidth="1.7" strokeLinecap="round" opacity=".65"/>
+function Budgie({ color, sex }: { color: BudgieColor; sex: BudgieSex }) {
+  const { body, shade, face, wing, ink, cheek } = budgieColors[color]
+  return <svg className="budgie-art" viewBox="0 0 160 132" aria-hidden="true">
+    <path className="budgie-wing budgie-wing-far"
+      d="M105 65C103 48 93 27 79 19C76 32 81 46 87 55C80 51 74 47 69 43C72 57 87 67 105 65Z"
+      fill={shade}/>
+    <path d="M78 77Q50 80 9 103Q26 105 68 91Q53 101 43 106Q68 103 93 82Z" fill={ink}/>
+    <path d="M59 80C74 69 90 64 105 55C116 48 126 42 136 43C145 43 151 47 151 55C150 71 133 88 109 91C90 95 73 88 59 80Z"
+      fill={body}/>
+    <path d="M59 80C76 79 91 88 110 85C128 83 140 76 148 65C141 82 127 90 109 91C90 95 73 88 59 80Z"
+      fill={shade}/>
+    {color === 'white' && <path d="M67 77C79 68 91 65 105 57C111 59 113 66 109 71C103 79 85 83 67 77Z"
+      fill="#8094a9"/>}
+    <path d="M107 54C118 47 127 42 136 43C145 43 151 47 151 55C150 63 143 68 136 70C126 72 118 64 107 54Z"
+      fill={face}/>
+    <path d="M123 47Q120 51 124 56M117 49Q115 53 118 57M111 53Q110 56 113 59"
+      fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round"/>
+    <g className="budgie-wing">
+      <path d="M104 65C97 48 84 30 66 18Q59 13 50 11Q50 19 60 32Q51 30 45 24Q48 37 63 46Q54 46 50 42Q57 57 78 62Q87 73 104 65Z"
+        fill={wing}/>
+      <path d="M52 16Q62 28 73 30Q70 38 81 42Q79 48 88 53Q73 53 65 45Q72 45 74 42Q61 39 54 32Q62 34 65 33Q56 25 52 16Z" fill={ink}/>
+      <path d="M57 47Q70 54 78 52Q79 58 88 60Q92 63 96 63Q83 68 73 60Q63 58 57 47Z" fill={ink}/>
     </g>
-    <g className="budgie-tail">
-      <path d="M66 92 C48 104 28 120 6 136 C30 126 54 120 76 108Z" fill="var(--budgie-tail)"/>
-      <path d="M62 98 C42 112 22 128 4 142 C30 130 54 122 78 112Z" fill="var(--budgie-wing-dark)"/>
-      <path d="M72 96 C60 112 46 126 30 138 C52 126 70 118 86 110Z" fill="var(--budgie-tail)" opacity=".72"/>
-      <path d="M60 106 C46 118 34 130 24 140 M70 108 C58 120 46 132 36 142" fill="none"
-        stroke="var(--budgie-mark)" strokeWidth="1.3" strokeLinecap="round" opacity=".35"/>
-    </g>
-    <path d="M52 78 C68 60 96 50 124 54 C146 57 158 66 164 76 C170 86 162 96 146 102 C118 112 80 104 60 92 C50 86 48 82 52 78Z" fill="var(--budgie-body)"/>
-    <path d="M82 100 C102 110 128 108 146 98 C132 112 104 116 84 106Z" fill="var(--budgie-face)" opacity=".22"/>
-    <path d="M74 94 C84 91 94 94 100 100 C90 105 80 103 74 98Z" fill="var(--budgie-cheek)" opacity=".8"/>
-    <g className="budgie-wing budgie-wing-near">
-      <path d="M120 76 C104 50 80 30 48 22 C58 46 76 66 98 82 C108 90 118 86 120 76Z" fill="var(--budgie-wing)"/>
-      <path d="M112 78 C100 62 84 48 64 38 C76 56 92 72 110 82Z" fill="var(--budgie-wing-dark)" opacity=".35"/>
-      <path d="M54 30 C64 44 76 58 90 70 M64 26 C74 40 88 54 102 66" fill="none"
-        stroke="var(--budgie-mark)" strokeWidth="2" strokeLinecap="round" opacity=".8"/>
-    </g>
-    <path d="M130 50 C144 44 158 50 164 62 C168 72 166 82 158 88 C148 80 136 78 126 82 C122 72 124 58 130 50Z" fill="var(--budgie-face)"/>
-    <path d="M132 52 C142 47 154 50 161 59 M128 60 C138 55 150 57 158 65" fill="none"
-      stroke="var(--budgie-mark)" strokeWidth="2" strokeLinecap="round" opacity=".72"/>
-    <circle cx="150" cy="64" r="2.6" fill="var(--budgie-eye)"/>
-    <circle cx="150.8" cy="63.2" r=".7" fill="#fffdf2" opacity=".8"/>
-    <ellipse cx="147" cy="80" rx="3.4" ry="2.8" fill="var(--budgie-cheek)"/>
-    <path d="M163 68 C170 69 174 74 169 78 C166 81 162 78 160 74Z" fill="var(--budgie-beak)"/>
-    <path d="M110 104 C108 110 112 114 118 116 M124 106 C122 112 126 116 132 116" fill="none"
-      stroke="var(--budgie-beak)" strokeWidth="2" strokeLinecap="round" opacity=".8"/>
-  </g>
+    <ellipse cx="130" cy="61" rx="4.5" ry="2.7" transform="rotate(-29 130 61)" fill={cheek}/>
+    <circle cx="129" cy="66" r="1.5" fill={ink}/>
+    <circle cx="134" cy="67" r="1.3" fill={ink}/>
+    <circle cx="139" cy="51" r="3.1" fill="#232827"/>
+    <circle cx="140" cy="50" r="1" fill="#fffdf2"/>
+    <path d="M147 56Q154 54 155 58Q155 63 150 65Q151 61 145 59Z" fill="#ce8b37"/>
+    <path d="M144 55Q147 52 151 54Q154 56 150 58Q145 59 144 55Z" fill={cereColors[sex]}/>
+  </svg>
 }
 
-function FlockBird({ className, palette, size, delay, flip = false, flap = '.22s' }: {
-  className: string; palette: BudgiePalette; size: number; delay: string; flip?: boolean; flap?: string
-}) {
-  return <g className={`flock-flight ${className}`} style={{ animationDelay: delay }}>
-    <g className="flock-size" style={{ transform: `scale(${size})` }}>
-      {flip ? <g transform="scale(-1 1)"><g transform="translate(-115 -90)"><Budgie palette={palette} flap={flap}/></g></g>
-        : <g transform="translate(-115 -90)"><Budgie palette={palette} flap={flap}/></g>}
-    </g>
-  </g>
-}
+const flock = [
+  { color: 'blue', sex: 'cock' },
+  { color: 'green', sex: 'hen' },
+  { color: 'white', sex: 'hen' },
+  { color: 'green', sex: 'cock' },
+  { color: 'blue', sex: 'hen' },
+  { color: 'white', sex: 'hen' },
+  { color: 'green', sex: 'cock' },
+] as const
+
+const flightPaths = [
+  { lane: 37, scale: .68, delay: 120, duration: 2070, flap: 245 },
+  { lane: 60, scale: .74, delay: 240, duration: 2000, flap: 262 },
+  { lane: 29, scale: .6, delay: 450, duration: 2060, flap: 226 },
+  { lane: 47, scale: 1, delay: 0, duration: 1880, flap: 282 },
+  { lane: 52, scale: .88, delay: 380, duration: 1960, flap: 254 },
+  { lane: 69, scale: .9, delay: 540, duration: 1910, flap: 293 },
+  { lane: 41, scale: .76, delay: 620, duration: 2030, flap: 238 },
+] as const
 
 export function BudgieFlock() {
-  return <svg className="budgie-art" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-    <FlockBird className="flight-1" palette={green} size={.62} delay="0s" flap=".18s"/>
-    <FlockBird className="flight-2" palette={blue} size={.55} delay=".06s" flip flap=".2s"/>
-    <FlockBird className="flight-3" palette={yellow} size={.46} delay=".14s" flap=".17s"/>
-    <FlockBird className="flight-4" palette={green} size={.38} delay=".1s" flap=".22s"/>
-    <FlockBird className="flight-5" palette={white} size={.36} delay=".2s" flip flap=".19s"/>
-    <FlockBird className="flight-6" palette={blue} size={.32} delay=".28s" flap=".23s"/>
-    <FlockBird className="flight-7" palette={yellow} size={.42} delay=".18s" flap=".19s"/>
-    <FlockBird className="flight-1" palette={green} size={.34} delay=".13s" flap=".22s"/>
-    <FlockBird className="flight-2" palette={blue} size={.32} delay=".19s" flip flap=".24s"/>
-    <FlockBird className="flight-7" palette={white} size={.3} delay=".27s" flip flap=".21s"/>
-  </svg>
+  const [{ birds, direction }] = useState(() => {
+    const birds = [...flock]
+    for (let index = birds.length - 1; index > 0; index--) {
+      const swap = Math.floor(Math.random() * (index + 1))
+      ;[birds[index], birds[swap]] = [birds[swap], birds[index]]
+    }
+    return { birds, direction: Math.random() < .5 ? 'right' : 'left' }
+  })
+  return <div className="celebration-flock" data-direction={direction} aria-hidden="true">
+    {flightPaths.map((path, index) => <div key={path.delay} className="flock-flight" style={{
+      '--lane': `${path.lane}%`,
+      '--size': path.scale,
+      '--flight-delay': `${path.delay}ms`,
+      '--flight-duration': `${path.duration}ms`,
+      '--flap-duration': `${path.flap}ms`,
+      '--flap-phase': `-${path.delay % path.flap}ms`,
+    } as CSSProperties}>
+      <Budgie {...birds[index]}/>
+    </div>)}
+  </div>
 }
 
 type PieceShape = 'leaf' | 'feather' | 'seed' | 'petal'

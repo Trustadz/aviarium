@@ -686,8 +686,7 @@ export const dutch = {
   "View solved puzzle": "Bekijk de opgeloste puzzel",
   "Auto solve": "Automatisch oplossen",
   "Celebration preview": "Viering bekijken",
-  "Celebration previews": "Vieringen bekijken",
-  "Preview each completion celebration without solving a puzzle.": "Bekijk elke viering zonder een puzzel op te lossen.",
+  "Preview puzzle celebration": "Puzzelviering bekijken",
 } as const satisfies Record<typeof apiMessages[keyof typeof apiMessages], string> & Record<string, string>
 
 export type Message = keyof typeof dutch
