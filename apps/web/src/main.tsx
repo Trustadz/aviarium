@@ -1,34 +1,37 @@
 import { liveQuery } from 'dexie'
 import type { Locale } from '../../../packages/game-sdk/src/locales.js'
-import { levelTitle } from './sudoku-copy.js'
 import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, ArrowRight, BookOpen, Check, Heart, History, LogIn, LogOut, Newspaper,
-  Pencil, Search, Settings2, Trash2, Users, WifiOff } from 'lucide-react'
-import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
-import { defaults, type Preferences, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
-import { packLevelId, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { ArrowLeft, ArrowRight, BookOpen, LogIn, LogOut, Newspaper,
+  Pencil, Users, WifiOff } from 'lucide-react'
+import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
+import { packProgress, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
+import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
 import { AccountMenu, ProfileForm } from './AccountSettings.js'
 import { News } from './News.js'
 import { ContinueGames } from './ContinueGames.js'
+import { GameCatalog } from './GameCatalog.js'
+import { GameHistory } from './GameHistory.js'
+import type { WebGame } from './game-web.js'
+import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
 import { registerOffline, useGameDownloads } from './offline.js'
-import { games } from './registry.js'
+import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
-import { PackCards, PackRoadmap, QuickPlay, SudokuHistory, packPath } from './SudokuMenu.js'
-import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, localProfile, saveLocal,
-  sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession } from './storage.js'
+import { PackCards, PackRoadmap, packApi, packPath } from './GamePacks.js'
+import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
+  sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession, type MutationExtras, type ProfilePreferences } from './storage.js'
 import './styles.css'
 
 const featuredGame = games[0]
-const Player = lazy(featuredGame.player)
-const Studio = lazy(() => import('./Studio.js'))
-const PackStudio = lazy(() => import('./PackStudio.js'))
+const mutationExtras: MutationExtras = (game, level) => findGame(game)?.mutationExtras?.(level)
 const Admin = lazy(() => import('./Admin.js'))
 
 type ColorScheme = 'light' | 'dark'
+type PackLoadStatus = 'loading' | 'ready' | 'failed'
+const packGames = games.filter(game => game.packs)
 type ThemePreference = 'auto' | ColorScheme
 
 const themeKey = 'aviarium:theme'
@@ -62,9 +65,10 @@ function AppleInstallHelp() {
   </details>
 }
 
-function setBrowserTheme(element: HTMLElement | null, property: '--surface' | '--sudoku-page') {
+function setBrowserTheme(element: HTMLElement | null, property: '--surface' | '--game-page') {
   if (!element) return
-  const color = getComputedStyle(element).getPropertyValue(property).trim()
+  const styles = getComputedStyle(element)
+  const color = element.classList.contains('pack-palette') ? styles.backgroundColor : styles.getPropertyValue(property).trim()
   if (!color) return
   document.documentElement.style.setProperty('--window-background', color)
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
@@ -159,67 +163,107 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const catalogKey = 'aviarium:catalog:' + profile
   const packIndexKey = 'aviarium:pack-index:' + profile
   const [path, setPath] = useState(location.pathname.replace(/\/$/, '') || '/')
-  const [catalog, setCatalog] = useState<PublishedLevel[]>(() => {
+  const [catalog, setCatalog] = useState<GameLevel[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(catalogKey) ?? 'null')
       return Array.isArray(saved) ? saved : []
     } catch { return [] }
   })
   const [sessions, setSessions] = useState<LocalSession[]>([])
-  const [savedLevels, setSavedLevels] = useState<ReadonlyMap<string, PublishedLevel>>(new Map())
-  const [packs, setPacks] = useState<PublishedPack[]>([])
-  const [packStatus, setPackStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const [savedLevels, setSavedLevels] = useState<ReadonlyMap<string, GameLevel>>(new Map())
+  const [packs, setPacks] = useState<PackRevision[]>([])
+  const latestCatalog = useRef(catalog)
+  const latestPacks = useRef(packs)
+  const [packStatuses, setPackStatuses] = useState<Record<string, PackLoadStatus>>({})
   const [packRetry, setPackRetry] = useState(0)
-  const [viewedPack, setViewedPack] = useState<PublishedPack>()
+  const [viewedPack, setViewedPack] = useState<PackRevision>()
   const [packProblem, setPackProblem] = useState('')
   const [completions, setCompletions] = useState<string[]>([])
-  const [prefs, setPrefs] = useState(defaults)
+  const [prefs, setPrefs] = useState<ProfilePreferences>({})
   const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
   const [manageInstalls, setManageInstalls] = useState(() => localStorage.getItem('aviarium:manage-installs') === 'on')
-  const [active, setActive] = useState<{ session: LocalSession; level: PublishedLevel; head: LocalSession; pack?: PublishedPack }>()
+  const [active, setActive] = useState<{ session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision }>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
-  const [dialog, showDialog] = useState<'display' | 'sudoku' | 'account'>()
+  const [dialog, showDialog] = useState<'display' | 'game' | 'account'>()
   const [changingRole, setChangingRole] = useState(false)
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
   const openGame = games.find(game => path === game.url || path.startsWith(game.url + '/'))
-  const { installed, remove, recordActivity } = useGameDownloads(openGame?.id, online)
-  const canPlay = online || installed.includes(featuredGame.id)
+  const studioMatch = /^\/studio\/([a-z0-9-]+)(\/admin)?$/.exec(path)
+  const studioGame = path === '/studio/packs' ? findGame('sudoku') : studioMatch && findGame(studioMatch[1])
+  const adminPackStudio = Boolean(studioMatch?.[2])
+  const { installed, remove, recordActivity } = useGameDownloads(studioGame?.id ?? openGame?.id, online)
+  const canPlay = (game: WebGame) => online || installed.includes(game.id)
   const saves = useRef<Promise<void>>(Promise.resolve())
   const refreshCatalog = useCallback(async () => {
-    try {
-      const levels = await api<PublishedLevel[]>('/catalog', undefined, accountId)
-      await cacheLevels(levels)
-      localStorage.setItem(catalogKey, JSON.stringify(levels))
-      setCatalog(levels)
-      return levels
-    } catch (error) {
-      if (error instanceof ApiError && [401, 409].includes(error.status)) void refreshSession()
-      return undefined
+    const requests = games.flatMap(game => game.catalog
+      ? [{ game: game.id, promise: api<GameLevel[]>(game.catalog, undefined, accountId) }] : [])
+    const results = await Promise.allSettled(requests.map(request => request.promise))
+    const updated = new Map<string, GameLevel[]>()
+    for (const [index, result] of results.entries()) {
+      const game = requests[index].game
+      if (result.status === 'fulfilled') updated.set(game, result.value.map(level => ({ ...level, game })))
+      else if (result.reason instanceof ApiError && [401, 409].includes(result.reason.status)) void refreshSession()
     }
+    if (!updated.size) return
+    const levels = [
+      ...latestCatalog.current.filter(level => !updated.has(level.game ?? 'sudoku')),
+      ...[...updated.values()].flat(),
+    ]
+    latestCatalog.current = levels
+    setCatalog(levels)
+    try { localStorage.setItem(catalogKey, JSON.stringify(levels)) } catch { /* The current catalog stays available. */ }
+    await cacheLevels(levels).catch(() => undefined)
   }, [accountId, catalogKey, refreshSession])
   const refreshPacks = useCallback(async (signal?: AbortSignal) => {
-    const published = await api<PublishedPack[]>('/packs', { signal }, accountId)
+    if (online) setPackStatuses(Object.fromEntries(packGames.map(game => [game.id, 'loading'])))
+    const results = online ? await Promise.allSettled(packGames.map(game =>
+      api<PackRevision[]>(packApi(game.id), { signal }, accountId))) : []
+    const updated = new Map<string, PackRevision[]>()
+    const statuses = Object.fromEntries(packGames.map((game, index): [string, PackLoadStatus] => {
+      const result = results[index]
+      if (result?.status === 'fulfilled') updated.set(game.id, result.value)
+      return [game.id, result?.status === 'rejected' ? 'failed' : 'ready']
+    }))
+    let cached: PackRevision[] = []
+    if (updated.size < packGames.length) {
+      try {
+        const index: unknown = JSON.parse(localStorage.getItem(packIndexKey) ?? '[]')
+        if (Array.isArray(index) && index.every(key => typeof key === 'string')) {
+          const records = await db.packs.bulkGet(index)
+          cached = records.flatMap(record => record ? [record.pack] : [])
+        }
+      } catch { /* Pack cards can still use in-memory data. */ }
+    }
     if (signal?.aborted) return
+    const liveGames = new Set(latestPacks.current.map(pack => pack.data.game))
+    const published = [
+      ...latestPacks.current.filter(pack => !updated.has(pack.data.game)),
+      ...cached.filter(pack => !updated.has(pack.data.game) && !liveGames.has(pack.data.game)),
+      ...[...updated.values()].flat(),
+    ]
+    latestPacks.current = published
     setPacks(published)
-    setPackStatus('ready')
-    const records = published.map(pack => ({ key: levelKey(pack.id, pack.revision), pack }))
-    void db.packs.bulkPut(records).then(() => {
-      localStorage.setItem(packIndexKey, JSON.stringify(records.map(record => record.key)))
-    }).catch(() => undefined)
-  }, [accountId, packIndexKey])
-  const findPack = useCallback(async (id: string, revision: number, review = false) => {
+    setPackStatuses(statuses)
+    if (updated.size) {
+      const records = published.map(pack => ({ key: levelKey(pack.id, pack.revision), pack }))
+      void db.packs.bulkPut(records).then(() => {
+        localStorage.setItem(packIndexKey, JSON.stringify(records.map(record => record.key)))
+      }).catch(() => undefined)
+    }
+  }, [accountId, online, packIndexKey])
+  const findPack = useCallback(async (game: WebGame, id: string, revision: number, review = false) => {
     const key = levelKey(id, revision)
     const cached = await db.packs.get(key).catch(() => undefined)
-    if (cached && (!review || !online)) return cached.pack
+    if (cached?.pack.data.game === game.id && (!review || !online)) return cached.pack
     if (!online) throw new Error('Connect to open this pack for the first time.')
     try {
-      const { ownedByViewer, ...pack } = await api<PublishedPack>(`/packs/${id}/${revision}`, undefined, accountId)
+      const { ownedByViewer, ...pack } = await api<PackRevision>(`${packApi(game.id)}/${id}/${revision}`, undefined, accountId)
       void db.packs.put({ key, pack }).catch(() => undefined)
       return { ...pack, ownedByViewer }
     } catch (error) {
-      if (cached) return cached.pack
+      if (cached?.pack.data.game === game.id) return cached.pack
       throw error
     }
   }, [accountId, online])
@@ -232,7 +276,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     const levels = await db.levels.bulkGet(levelKeys)
     setSavedLevels(new Map(levels.flatMap(item => item ? [[item.key, item.level]] : [])))
     setSessions(items)
-    setPrefs({ ...defaults, ...settings?.data })
+    setPrefs(settings?.data ?? {})
     setCompletions(completed.map(item => levelKey(item.level, item.revision)))
   }, [profile])
   useEffect(() => {
@@ -252,40 +296,26 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   useEffect(() => { if (online) void refreshCatalog() }, [refreshCatalog, online])
   useEffect(() => {
     const controller = new AbortController()
-    const { signal } = controller
-    async function load() {
-      if (online) {
-        setPackStatus('loading')
-        try { await refreshPacks(signal); return } catch {
-          if (signal.aborted) return
-        }
-      }
-      setPackStatus(online ? 'failed' : 'ready')
-      const index: unknown = JSON.parse(localStorage.getItem(packIndexKey) ?? '[]')
-      if (!Array.isArray(index) || !index.length || !index.every(key => typeof key === 'string')) return
-      const cached = await db.packs.bulkGet(index)
-      if (!signal.aborted) setPacks(current => current.length ? current : cached.flatMap(record => record ? [record.pack] : []))
-    }
-    void load().catch(() => undefined)
+    void refreshPacks(controller.signal)
     return () => controller.abort()
-  }, [online, packIndexKey, packRetry, refreshPacks])
+  }, [packRetry, refreshPacks])
   useEffect(() => {
-    const match = /^\/games\/sudoku\/packs\/([a-z0-9-]+)\/(\d+)$/.exec(path)
-    if (!match) return
+    const match = openGame?.packs && /^\/packs\/([a-z0-9-]+)\/(\d+)$/.exec(path.slice(openGame.url.length))
+    if (!match || !openGame) return
     let cancelled = false
     setViewedPack(undefined); setPackProblem('')
-    void findPack(match[1], Number(match[2]), true).then(pack => {
+    void findPack(openGame, match[1], Number(match[2]), true).then(pack => {
       if (!cancelled) setViewedPack(pack)
     }, error => { if (!cancelled) setPackProblem(errorMessage(error)) })
     return () => { cancelled = true }
-  }, [path, findPack])
+  }, [path, openGame, findPack])
   useEffect(() => { void refreshLocal().catch(error => setNotice(errorMessage(error))) }, [refreshLocal, active])
   useEffect(() => {
     if (!accountId || !online || active) return
     let current = true
     const run = () => {
       if (document.hidden) return
-      void saves.current.catch(() => undefined).then(() => sync(profile)).then(() => {
+      void saves.current.catch(() => undefined).then(() => sync(profile, mutationExtras)).then(() => {
         if (current) { setNetworkNotice(''); void refreshLocal() }
       }, error => {
         if (!current) return
@@ -309,8 +339,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault(); go(next)
   }
-  function record(attempt: NonNullable<typeof active>, data: SudokuSave) {
-    recordActivity(featuredGame.id)
+  function record(attempt: NonNullable<typeof active>, data: GameAttempt) {
+    recordActivity(attempt.game.id)
     const result = saves.current.catch(() => undefined).then(async () => {
       attempt.head = await writeAttempt(attempt.head, data)
       if (attempt.head.id !== attempt.session.id) setNotice('This attempt changed in another tab or device. Your moves are saved in a separate copy.')
@@ -318,37 +348,43 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     saves.current = result
     return result
   }
-  async function open(level: PublishedLevel, existing?: LocalSession, suppliedPack?: PublishedPack) {
-    if (!canPlay) throw new Error('Connect to install Sudoku on this device.')
-    const pack = suppliedPack ?? (level.pack && await findPack(level.pack.id, level.pack.revision))
-    if (pack?.data.rules.inOrder && level.pack && level.pack.stop > 1 &&
-        !completed.has(levelKey(packLevelId(pack.id, level.pack.stop - 1), pack.revision)))
+  async function open(game: WebGame, level: GameLevel, existing?: LocalSession, suppliedPack?: PackRevision) {
+    if (!canPlay(game)) throw new Error(game.connectMessage)
+    const pack = suppliedPack ?? (level.pack && !level.pack.legacyStandalone ? await findPack(game, level.pack.id, level.pack.revision) : undefined)
+    if (!existing && pack && level.pack &&
+        !packProgress(pack, packCompletionEvents(completed, sessions)).playable[level.pack.stop - 1])
       throw new Error('Solve the previous stop in this pack first.')
-    const { createSave } = await featuredGame.player()
-    const session = existing ?? { id: crypto.randomUUID(), revision: 0, data: createSave(level, pack),
+    const session = existing ?? { id: crypto.randomUUID(), revision: 0, data: await game.createAttempt(level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     if (!existing) await saveLocal(session)
-    setNotice(''); setActive({ session, level, head: session, pack }); go('/games/sudoku', true)
+    setNotice(''); setActive({ game, session, level, head: session, pack }); go(game.url, true)
   }
   async function resume(id: string) {
     const session = await db.sessions.get(id)
     if (!session || session.profile !== profile || !isResumable(session)) throw new Error('This saved game is unavailable.')
+    const game = findGame(session.data.game)
+    if (!game) throw new Error('This saved game is unavailable.')
     const stored = await db.levels.get(levelKey(session.data.level, session.data.levelRevision))
     if (!stored) throw new Error('This level revision is not downloaded yet.')
-    await open(stored.level, session)
+    if (stored.level.pack && (!stored.level.pack.legacyStandalone || session.data.packRevision !== undefined)) {
+      const pack = await findPack(game, stored.level.pack.id, session.data.packRevision ?? stored.level.pack.revision)
+      const level = game.packs?.levels(pack).find(item => item.id === session.data.level && item.revision === session.data.levelRevision)
+      if (level) { await open(game, level, session, pack); return }
+    }
+    await open(game, stored.level, session)
   }
   async function deleteAttempt(id: string) {
     await saves.current.catch(() => undefined)
     await deleteSavedGame(profile, id)
   }
   function perform(task: () => Promise<unknown>) { void task().catch(error => setNotice(errorMessage(error))) }
-  function changePrefs(patch: Partial<Preferences>) {
+  function changePrefs(patch: Partial<ProfilePreferences>) {
     setPrefs(current => ({ ...current, ...patch }))
     perform(async () => {
       try { await updatePreferences(profile, patch) }
       catch (error) { await refreshLocal().catch(() => undefined); throw error }
-      if (account && !active && online) await sync(profile)
+      if (account && !active && online) await sync(profile, mutationExtras)
     })
   }
   function changeTestRole(role: TestRole) {
@@ -366,24 +402,19 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       }
     })
   }
-  const matches = games.filter(game => (!reader || game.eReader) &&
-    (category !== 'Favorites' || prefs.favorite) &&
-    (category !== 'Logic' || game.tags.includes('Logic')) &&
-    (game.title + ' ' + game.tags.map(tag => knownMessage(t, tag)).join(' ')).toLowerCase().includes(query.trim().toLowerCase()))
   const continueCards = sessions.flatMap(session => {
     if (!isResumable(session)) return []
     const game = games.find(game => game.id === session.data.game)
     if (!game || (reader && !game.eReader)) return []
     const level = savedLevels.get(levelKey(session.data.level, session.data.levelRevision))
-    const { entries } = session.data.board
     return [{
       id: session.id,
       game: game.id,
-      title: level ? levelTitle(t, level) : game.title,
-      details: [game.title, level && t(level.difficulty), session.parentId && t("Conflict copy")].filter(Boolean).join(' · '),
-      progress: t('{filled} of {total} cells filled', { filled: entries.filter(Boolean).length, total: entries.length }),
-      preview: <game.Preview grid={level?.grid} entries={entries}/>,
-      canResume: Boolean(level) && (online || installed.includes(game.id)),
+      title: level ? game.levelTitle(t, level) : game.title,
+      details: [game.title, level && game.packs?.detail(t, level), session.parentId && t("Conflict copy")].filter(Boolean).join(' · '),
+      progress: game.progress(t, session.data),
+      preview: game.preview(level, session.data),
+      canResume: Boolean(level) && canPlay(game),
     }]
   })
   function continueRow(gameId?: string) {
@@ -395,7 +426,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           await deleteAttempt(id)
           await refreshLocal()
           if (accountId && online) {
-            await sync(profile)
+            await sync(profile, mutationExtras)
             await refreshLocal()
           }
         })
@@ -404,37 +435,42 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const completed = new Set([...completions, ...sessions.filter(item => item.data.completed)
     .map(item => levelKey(item.data.level, item.data.levelRevision))])
 
-  const editableGames = account && online ? games.filter(game =>
+  const editableGames = account ? games.filter(game =>
     account.role === 'admin' || account.editorGames.includes(game.id)) : []
-  const canEditSudoku = Boolean(account && editableGames.some(game => game.id === featuredGame.id))
-  const preview = catalog.find(level => level.id === 'first-light') ?? catalog[0]
+  const editors = editableGames.filter(game => game.Studio)
   const inLibrary = path === '/'
+  const inStudioCatalog = path === '/studio' && editors.length > 0
+  const availableGames = inStudioCatalog ? editors : games
+  const catalogCategories = ['All games', ...new Set(games.flatMap(game => game.tags)), 'Favorites']
+  const catalogFeature = featuredGame
+  const catalogPage = (game: (typeof games)[number]) => inStudioCatalog ? '/studio/' + game.id : game.url
   const inNews = path === '/news'
-  const inStudio = path === '/studio' || path === '/studio/sudoku' || path === '/studio/packs'
+  const inStudio = path === '/studio' || Boolean(studioGame)
   const inAdmin = path === '/admin'
   const inAbout = path === '/about'
   const inGame = Boolean(openGame)
   const inShell = !inGame
-  const surface = inGame ? 'sudoku' : inStudio ? 'studio' : 'library'
+  const playing = active && path === active.game.url ? active : undefined
+  const playPack = playing?.pack
+  const surface = inGame ? 'game' : inStudio ? 'studio' : 'library'
   const app = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => setBrowserTheme(app.current, surface === 'sudoku' ? '--sudoku-page' : '--surface'),
-    [reader, surface, theme])
-  const sharedPuzzle = new URLSearchParams(location.search)
-  const sharedId = sharedPuzzle.get('puzzle')
-  const sharedRevision = sharedPuzzle.get('revision')
+  const gameSurface = useRef<HTMLElement>(null)
+  useLayoutEffect(() => setBrowserTheme(openGame ? gameSurface.current : app.current, surface === 'game' ? '--game-page' : '--surface'),
+    [reader, surface, theme, openGame?.id, playPack?.data.theme])
+  const settings = openGame?.settings
 
   return <div ref={app} className={'app' + (reader ? ' reader' : '') + (inShell ? ' app-shell' : '')} data-theme={theme} data-surface={surface}>
     {inShell && <>
       <header className="site-header"><div className="frame header-frame">
         <a className="brand" href="/" aria-label={t("Aviarium home")} onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/>
-          <span>{inStudio ? t("Studio") : inNews ? t("News") : inAdmin ? t("Administration") : inAbout ? t("About") : 'Aviarium'}</span>
+          <span>{studioGame ? t('{game} Studio', { game: studioGame.title }) : inStudio ? t("Studio") : inNews ? t("News") : inAdmin ? t("Administration") : inAbout ? t("About") : 'Aviarium'}</span>
         </a>
         {!online && <span className="offline-tag"><WifiOff size={16}/>{" "}{t("Offline")}</span>}
       </div></header>
       <div className="app-rail">
         <nav aria-label={t("Main navigation")} className="app-destinations">
           <a href="/" aria-current={inLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
-          {editableGames.length > 0 && <a href="/studio" aria-current={inStudio ? 'page' : undefined}
+          {editors.length > 0 && <a href="/studio" aria-current={inStudio ? 'page' : undefined}
             onClick={event => link(event, '/studio')}><Pencil size={21}/><span>{t("Studio")}</span></a>}
           <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>{t("News")}</span></a>
         </nav>
@@ -442,97 +478,72 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
       </div>
     </>}
-    <main className={(inGame ? 'game-frame' : 'frame main-frame') + (inGame ? ' sudoku-theme' : '')}>
+    <main ref={gameSurface} className={(inGame ? 'game-frame' : 'frame main-frame') + (openGame || studioGame ? ' game-theme ' + (openGame || studioGame)?.theme : '') + (studioGame ? ' studio-game-canvas' : '') +
+      (playPack ? ` pack-palette pack-${playPack.data.theme}` : '')}>
       {notice && <div className="notice" role="alert">{knownMessage(t, notice)}<button onClick={() => setNotice('')}>{t("Dismiss")}</button></div>}
       {inLibrary && networkNotice && <p role="status" className="network-notice">{t("Sync delayed.")}{" "}{knownMessage(t, networkNotice)}</p>}
       {inLibrary && online && activate && <div className="notice">{t("An Aviarium update is ready.")}<button onClick={activate}>{t("Reload")}</button></div>}
       <Suspense fallback={<p role="status">{t("Loading…")}</p>}>
-      {inLibrary ? <>
-        {continueRow()}
-        <section className="hero">
+      {inLibrary || inStudioCatalog ? <>
+        {inLibrary && continueRow()}
+        {inLibrary && <section className="hero">
           <div className="hero-content">
             <p className="hero-kicker"><span/>{" "}{t("PUZZLE LIBRARY")}</p>
             <h1>Aviarium</h1>
             <p>{t('A quiet place to play. Find your next puzzle or pick up where you left off.')}</p>
             <div className="hero-actions">
-              <button className="primary hero-action" onClick={() => go('/games/sudoku')}>{t("Explore Sudoku")}{" "}<ArrowRight size={17}/></button>
+              <button className="primary hero-action" onClick={() => go(catalogPage(catalogFeature))}>
+                {t('Explore {game}', { game: catalogFeature.title })}{" "}<ArrowRight size={17}/>
+              </button>
             </div>
           </div>
-          {preview && <div className={'hero-art ' + featuredGame.theme} aria-hidden="true"><featuredGame.Preview grid={preview.grid}/></div>}
-        </section>
-        <section className="library">
-          <div className="section-heading"><div><h2>{t("Game library")}</h2><p>{t("Browse by category or open your favorites.")}</p></div>
-            <label className="search"><Search size={18}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t("Search games")} aria-label={t("Search games")}/></label>
-          </div>
-          <div className="tabs" aria-label={t("Game categories")}>{['All games', 'Logic', 'Favorites'].map(name =>
-            <button key={name} aria-pressed={name === category} onClick={() => setCategory(name)}>{knownMessage(t, name)}</button>)}</div>
-          <div className="game-list">{matches.map(game => <article className="game-card" key={game.id}>
-            <a className={'game-card-image ' + game.theme} href={game.url} onClick={event => link(event, game.url)} aria-label={t('Open {game}', { game: game.title })}>{preview && <game.Preview grid={preview.grid}/>}</a>
-            <div className="game-card-body">
-              <div className="card-title"><h3><a href={game.url} onClick={event => link(event, game.url)}>{game.title}</a></h3>
-              <button className="icon-button" aria-label={prefs.favorite ? t("Remove Sudoku from favorites") : t("Add Sudoku to favorites")}
-                aria-pressed={prefs.favorite} onClick={() => changePrefs({ favorite: !prefs.favorite })}><Heart size={19} fill={prefs.favorite ? 'currentColor' : 'none'}/></button></div>
-              <p>{t(game.description)}</p>
-              <div className="card-footer"><span className="badge">{t("Logic")}</span><span className="badge e-ink"><BookOpen size={13}/>{" "}{t("E-reader")}</span>
-                <a className="text-button" href={game.url} onClick={event => link(event, game.url)}>{t("Play")}{" "}<ArrowRight size={16}/></a></div>
-              {manageInstalls && installed.includes(game.id) && <div className="game-download">
-                <span><Check size={15}/>{" "}{t("Installed on this device")}</span>
-                <button className="secondary" aria-label={t('Remove {game} download', { game: game.title })}
-                  onClick={() => perform(() => remove(game.id))}><Trash2 size={15}/>{" "}{t("Remove download")}</button>
-              </div>}
-            </div>
-          </article>)}</div>
-          {!matches.length && <p className="empty">{t("No games match this view.")}</p>}
-        </section></>
-      : path === '/games/sudoku' && active ? <Player key={active.session.id} session={active.session} level={active.level} pack={active.pack} preferences={prefs}
-        reader={reader} persist={data => record(active, data)} openSettings={() => showDialog('sudoku')}
+          <div className={'hero-art ' + catalogFeature.theme} aria-hidden="true">{catalogFeature.preview(catalogFeature.sample?.(catalog))}</div>
+        </section>}
+        <GameCatalog studio={inStudioCatalog} games={availableGames.filter(game => !reader || game.eReader).map(game => ({
+          ...game, description: t(inStudioCatalog ? game.studioDescription ?? game.description : game.description), href: catalogPage(game),
+          artClass: game.theme, art: game.preview(game.sample?.(catalog)),
+          favorite: Boolean(game.favorite && prefs[game.favorite]),
+          toggleFavorite: game.favorite ? () => changePrefs({ [game.favorite!]: !prefs[game.favorite!] }) : undefined,
+          removeDownload: manageInstalls && installed.includes(game.id) ? () => perform(() => remove(game.id)) : undefined,
+        }))} categories={catalogCategories} category={category} setCategory={setCategory} query={query} setQuery={setQuery} link={link}/>
+      </>
+      : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
+        preferences={prefs} reader={reader} persist={data => record(playing, data)}
+        openSettings={settings ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
           try { await refreshLocal() }
-          finally { go(active.pack ? packPath(active.pack) : '/games/sudoku') }
+          finally {
+            const pack = playing.pack && (packs.find(item => item.id === playing.pack?.id && item.revision >= playing.pack.revision) ?? playing.pack)
+            go(pack ? packPath(pack) : playing.game.url)
+          }
         })}
-        reset={() => perform(async () => { await deleteAttempt(active.head.id); await open(active.level, undefined, active.pack) })}/>
-      : openGame && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
+        reset={() => perform(async () => { await deleteAttempt(playing.head.id); await open(playing.game, playing.level, undefined, playing.pack) })}/>
+      : openGame?.guide && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
         sections={openGame.guide} leave={event => link(event, openGame.url)}/>
-      : path === '/games/sudoku/history' ? <SudokuHistory sessions={sessions} levels={savedLevels} packs={packs}
-        leave={() => go('/games/sudoku')} replay={level => perform(() => open(level))} canPlay={canPlay}/>
-      : path.startsWith('/games/sudoku/packs/') ? viewedPack && packPath(viewedPack) === path
-        ? <PackRoadmap pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay}
-          canExport={Boolean(canEditSudoku && (account?.role === 'admin' || viewedPack.ownedByViewer))}
-          leave={() => go('/games/sudoku')} play={level => perform(() => {
-            const existing = sessions.find(item => isResumable(item) && item.data.level === level.id && item.data.levelRevision === level.revision)
-            return existing ? resume(existing.id) : open(level, undefined, viewedPack)
+      : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
+        leave={() => go(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
+      : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && packPath(viewedPack) === path
+        ? <PackRoadmap presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
+          canExport={Boolean(online && editableGames.includes(openGame) && (account?.role === 'admin' || viewedPack.ownedByViewer))}
+          leave={() => go(openGame.url)} play={level => perform(() => {
+            const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
+              item.data.level === level.id && item.data.levelRevision === level.revision)
+            return existing ? resume(existing.id) : open(openGame, level, undefined, viewedPack)
           })}/>
-        : <section className="catalog"><button className="text-button" onClick={() => go('/games/sudoku')}>{t("Sudoku menu")}</button>
-          <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t("Loading pack…")}</p></section>
-      : path === '/games/sudoku' ? <section className="catalog sudoku-menu" aria-labelledby="game-menu-title">
-        <div className="game-menu-heading">
-          <div className="game-navigation">
-            <button className="text-button back" aria-label={t("Exit to library")} onClick={() => go('/')}><ArrowLeft size={17}/>{" "}{t("Library")}</button>
-            <div className="sudoku-nav-tools">
-              <button className="text-button" onClick={() => go('/games/sudoku/history')}><History size={17}/>{" "}{t("History")}</button>
-              <button className="icon-button" aria-label={t("Sudoku settings")} title={t("Sudoku settings")} onClick={() => showDialog('sudoku')}><Settings2 size={18}/></button>
-            </div>
-          </div>
-          <div className="game-navigation">
-            <h1 id="game-menu-title">Sudoku</h1>
-            <a className="text-button" href={featuredGame.url + '/how-to'}
-              onClick={event => link(event, featuredGame.url + '/how-to')}><BookOpen size={17}/>{" "}{t("How to play")}</a>
-          </div>
-        </div>
-        {continueRow(featuredGame.id)}
-        {!canPlay && <p className="notice">{t('Connect to install Sudoku on this device.')}</p>}
-        {sharedId && sharedRevision && <button className="secondary" disabled={!online} onClick={() => perform(async () => {
-          const level = await api<PublishedLevel>(`/sudoku/level/${encodeURIComponent(sharedId)}/${encodeURIComponent(sharedRevision)}`, undefined, accountId)
-          await open(level)
-        })}>{t("Play shared puzzle")}</button>}
-        <QuickPlay canPlay={canPlay} profile={profile} generate={async (difficulty, seed, version) => {
-          const { createQuickPlayLevel } = await featuredGame.player()
-          await open(await createQuickPlayLevel(difficulty, seed, version))
-        }}/>
-        <PackCards packs={packs} completed={completed} status={packStatus}
-          retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>
-      </section>
+        : <section className="catalog"><button className="text-button" onClick={() => go(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
+          <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
+      : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => go('/')}
+        history={openGame.history ? () => go(openGame.url + '/history') : undefined}
+        settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
+        guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
+        {continueRow(openGame.id)}
+        {!canPlay(openGame) && <p className="notice">{t(openGame.connectMessage)}</p>}
+        {openGame.menu?.({ canPlay: canPlay(openGame), online, profile, params: new URLSearchParams(location.search),
+          launch: level => open(openGame, level), perform })}
+        {openGame.packs && <PackCards presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
+          completed={completed} status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>}
+      </GameMenu>
       : inNews ? <News account={account} online={online}/>
       : inAbout ? <section className="panel about-page" aria-labelledby="about-heading">
         <h1 id="about-heading">{t("About Aviarium")}</h1>
@@ -540,45 +551,25 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         <p>{t('Aviarium is a self-hosted puzzle library. Start with Sudoku, play the same published puzzles as everyone else, and pick up where you left off. You can download games to play offline, and creators can use Studio to build and share their own puzzles.')}</p>
         <a className="secondary" href="https://github.com/Trustadz/aviarium">{t("Aviarium on GitHub")}</a>
       </section>
-      : inStudio && account && editableGames.length > 0 ? path === '/studio' ? <section className="creator-home" aria-labelledby="studio-heading">
-        <h1 id="studio-heading">{t("Studio")}</h1>
-        <div className="game-list">{editableGames.map(game => <article className="game-card" key={game.id}>
-          <a className={'game-card-image ' + game.theme} aria-label={t('Create for {game}', { game: game.title })}
-            href={'/studio/' + game.id} onClick={event => link(event, '/studio/' + game.id)}>
-            {preview && <game.Preview grid={preview.grid}/>}
-          </a>
-          <div className="game-card-body">
-            <h2>{game.title}</h2>
-            <a className="primary" href={'/studio/' + game.id} onClick={event => link(event, '/studio/' + game.id)}>
-              {t("Open workspace")}{" "}<ArrowRight size={16}/>
-            </a>
-          </div>
-        </article>)}</div>
-      </section> : canEditSudoku ? <>
-        <div className="studio-tools">
-          <label>{t("Studio game")}<select value={featuredGame.id} onChange={event => go(event.target.value ? '/studio/' + event.target.value : '/studio')}>
-            <option value="">{t("All games")}</option>
-            {editableGames.map(game => <option value={game.id} key={game.id}>{game.title}</option>)}
-          </select></label>
-          <div className="tabs" aria-label={t("Studio sections")}>
-            <button aria-pressed={path === '/studio/sudoku'} onClick={() => go('/studio/sudoku')}>{t("Puzzles")}</button>
-            <button aria-pressed={path === '/studio/packs'} onClick={() => go('/studio/packs')}>{t("Packs")}</button>
-          </div>
-        </div>
-        {path === '/studio/sudoku' ? <Studio key={account.id} account={account} onPublish={() => { void refreshCatalog() }}/>
-          : <PackStudio key={account.id} account={account} levels={catalog} onPublish={() => perform(() => refreshPacks())}/>}
-      </> : <section className="panel"><h1>{t("Access required")}</h1><a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t("Studio games")}</a></section>
+      : studioGame && account && editors.includes(studioGame) ? studioGame.Studio && (!adminPackStudio || (online && account.role === 'admin')) ? <>
+        <studioGame.Studio key={account.id + ':' + studioGame.id + (adminPackStudio ? ':admin' : '')} account={account} online={online}
+          admin={adminPackStudio} reader={reader} theme={theme} packs={packs.filter(pack => pack.data.game === studioGame.id)}
+          leave={() => go(adminPackStudio ? '/admin' : '/studio')} onPublish={() => perform(() => refreshPacks())}/>
+      </> : <section className="panel"><h1>{t('Access required')}</h1>
+        <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio games')}</a></section>
+
       : inAdmin && online && account?.role === 'admin' ? <>
-        <Admin key={account.id} account={account} onCatalogChange={() => { void refreshCatalog() }}/>
+        <Admin key={account.id} account={account} openPackStudio={game => go('/studio/' + game + '/admin')} onCatalogChange={() => { void refreshCatalog() }}/>
       </>
       : <section className="panel"><h1>{t("Access required")}</h1><p>{t("Sign in with an authorized account.")}</p><button className="secondary" onClick={() => go('/')}>{t("Return to library")}</button></section>}
       </Suspense>
     </main>
     {dialog && <div className="settings-overlay" onClick={() => showDialog(undefined)}>
-      <section className={'settings-panel' + (dialog === 'sudoku' ? ' sudoku-theme' : '')}
+      <section className={'settings-panel' + (dialog === 'game' && openGame ? ' game-theme ' + openGame.theme +
+        (playPack ? ` pack-palette pack-${playPack.data.theme}` : '') : '')}
         role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={event => event.stopPropagation()}>
         <div className="section-heading"><h2 id="settings-title">
-          {dialog === 'display' ? t('Device settings') : dialog === 'sudoku' ? t('Sudoku settings')
+          {dialog === 'display' ? t('Device settings') : dialog === 'game' && settings ? t(settings.title)
             : t(account ? 'Account settings' : 'Player settings')}
         </h2><button autoFocus className="secondary" onClick={() => showDialog(undefined)}>{t("Close")}</button></div>
         {dialog === 'display' && <>
@@ -603,10 +594,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             </select></label>
           </>}
         </>}
-        {dialog === 'sudoku' && ([['mistakes', t("Highlight conflicts")], ['timer', t("Show timer")], ['hints', t("Enable hints")],
-          ['autoNotes', t("Show Auto notes button")], ['autoNoteDeletion', t("Automatically remove conflicting notes")]] as const)
-          .map(([key, label]) => <label className="setting-row" key={key}>{label}<input type="checkbox" checked={prefs[key]}
-            onChange={event => changePrefs({ [key]: event.target.checked })}/></label>)}
+        {dialog === 'game' && settings?.toggles.map(setting => <label className="setting-row" key={setting.key}>
+          {t(setting.label)}<input type="checkbox" checked={Boolean(prefs[setting.key] ?? setting.default)}
+            onChange={event => changePrefs({ [setting.key]: event.target.checked })}/>
+        </label>)}
         {dialog === 'account' && <>
           <LanguageSelector/>
           {languageError && <p role="status" className="error">{knownMessage(t, languageError)}</p>}
@@ -618,13 +609,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
               event.preventDefault()
               perform(async () => {
                 await saves.current
-                await sync(profile).catch(() => undefined)
+                await sync(profile, mutationExtras).catch(() => undefined)
                 location.assign('/api/auth/login?switch=1')
               })
             }}><Users size={17}/>{" "}{t("Switch account")}</a>
             <button className="secondary" onClick={() => perform(async () => {
               await saves.current
-              await sync(profile).catch(() => undefined)
+              await sync(profile, mutationExtras).catch(() => undefined)
               await api('/auth/logout', { method: 'POST' }, account.id)
               go('/')
               signOut()

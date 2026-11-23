@@ -1,14 +1,14 @@
+import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
 import { errorMessage } from './api.js'
 import { levelTitle, packTitle, technique } from './sudoku-copy.js'
 import type { Message } from './messages.js'
 import { knownMessage, useT } from './i18n.js'
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { ArrowLeft, Eraser, Heart, Lightbulb, Pause, Pencil, Play, Redo2, RotateCcw, Settings2, Timer, Undo2 } from 'lucide-react'
-import type { PublishedLevel } from '../../../packages/game-sdk/src/index.js'
 import type { Preferences, SudokuSave } from '../../../packages/sudoku/src/contracts.js'
-import { bit, candidateMasks, column, conflicts, row, rules, type Board } from '../../../packages/sudoku/src/rules.js'
+import { bit, candidateMasks, column, conflicts, row, rules, rulesFor, type Board } from '../../../packages/sudoku/src/rules.js'
 import { logicalHint, type LogicalStep } from '../../../packages/sudoku/src/logic.js'
-import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { effectivePackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { validate } from '../../../packages/sudoku/src/solver.js'
 import { Grid } from './Grid.js'
 import { PuzzleShare } from './SudokuMenu.js'
@@ -17,14 +17,15 @@ import type { LocalSession } from './storage.js'
 export { createQuickPlayLevel } from './quick-play.js'
 
 export function createSave(level: PublishedLevel, pack?: PublishedPack): SudokuSave {
-  return { game: 'sudoku', level: level.id, levelRevision: level.revision, ruleset: 1, format: 1,
+  return { game: 'sudoku', level: level.id, levelRevision: level.revision, ruleset: level.ruleset === 2 ? 2 : 1, format: 1,
     board: rules.create(Array.from(level.grid, Number)), undo: [], redo: [], elapsedMs: 0, completed: false,
-    lives: pack?.data.rules.lives ?? undefined }
+    packRevision: pack?.revision,
+    lives: pack && level.pack ? effectivePackRules(pack, level.pack.stop).lives ?? undefined : undefined }
 }
 
 interface Props {
-  session: LocalSession; level: PublishedLevel; preferences: Preferences; reader: boolean; pack?: PublishedPack
-  persist: (data: SudokuSave) => Promise<void>; leave: () => void; reset: () => void; openSettings: () => void
+  session: LocalSession<SudokuSave>; level: PublishedLevel; preferences: Preferences; reader: boolean; pack?: PublishedPack
+  persist: (data: SudokuSave) => Promise<void>; leave: () => void; reset: () => void; openSettings?: () => void; trial?: boolean
 }
 type Hint = { cell?: number } & ({ stage: 1 | 2 | 3; step: LogicalStep } | { stage?: never; message: Message })
 
@@ -32,18 +33,21 @@ function digitUsedUp(entries: readonly number[], digit: number) {
   return entries.filter(value => value === digit).length >= 9
 }
 
-export default function Player({ session, level, preferences, reader, pack, persist, leave, reset, openSettings }: Props) {
+export default function Player({ session, level, preferences, reader, pack, persist, leave, reset, openSettings, trial = false }: Props) {
   const t = useT()
   const givens = useMemo(() => Array.from(level.grid, Number), [level.grid])
-  const lifeLimit = pack?.data.rules.lives
-  const showHints = preferences.hints && pack?.data.rules.hints !== false
-  const showAutoNotes = preferences.autoNotes && pack?.data.rules.autoNotes !== false
-  const showTimer = pack?.data.rules.timeTrial || (preferences.timer && !reader)
+  const packRules = pack && level.pack ? effectivePackRules(pack, level.pack.stop) : undefined
+  const diagonal = level.ruleset === 2
+  const boardRules = rulesFor(diagonal)
+  const lifeLimit = packRules?.lives
+  const showHints = preferences.hints && packRules?.hints !== false
+  const showAutoNotes = preferences.autoNotes && packRules?.autoNotes !== false
+  const showTimer = packRules?.timeTrial || (preferences.timer && !reader)
   const solution = useMemo(() => {
     if (!lifeLimit) return undefined
-    const result = validate(givens, 65_000)
+    const result = validate(givens, 65_000, diagonal)
     return result.kind === 'unique' ? result.solution : undefined
-  }, [givens, lifeLimit])
+  }, [givens, lifeLimit, diagonal])
   const [data, setData] = useState(session.data)
   const latest = useRef(data)
   const [selected, select] = useState(Math.max(givens.indexOf(0), 0))
@@ -112,7 +116,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
       setLostLife(undefined)
     }
     if (!note && lockedDigit && digitUsedUp(board.entries, lockedDigit)) setLockedDigit(0)
-    const completed = rules.verify(givens, board.entries)
+    const completed = boardRules.verify(givens, board.entries)
     void snapshot({ ...current, board, undo: [...current.undo, current.board].slice(-40), redo: [],
       completed, completedAt: completed ? Date.now() : undefined })
   }
@@ -127,11 +131,11 @@ export default function Player({ session, level, preferences, reader, pack, pers
       void snapshot({ ...current, lives })
       return
     }
-    saveBoard(rules.apply(givens, board, { cell, digit, note, autoNoteDeletion: preferences.autoNoteDeletion }))
+    saveBoard(boardRules.apply(givens, board, { cell, digit, note, autoNoteDeletion: preferences.autoNoteDeletion }))
   }
   function autoNotes() {
     const board = latest.current.board
-    const notes = candidateMasks(board.entries)
+    const notes = candidateMasks(board.entries, diagonal)
     if (notes.some((mask, cell) => mask !== board.notes[cell])) saveBoard({ ...board, notes })
   }
   function startPress(event: PointerEvent<HTMLButtonElement>, digit: number) {
@@ -162,7 +166,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
     setLostLife(undefined)
     if (!note && lockedDigit && digitUsedUp(board.entries, lockedDigit)) setLockedDigit(0)
     const other = direction === 'undo' ? 'redo' : 'undo'
-    const completed = rules.verify(givens, board.entries)
+    const completed = boardRules.verify(givens, board.entries)
     void snapshot({ ...current, board, [direction]: source.slice(0, -1), [other]: [...current[other], current.board].slice(-40),
       completed, completedAt: completed ? Date.now() : undefined })
   }
@@ -172,17 +176,17 @@ export default function Player({ session, level, preferences, reader, pack, pers
       return
     }
     const board = latest.current.board.entries
-    const bad = conflicts(board)
+    const bad = conflicts(board, diagonal)
     if (bad.size) {
       setHint({ message: "Check the highlighted conflict before requesting a hint.", cell: [...bad][0] })
       return
     }
-    const result = validate(board, 5_000)
+    const result = validate(board, 5_000, diagonal)
     if (result.kind === 'unsolvable') {
       setHint({ message: "The current entries cannot lead to a solution. Try undoing a move." })
       return
     }
-    const step = logicalHint(board, excluded.current)
+    const step = logicalHint(board, excluded.current, diagonal)
     if (step) {
       setHint({ step, stage: 1 })
     } else setHint({ message: 'No supported logical deduction was found for this board.' })
@@ -208,7 +212,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
       ? t('Place {digit} in {cell}.', { digit: filledValue, cell: cellText(index) })
       : t('Eliminate {digit} from {cell}.', { digit: eliminatedCandidate!, cell: cellText(index) })).join(' ')
     const techniqueText = t('Try the {technique} technique.', { technique: technique(t, step) })
-    const explanation = step.id === 'hidden-single' ? t('Find a digit that can fit in only one cell of a row, column, or box.')
+    const explanation = step.diagonal ? t('Find a digit that can fit in only one cell of a diagonal.') : step.id === 'hidden-single' ? t('Find a digit that can fit in only one cell of a row, column, or box.')
       : step.id === 'naked-single' || step.id === 'open-singles' ? t('Find an empty cell with just one possible digit.')
         : step.type === 'elimination' ? t('Find the pattern to identify which candidates it rules out.') : undefined
     const prompt = current.stage === 1 ? t('Press Hint again to highlight the cell.')
@@ -221,8 +225,8 @@ export default function Player({ session, level, preferences, reader, pack, pers
   return <div className={pack ? `play-page pack-play pack-${pack.data.theme}` : 'play-page'}>
     {packArt && <img className="pack-play-art" alt="" src={packArt}/>}
     <div className="game-navigation">
-      <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/>{" "}{t("Game menu")}</button>
-      <button className="icon-button" title={t("Sudoku settings")} aria-label={t("Sudoku settings")} onClick={openSettings}><Settings2 size={18}/></button>
+      <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/>{" "}{t(trial ? "Back to editor" : "Game menu")}</button>
+      {openSettings && <button className="icon-button" title={t("Sudoku settings")} aria-label={t("Sudoku settings")} onClick={openSettings}><Settings2 size={18}/></button>}
     </div>
     <div className="play-heading"><div><div className="eyebrow">{pack ? packTitle(t, pack) : 'Sudoku'}</div><h1>{levelTitle(t, level)}</h1></div>
       <div className="play-meta"><span className={'badge ' + level.difficulty.toLowerCase()}>{t(level.difficulty)}</span>
@@ -235,12 +239,12 @@ export default function Player({ session, level, preferences, reader, pack, pers
           : <Grid entries={data.board.entries} notes={data.board.notes} givens={givens} selected={selected} select={select}
             enter={move} activate={cell => { select(cell); if (lockedDigit) move(lockedDigit, cell) }}
             highlightedDigit={lockedDigit || data.board.entries[selected]} hintCell={visibleHint?.cell} hintCells={hintCells}
-            errors={preferences.mistakes ? conflicts(data.board.entries) : undefined} disabled={finished}/>}
+            errors={preferences.mistakes ? conflicts(data.board.entries, diagonal) : undefined} diagonal={diagonal} disabled={finished}/>}
       </div>
       <div className="play-controls">
         {finished ? <section className="panel success">
           <h2>{gameOver ? t("Out of lives") : t("Puzzle solved")}</h2>
-          <p>{gameOver ? t("Start a fresh attempt to try this stop again.") : t("Your completion has been saved.")}</p>
+          <p>{gameOver ? t("Start a fresh attempt to try this stop again.") : t(trial ? "Test complete" : "Your completion has been saved.")}</p>
           <button className="primary" onClick={gameOver ? reset : leave}>{gameOver ? t("Retry puzzle") : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
           {!gameOver && <PuzzleShare level={level}/>}
         </section>

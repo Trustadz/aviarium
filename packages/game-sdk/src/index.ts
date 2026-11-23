@@ -24,17 +24,16 @@ export type Validation<Solution> =
 
 export const difficulties = ['Easy', 'Medium', 'Hard', 'Extreme', 'Genius'] as const
 export type Difficulty = typeof difficulties[number]
-export interface PublishedLevel {
+export interface GameLevel {
+  game?: string
   id: string
   revision: number
   ruleset: number
   title: string
-  grid: string
-  difficulty: Difficulty
   source: 'Built-in' | 'Generated' | 'Creator'
   seed?: string | null
   generatorVersion?: number | null
-  pack?: { id: string; revision: number; stop: number }
+  pack?: { id: string; revision: number; stop: number; legacyStandalone?: boolean }
 }
 
 export interface SaveEnvelope {
@@ -45,4 +44,4 @@ export interface SaveEnvelope {
   format: number
 }
 
-export const savedGameLimit = 5
+export { savedGameLimit } from './progress.js'

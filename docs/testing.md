@@ -24,3 +24,5 @@ AVIARIUM_BROWSER_TEST_DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432
 ```
 
 The runner creates and removes separate databases for the OIDC, localization, and signed-in smoke tests. The **Verify** workflow runs the same suite on pull requests and pushes to `main`. **Publish container** calls it again when you start a manual release.
+
+The browser suite also upgrades a database containing legacy Sudoku publications, checks ordered pack expansion with ten completed stops, and covers offline Studio autosave and level rule overrides.
