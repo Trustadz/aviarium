@@ -85,11 +85,11 @@ equivalent application modes. Keep a requested preview running for handoff.
 When done with this disposable environment, stop its app process and run
 `docker stop "$AVIARIUM_DEV_DB"`.
 
-## Verify and hand off
+## Verify and request local approval
 
-Run `npm run typecheck`, `npm test`, and `npm run build` before opening the
-draft. For application, migration, or release workflow changes, also run the
-combined browser suite. Install Chromium with `npx playwright install chromium`
+Run `npm run typecheck`, `npm test`, and `npm run build` before requesting
+local approval. For application, migration, or release workflow changes,
+also run the combined browser suite. Install Chromium with `npx playwright install chromium`
 or set `AVIARIUM_CHROMIUM` to a compatible installed executable. See
 [verification](testing.md) for narrower runs and manual device checks.
 
@@ -105,9 +105,19 @@ per host and leave that port free. The OIDC and localization apps default to
 documentation-only work, also check changed internal links and examples
 against the checkout.
 
-Inspect `git status`, the full working diff, and the staged diff. Stage explicit
-paths, commit the focused change, and push the named feature branch. For example,
-after confirming the remote and GitHub CLI authentication:
+Inspect `git status` and the full local diff. Give the user the preview URL
+for application changes or point to the local diff for documentation changes.
+Share the check results and the manual scenarios the user can review.
+
+Ask the user to approve the local changes for GitHub. Wait for an explicit
+approval before pushing or opening or updating a PR. If the user asks for
+changes, verify the revised version and request approval again.
+
+## Publish an approved draft
+
+After approval, stage explicit paths, commit the reviewed change, and push the
+named feature branch. Create a draft PR against `main` or update the existing
+draft. For example, after confirming GitHub CLI authentication:
 
 ```sh
 git push -u origin codex/short-description
@@ -115,9 +125,9 @@ gh pr create --draft --base main --head codex/short-description \
   --title "Describe the change" --body-file /tmp/aviarium-pr-body.md
 ```
 
-Use the draft PR as the handoff. Include the requested behavior and why it
-changed, relevant design choices, current commit, check commands and outcomes,
-and remaining manual scenarios with expected results. If a preview is running,
+Record the approved local handoff in the draft PR. Include the requested
+behavior and why it changed, relevant design choices, the current commit, check
+commands and outcomes, and remaining manual scenarios with expected results. If a preview is running,
 give its URL, branch or commit, and setup steps. A loopback URL is usable only
 on its host, so include reproduction steps for a reviewer with a different
 checkout. Link the issue if there is one. Use `enhancement` or `feature` for
@@ -125,7 +135,7 @@ features and `bug` or `fix` for fixes.
 
 Read the PR thread and check results with `gh pr view NUMBER --comments` and
 `gh pr checks NUMBER`. GitHub runs **Verify** on drafts and ready PRs. Address
-feedback on the same branch, rerun affected checks, and update the handoff for
-the new commit. Report environment or authentication blockers with what was
-verified locally. Merge and production publishing require owner authorization.
+feedback on the same branch, rerun affected checks, and obtain local approval
+before pushing the revised commit and updating the PR. Report environment or
+authentication blockers with what was verified locally. Merge and production publishing require owner authorization.
 For an authorized release, use the [release workflow](../README.md#publish-a-release).
