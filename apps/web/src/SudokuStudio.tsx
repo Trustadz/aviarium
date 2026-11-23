@@ -9,6 +9,7 @@ import type { LevelReview, StudioEditorProps, StudioGame, StudioTrialProps } fro
 import PackStudio, { type PackStudioProps } from './PackStudio.js'
 import Player, { createSave } from './Player.js'
 import { sudokuPackPresentation } from './SudokuMenu.js'
+import { randomId } from './random.js'
 import { SudokuLevelEditor, type StudioCheck } from './SudokuLevelEditor.js'
 import { sudokuRuleGroups } from './sudoku-studio-rules.js'
 import checkWorkerUrl from './studio-check-worker.ts?worker&url'
@@ -31,7 +32,7 @@ function SudokuEditor({ level, rules, update, trial, onCheck }: StudioEditorProp
 
 function SudokuTrial({ level, pack, profile, reader, leave }: StudioTrialProps) {
   const [attempt, reset] = useState(0)
-  const [id] = useState(() => crypto.randomUUID())
+  const [id] = useState(() => randomId())
   const gameLevel = level as PublishedLevel
   const gamePack = pack as PublishedPack
   const session = { id, revision: 0, data: createSave(gameLevel, gamePack), profile,

@@ -9,6 +9,7 @@ import { packApi, packExportUrl, PackRoadmap } from './GamePacks.js'
 import type { LevelReview, StudioGame } from './game-studio.js'
 import { knownMessage, useT } from './i18n.js'
 import { PackLevelList } from './PackLevelList.js'
+import { randomId } from './random.js'
 import { PackWorkspace } from './PackWorkspace.js'
 import { db, type StudioPack } from './storage.js'
 import { StudioRuleFields } from './StudioRuleFields.js'
@@ -46,7 +47,7 @@ function stableDraft(draft: PackDraft): PackDraft {
 }
 
 function newLevelId(packId: string) {
-  return 'pack:' + packId + ':' + crypto.randomUUID().replaceAll('-', '').slice(0, 20)
+  return 'pack:' + packId + ':' + randomId().replaceAll('-', '').slice(0, 20)
 }
 
 export interface PackStudioProps {
@@ -184,7 +185,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
   }
 
   function persist(record: StudioPack) {
-    const edit = { ...record, localEdit: crypto.randomUUID() }
+    const edit = { ...record, localEdit: randomId() }
     show(edit)
     setSaved(false); setNotice('')
     void enqueueWrite(async () => {
@@ -211,7 +212,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
   }
 
   function create(data: PackDraftData) {
-    const id = crypto.randomUUID()
+    const id = randomId()
     const puzzles = data.puzzles.map(puzzle => ({ ...puzzle, levelId: newLevelId(id), levelRevision: undefined }))
     const record = wrap({ id, version: 0, published: null, visible: false, data: { ...data, puzzles } }, true)
     open(record); persist(record)

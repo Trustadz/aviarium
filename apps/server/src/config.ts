@@ -16,8 +16,8 @@ export const pool = new pg.Pool({
 pool.on('error', error => console.error(JSON.stringify({ event: 'database_connection_lost', type: error.name })))
 const publicUrl = new URL(PUBLIC_ORIGIN || 'http://localhost:4173')
 const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(publicUrl.hostname)
-if (publicUrl.protocol !== 'https:' && !(publicUrl.protocol === 'http:' && loopback))
-  throw new Error('PUBLIC_ORIGIN must use HTTPS except on the loopback host')
+if (publicUrl.protocol !== 'http:' && publicUrl.protocol !== 'https:')
+  throw new Error('PUBLIC_ORIGIN must use HTTP or HTTPS')
 if (testEnvironment && !loopback) throw new Error('TEST_ENVIRONMENT requires a loopback PUBLIC_ORIGIN')
 const publishedHost = process.env.APP_BIND
 export const listenHost = process.env.HOST || (testEnvironment ? '127.0.0.1' : '0.0.0.0')
