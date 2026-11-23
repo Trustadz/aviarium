@@ -20,6 +20,7 @@ import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
 import { registerOffline, useGameDownloads } from './offline.js'
+import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
 import { PackCards, PackRoadmap, packApi, packPath } from './GamePacks.js'
@@ -355,7 +356,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (!existing && pack && level.pack &&
         !packProgress(pack, packCompletionEvents(completed, sessions)).playable[level.pack.stop - 1])
       throw new Error('Solve the previous stop in this pack first.')
-    const session = existing ?? { id: crypto.randomUUID(), revision: 0, data: await game.createAttempt(level, pack),
+    const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     if (!existing) await saveLocal(session)

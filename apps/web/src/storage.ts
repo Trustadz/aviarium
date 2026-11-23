@@ -5,6 +5,7 @@ import type { PackCompletion, PackDraftRecord, PackRevision } from '../../../pac
 import { isResumable, levelKey, savedGameLimit, type AttemptMutation, type GameAttempt, type SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
 export { isResumable, levelKey } from '../../../packages/game-sdk/src/progress.js'
 import { api, json } from './api.js'
+import { randomId } from './random.js'
 
 export const localProfile = 'local-play'
 
@@ -101,7 +102,7 @@ export function writeAttempt(expected: LocalSession, data: LocalSession['data'])
     const concurrent = current.revision !== expected.revision || current.updated !== expected.updated
     const dirty = expected.profile !== localProfile
     const next: LocalSession = concurrent
-      ? { ...expected, id: crypto.randomUUID(), parentId: expected.id, revision: 0, sent: undefined,
+      ? { ...expected, id: randomId(), parentId: expected.id, revision: 0, sent: undefined,
           updated: Date.now(), data, dirty, archived: false }
       : { ...expected, sent: current?.sent, updated: Math.max(Date.now(), expected.updated + 1), data, dirty }
     await db.sessions.put(next)
@@ -171,7 +172,7 @@ async function synchronize(profile: string, extras: MutationExtras) {
       if (!current?.dirty && !current?.sent) return undefined
       if (current.sent) return current.sent
       const stored = await db.levels.get(levelKey(current.data.level, current.data.levelRevision))
-      const mutation: QueuedMutation = { sessionId: current.id, mutationId: crypto.randomUUID(),
+      const mutation: QueuedMutation = { sessionId: current.id, mutationId: randomId(),
         baseRevision: current.revision, data: current.data, archived: current.archived, updatedAt: current.updated,
         archiveIfUnchanged: current.expired, ...extras(current.data.game, stored?.level) }
       await db.sessions.put({ ...current, sent: mutation, dirty: false })

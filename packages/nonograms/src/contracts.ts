@@ -3,6 +3,7 @@ import type { GameLevel } from '../../game-sdk/src/index.js'
 import { definePackSchemas, packLevelFields, packLevelId, progressionRules, type PackRevision } from '../../game-sdk/src/packs.js'
 import { attemptIdentity, attemptOutcome, mutationHeader, packRevisionField } from '../../game-sdk/src/progress.js'
 import { fromPicture, randomDifficulties, randomPuzzle, type Puzzle } from './puzzles.js'
+import { sha256 } from '../../game-sdk/src/sha256.js'
 
 export const nonogramsId = 'nonograms'
 export const gridSizeSchema = z.union([z.literal(5), z.literal(10)])
@@ -63,9 +64,8 @@ export function createNonogramAttempt(level: NonogramLevel, pack?: PackRevision)
 export async function quickNonogram(descriptor: QuickDescriptor): Promise<NonogramLevel | undefined> {
   const { seed, size, difficulty, version } = descriptor
   const key = JSON.stringify([version, seed, size, difficulty])
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key))
-  const bytes = new Uint8Array(digest)
-  let state = new DataView(digest).getUint32(0)
+  const bytes = await sha256(new TextEncoder().encode(key))
+  let state = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0)
   const random = () => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0
     return state / 2 ** 32

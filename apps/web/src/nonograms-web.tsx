@@ -6,6 +6,7 @@ import {
 } from '../../../packages/nonograms/src/contracts.js'
 import { randomDifficulties, randomSizes, type RandomOptions } from '../../../packages/nonograms/src/puzzles.js'
 import { knownMessage, useT, type Translate } from './i18n.js'
+import { randomId } from './random.js'
 import type { GameMenuContext, WebGame } from './game-web.js'
 import type { PackPresentation } from './GamePacks.js'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
@@ -55,7 +56,7 @@ function QuickPlay({ canPlay, profile, launch, perform }: GameMenuContext) {
       setBusy(true)
       perform(async () => {
         try {
-          const level = await quickNonogram({ ...options, seed: crypto.randomUUID(), version: 1 })
+          const level = await quickNonogram({ ...options, seed: randomId(), version: 1 })
           if (!level) throw new Error('No random puzzle found. Try again.')
           await launch(level)
         } finally { setBusy(false) }
