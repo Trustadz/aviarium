@@ -4,6 +4,9 @@ import {
   nonogramSaveSchema, puzzleSchema, type NonogramEntry, type NonogramPack,
 } from '../../../packages/nonograms/src/contracts.js'
 import { matchesClues, solveByDeduction, starterPack } from '../../../packages/nonograms/src/puzzles.js'
+import {
+  nonogramBoardKey, nonogramLeaderboardRulesVersion, nonogramPuzzleContent, nonogramQuickBoards, parseNonogramBoard,
+} from '../../../packages/nonograms/src/leaderboards.js'
 import { HttpError } from './auth.js'
 import type { ServerGame } from './game-runtime.js'
 
@@ -35,6 +38,22 @@ export const nonogramsServer: ServerGame = {
     }],
   },
   readMutation: input => nonogramMutation.parse(input),
+  leaderboards: {
+    quickBoards: nonogramQuickBoards,
+    boardKey: level => nonogramBoardKey({ ...level, content: puzzleSchema.parse(level.content) }),
+    parseBoard: parseNonogramBoard,
+    record(level, save, packTitle) {
+      const data = nonogramSaveSchema.parse(save)
+      const content = puzzleSchema.parse(level.content)
+      const board = nonogramBoardKey({ ...level, content })
+      return {
+        boardKey: board.key, boardKind: board.kind, boardMeta: board.meta,
+        puzzleContent: nonogramPuzzleContent(content),
+        value: data.elapsedMs, unit: 'ms', lowerIsBetter: true,
+        levelTitle: level.title, packTitle, rulesVersion: nonogramLeaderboardRulesVersion,
+      }
+    },
+  },
   async resolveGeneratedLevel(db, input) {
     const { data, quickPlay } = nonogramMutation.parse(input)
     if (!quickPlay || data.levelRevision !== 1 || data.packRevision !== undefined) return

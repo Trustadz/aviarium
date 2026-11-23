@@ -5,6 +5,7 @@ import {
   type NonogramLevel, type NonogramPack, type NonogramSave,
 } from '../../../packages/nonograms/src/contracts.js'
 import { randomDifficulties, randomSizes, type RandomOptions } from '../../../packages/nonograms/src/puzzles.js'
+import { nonogramBoardKey } from '../../../packages/nonograms/src/leaderboards.js'
 import { knownMessage, useT, type Translate } from './i18n.js'
 import { randomId } from './random.js'
 import type { GameMenuContext, WebGame } from './game-web.js'
@@ -124,4 +125,5 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
     { key: 'nonogramTimer', label: 'Show timer', default: true },
   ] },
   history: true,
+  leaderboards: { boardHref: level => '/games/nonograms/leaderboards/board/' + encodeURIComponent(nonogramBoardKey(level as NonogramLevel).key) },
 }

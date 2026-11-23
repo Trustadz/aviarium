@@ -657,7 +657,7 @@ try {
       const users = await request('/api/admin/users', { headers: adminHeaders })
       const member = (await request('/api/me', { headers: playerHeaders })).user
       const person = users.find(item => item.id === member.id)
-      const role = adminPage.getByRole('combobox', { name: 'Role for ' + person.name })
+      const role = adminPage.getByRole('combobox', { name: 'Role for ' + person.name, exact: true })
       await role.selectOption('editor')
       await until(async () => {
         const result = await request('/api/me', { headers: playerHeaders })

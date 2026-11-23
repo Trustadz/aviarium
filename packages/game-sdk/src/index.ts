@@ -45,3 +45,12 @@ export interface SaveEnvelope {
 }
 
 export { savedGameLimit } from './progress.js'
+export {
+  emptyLeaderboardPlayerSummary, emptyLeaderboardSummary, formatLeaderboardValue, leaderboardCooldownDays, leaderboardResultStatuses,
+  leaderboardTopLimit, withinLeaderboardCooldown,
+} from './leaderboards.js'
+export type {
+  LeaderboardBoardInfo, LeaderboardBoardKey, LeaderboardBoardKind, LeaderboardCooldown, LeaderboardPlayerResult,
+  LeaderboardPlayerSummary, LeaderboardRecord, LeaderboardRemovalNotice, LeaderboardResultStatus, LeaderboardStanding,
+  LeaderboardSummary, LeaderboardValueUnit,
+} from './leaderboards.js'

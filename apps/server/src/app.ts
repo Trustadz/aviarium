@@ -11,6 +11,7 @@ import { enabledLocales, listenHost, origin, pool } from './config.js'
 import { registerNews } from './news.js'
 import { runNewsTranslations } from './news-translation.js'
 import { serverGames } from './games.js'
+import { registerLeaderboards } from './leaderboards.js'
 import { registerPacks } from './packs.js'
 import { registerProgress } from './progress.js'
 import { migrate } from './migrate.js'
@@ -62,6 +63,7 @@ export async function makeApp() {
     if (game.id === 'sudoku') registerPacks(app, game, '/api')
   }
   registerProgress(app)
+  registerLeaderboards(app)
   registerBackups(app)
   await app.register(staticFiles, {
     root: fileURLToPath(new URL('../../../../dist/web/', import.meta.url)),
@@ -72,7 +74,7 @@ export async function makeApp() {
   app.setNotFoundHandler((request, reply) => {
     const path = request.url.split('?')[0].replace(/\/$/, '')
     const game = /^\/(?:games|studio)\/([a-z0-9-]+)(?:\/|$)/.exec(path)?.[1]
-    const standalonePage = ['', '/news', '/about', '/studio', '/studio/packs', '/admin'].includes(path)
+    const standalonePage = ['', '/news', '/about', '/leaderboards', '/studio', '/studio/packs', '/admin'].includes(path)
     if (request.method === 'GET' && (standalonePage || (game && serverGames.has(game))))
       return reply.sendFile('index.html')
     return reply.code(404).send({ error: apiMessages.not_found, code: 'not_found' })

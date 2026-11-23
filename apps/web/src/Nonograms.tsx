@@ -5,9 +5,10 @@ import { fillsFitClues, matchesClues, type Cell } from '../../../packages/nonogr
 import type { GamePlayerProps } from './game-web.js'
 import { knownMessage, useT } from './i18n.js'
 import { errorMessage } from './api.js'
+import { displayTime } from './SudokuMenu.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, trial = false }: GamePlayerProps & { trial?: boolean }) {
+export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, trial = false, leaderboard }: GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
   const started = useRef(Date.now())
@@ -79,7 +80,7 @@ export default function Nonograms({ level, pack, session, preferences, leave, pe
 
   return <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined}
     leave={exit} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
-    problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove}/>
+    problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard}/>
 }
 
 function markValue(current: Cell, tool: Cell, value: Cell) {
@@ -87,7 +88,7 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committed, undo, problem, trial, elapsedMs, showTimer, onMove }: {
+function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committed, undo, problem, trial, elapsedMs, showTimer, onMove, leaderboard }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
@@ -101,6 +102,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
   elapsedMs: number
   showTimer: boolean
   onMove: (cells: Cell[], undo: Cell[][]) => void
+  leaderboard?: { open: () => void }
 }) {
   const t = useT()
   const width = puzzle.columns.length
@@ -256,8 +258,12 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
       <div className="play-controls">
         {solved && <section className="panel success" role="status">
           <h2>{t('Puzzle solved')}</h2>
-          {!trial && !problem && <p>{t('Your completion has been saved.')}</p>}
+          {!trial && <div className="leaderboard-result">
+            <strong>{displayTime(elapsedMs)}</strong>
+            <span>{t(problem ? 'Save failed' : 'Saved')}</span>
+          </div>}
           <button className="primary" onClick={leave}>{t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
+          {!trial && leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View board')}</button>}
         </section>}
         <div className="tools nonogram-tools" role="group" aria-label={t('Mark squares')}>
           {([['Fill', '■', 1], ['Mark blank', '×', 2], ['Erase', '□', 0]] as const).map(([label, symbol, mark]) =>
