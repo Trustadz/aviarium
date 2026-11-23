@@ -7,6 +7,7 @@ export const loginEnabled = loginFlag === 'true'
 const testFlag = process.env.TEST_ENVIRONMENT ?? 'false'
 if (testFlag !== 'true' && testFlag !== 'false') throw new Error('TEST_ENVIRONMENT must be true or false')
 export const testEnvironment = testFlag === 'true'
+const allowLanTest = testEnvironment && process.env.TEST_ENVIRONMENT_ALLOW_LAN === 'true'
 const pocketIdEnabled = loginEnabled && !testEnvironment
 
 const { DATABASE_URL, PUBLIC_ORIGIN, OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_CALLBACK_URL } = process.env
@@ -18,10 +19,10 @@ const publicUrl = new URL(PUBLIC_ORIGIN || 'http://localhost:4173')
 const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(publicUrl.hostname)
 if (publicUrl.protocol !== 'http:' && publicUrl.protocol !== 'https:')
   throw new Error('PUBLIC_ORIGIN must use HTTP or HTTPS')
-if (testEnvironment && !loopback) throw new Error('TEST_ENVIRONMENT requires a loopback PUBLIC_ORIGIN')
+if (testEnvironment && !allowLanTest && !loopback) throw new Error('TEST_ENVIRONMENT requires a loopback PUBLIC_ORIGIN')
 const publishedHost = process.env.APP_BIND
-export const listenHost = process.env.HOST || (testEnvironment ? '127.0.0.1' : '0.0.0.0')
-if (testEnvironment && !['localhost', '127.0.0.1', '::1', '[::1]'].includes(publishedHost || listenHost))
+export const listenHost = process.env.HOST || (testEnvironment && !allowLanTest ? '127.0.0.1' : '0.0.0.0')
+if (testEnvironment && !allowLanTest && !['localhost', '127.0.0.1', '::1', '[::1]'].includes(publishedHost || listenHost))
   throw new Error('TEST_ENVIRONMENT requires a loopback listener or Docker port binding')
 export const origin = publicUrl.origin
 export const callback = new URL((pocketIdEnabled && OIDC_CALLBACK_URL) || '/api/auth/callback', origin)

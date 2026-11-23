@@ -766,6 +766,17 @@ export const dutch = {
   "{difficulty} {size} × {size} {game}": "{difficulty} {size} × {size} {game}",
   "{difficulty} {game}": "{difficulty} {game}",
   "{pack} · {level}": "{pack} · {level}",
+  "A flutter of applause.": "Een gefladder van applaus.",
+  "A visitor from the aviary": "Een bezoeker uit de volière",
+  "Lives left": "Levens over",
+  "New best time": "Nieuwe beste tijd",
+  "Play again": "Opnieuw spelen",
+  "Skip celebration": "Viering overslaan",
+  "Stop {stop} of {total}": "Stop {stop} van {total}",
+  "View solved puzzle": "Bekijk de opgeloste puzzel",
+  "Auto solve": "Automatisch oplossen",
+  "Celebration preview": "Viering bekijken",
+  "Preview puzzle celebration": "Puzzelviering bekijken",
 } as const satisfies Record<typeof apiMessages[keyof typeof apiMessages], string> & Record<string, string>
 
 export type Message = keyof typeof dutch

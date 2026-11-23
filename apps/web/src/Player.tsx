@@ -4,7 +4,7 @@ import { levelTitle, packTitle, technique } from './sudoku-copy.js'
 import type { Message } from './messages.js'
 import { knownMessage, useT } from './i18n.js'
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
-import { ArrowLeft, Eraser, Heart, Lightbulb, Pause, Pencil, Play, Redo2, RotateCcw, Settings2, Timer, Undo2 } from 'lucide-react'
+import { ArrowLeft, Eraser, Heart, Lightbulb, Pause, Pencil, Play, Redo2, RotateCcw, Settings2, Timer, Undo2, WandSparkles } from 'lucide-react'
 import type { Preferences, SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { bit, candidateMasks, column, conflicts, row, rules, rulesFor, type Board } from '../../../packages/sudoku/src/rules.js'
 import { logicalHint, type LogicalStep } from '../../../packages/sudoku/src/logic.js'
@@ -12,6 +12,7 @@ import { effectivePackRules, type PublishedPack } from '../../../packages/sudoku
 import { validate } from '../../../packages/sudoku/src/solver.js'
 import { Grid } from './Grid.js'
 import { displayTime, PuzzleShare } from './SudokuMenu.js'
+import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import type { LocalSession } from './storage.js'
 
 export { createQuickPlayLevel } from './quick-play.js'
@@ -27,6 +28,7 @@ interface Props {
   session: LocalSession<SudokuSave>; level: PublishedLevel; preferences: Preferences; reader: boolean; pack?: PublishedPack
   persist: (data: SudokuSave) => Promise<void>; leave: () => void; reset: () => void; openSettings?: () => void; trial?: boolean
   leaderboard?: { open: () => void }
+  bestMs?: number; testMode?: boolean
 }
 type Hint = { cell?: number } & ({ stage: 1 | 2 | 3; step: LogicalStep } | { stage?: never; message: Message })
 
@@ -34,7 +36,7 @@ function digitUsedUp(entries: readonly number[], digit: number) {
   return entries.filter(value => value === digit).length >= 9
 }
 
-export default function Player({ session, level, preferences, reader, pack, persist, leave, reset, openSettings, trial = false, leaderboard }: Props) {
+export default function Player({ session, level, preferences, reader, pack, persist, leave, reset, openSettings, trial = false, bestMs, testMode = false, leaderboard }: Props) {
   const t = useT()
   const givens = useMemo(() => Array.from(level.grid, Number), [level.grid])
   const packRules = pack && level.pack ? effectivePackRules(pack, level.pack.stop) : undefined
@@ -60,6 +62,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
   const [lostLife, setLostLife] = useState<number>()
   const [problem, setProblem] = useState('')
   const [display, setDisplay] = useState(data.elapsedMs)
+  const [celebration, setCelebration] = useState<number>()
   const started = useRef(Date.now())
   const press = useRef<{ pointer: number; x: number; y: number; timer: ReturnType<typeof setTimeout>; skipClick: boolean } | null>(null)
   useEffect(() => () => { if (press.current) clearTimeout(press.current.timer) }, [])
@@ -70,12 +73,13 @@ export default function Player({ session, level, preferences, reader, pack, pers
     setData(next)
     return persistRef.current(next).then(() => setProblem(''), error => setProblem(errorMessage(error)))
   }
-  function snapshot(next = latest.current) {
+  function snapshot(next = latest.current, completedNow = false) {
     const now = Date.now()
     const elapsedMs = paused || latest.current.completed || latest.current.lives === 0 ? latest.current.elapsedMs
       : latest.current.elapsedMs + Math.max(0, now - started.current)
     started.current = now
     setDisplay(elapsedMs)
+    if (completedNow) setCelebration(elapsedMs)
     return commit({ ...next, elapsedMs })
   }
   const gameOver = data.lives === 0
@@ -119,7 +123,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
     if (!note && lockedDigit && digitUsedUp(board.entries, lockedDigit)) setLockedDigit(0)
     const completed = boardRules.verify(givens, board.entries)
     void snapshot({ ...current, board, undo: [...current.undo, current.board].slice(-40), redo: [],
-      completed, completedAt: completed ? Date.now() : undefined })
+      completed, completedAt: completed ? Date.now() : undefined }, completed && !current.completed)
   }
   function move(digit: number, cell = selected) {
     const current = latest.current
@@ -169,7 +173,14 @@ export default function Player({ session, level, preferences, reader, pack, pers
     const other = direction === 'undo' ? 'redo' : 'undo'
     const completed = boardRules.verify(givens, board.entries)
     void snapshot({ ...current, board, [direction]: source.slice(0, -1), [other]: [...current[other], current.board].slice(-40),
-      completed, completedAt: completed ? Date.now() : undefined })
+      completed, completedAt: completed ? Date.now() : undefined }, completed && !current.completed)
+  }
+  function autoSolve() {
+    if (paused || finished) return
+    const result = validate(givens, 65_000, diagonal)
+    if (result.kind !== 'unique') return
+    const current = latest.current
+    saveBoard({ ...current.board, entries: [...result.solution] })
   }
   function getHint() {
     if (hint?.stage) {
@@ -223,11 +234,27 @@ export default function Player({ session, level, preferences, reader, pack, pers
   }
   const seconds = Math.floor(display / 1000)
   const packArt = pack?.data.background ?? pack?.data.cover
+  const celebrationStats = celebration !== undefined ? [
+    { label: t('Difficulty'), value: t(level.difficulty) },
+    ...(pack && level.pack ? [{ label: t('Pack'), value: packTitle(t, pack) + ' · ' +
+      t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
+    ...(data.lives !== undefined && lifeLimit ? [{ label: t('Lives left'), value: data.lives + ' / ' + lifeLimit }] : []),
+  ] : []
+  const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
+    { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
+    ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
+    ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View board'), onClick: leaderboard.open }] : []),
+    { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
+  ] : []
   return <div className={pack ? `play-page pack-play pack-${pack.data.theme}` : 'play-page'}>
     {packArt && <img className="pack-play-art" alt="" src={packArt}/>}
     <div className="game-navigation">
       <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/>{" "}{t(trial ? "Back to editor" : "Game menu")}</button>
-      {openSettings && <button className="icon-button" title={t("Sudoku settings")} aria-label={t("Sudoku settings")} onClick={openSettings}><Settings2 size={18}/></button>}
+      <div className="game-nav-tools">
+        {testMode && !finished && <button className="text-button" disabled={paused} onClick={autoSolve}
+          title={t("Test environment")}><WandSparkles size={17}/>{" "}{t("Auto solve")}</button>}
+        {openSettings && <button className="icon-button" title={t("Sudoku settings")} aria-label={t("Sudoku settings")} onClick={openSettings}><Settings2 size={18}/></button>}
+      </div>
     </div>
     <div className="play-heading"><div><div className="eyebrow">{pack ? packTitle(t, pack) : 'Sudoku'}</div><h1>{levelTitle(t, level)}</h1></div>
       <div className="play-meta"><span className={'badge ' + level.difficulty.toLowerCase()}>{t(level.difficulty)}</span>
@@ -297,5 +324,11 @@ export default function Player({ session, level, preferences, reader, pack, pers
         <p role="alert" className="error">{problem && t('Save failed. {detail}', { detail: knownMessage(t, problem) })}</p>
       </div>
     </div>
+    {celebration !== undefined && <CelebrationOverlay reader={reader}
+      result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
+        saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) })
+          : t('Your completion has been saved.'),
+        saveError: Boolean(problem) && !trial }}
+      actions={celebrationActions} onClose={() => setCelebration(undefined)}/>}
   </div>
 }

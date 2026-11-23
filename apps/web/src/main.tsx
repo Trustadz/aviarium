@@ -21,6 +21,7 @@ import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, Leaderboard
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
+import { CelebrationOverlay } from './CelebrationOverlay.js'
 import { registerOffline, useGameDownloads } from './offline.js'
 import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
@@ -190,6 +191,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
   const [dialog, showDialog] = useState<'display' | 'game' | 'account'>()
+  const [celebrationPreview, setCelebrationPreview] = useState(false)
   const [changingRole, setChangingRole] = useState(false)
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
@@ -290,7 +292,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       showDialog(undefined)
       setPath(location.pathname.replace(/\/$/, '') || '/')
     }
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') showDialog(undefined) }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) showDialog(undefined)
+    }
     window.addEventListener('popstate', locationChanged)
     window.addEventListener('keydown', closeOnEscape)
     return () => {
@@ -489,6 +493,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   useLayoutEffect(() => setBrowserTheme(openGame ? gameSurface.current : app.current, surface === 'game' ? '--game-page' : '--surface'),
     [reader, surface, theme, openGame?.id, playPack?.data.theme])
   const settings = openGame?.settings
+  const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
+    item.data.game === playing.game.id && item.data.level === playing.level.id &&
+    item.data.levelRevision === playing.level.revision && item.data.completed).map(item => item.data.elapsedMs)) : Number.POSITIVE_INFINITY
 
   return <div ref={app} className={'app' + (reader ? ' reader' : '') + (inShell ? ' app-shell' : '')} data-theme={theme} data-surface={surface}>
     {inShell && <>
@@ -530,7 +537,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       </>
       : inLeaderboards ? <LeaderboardCatalog games={games} sessions={sessions} accountId={account?.id} online={online} link={link}/>
       : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
-        preferences={prefs} reader={reader} persist={data => record(playing, data)}
+        preferences={prefs} reader={reader} bestMs={Number.isFinite(bestMs) ? bestMs : undefined} testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
         leaderboard={playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
         openSettings={settings ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
@@ -625,6 +632,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
               onChange={event => changeTestRole(event.target.value as TestRole)}>
               <option value="user">{t("User")}</option><option value="editor">{t("Editor")}</option><option value="admin">{t("Admin")}</option>
             </select></label>
+            <h3>{t("Preview puzzle celebration")}</h3>
+            <div className="celebration-test-grid">
+              <button type="button" className="secondary" onClick={() => setCelebrationPreview(true)}>{t("Budgies")}</button>
+            </div>
           </>}
         </>}
         {dialog === 'game' && settings?.toggles.map(setting => <label className="setting-row" key={setting.key}>
@@ -658,6 +669,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         </>}
       </section>
     </div>}
+    {celebrationPreview && <CelebrationOverlay preview reader={reader}
+      result={{ elapsedMs: 0, stats: [{ label: t('Test environment'), value: t('Preview') }] }}
+      actions={[{ label: t('Close'), onClick: () => setCelebrationPreview(false) }]}
+      onClose={() => setCelebrationPreview(false)}/>}
   </div>
 }
 
