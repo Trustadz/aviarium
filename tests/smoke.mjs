@@ -6,6 +6,8 @@ import { generateQuickPuzzle, quickPlayVersion } from '../dist/packages/sudoku/s
 import { formatSeedCode, quickPlayId } from '../dist/packages/sudoku/src/seed-code.js'
 import { validate } from '../dist/packages/sudoku/src/solver.js'
 import { rules } from '../dist/packages/sudoku/src/rules.js'
+import { createNonogramAttempt, nonogramLevels } from '../dist/packages/nonograms/src/contracts.js'
+import { solveByDeduction } from '../dist/packages/nonograms/src/puzzles.js'
 import { packLevels, packProgress } from '../dist/packages/sudoku/src/packs.js'
 
 const origin = process.env.AVIARIUM_TEST_URL || 'http://localhost:4183'
@@ -273,7 +275,7 @@ try {
   await cardPreview.waitFor()
   assert.equal(await cardPreview.locator('.cell').count(), 81)
   assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
-  const cardSurface = await page.locator('.game-card').evaluate(card => getComputedStyle(card).backgroundColor)
+  const cardSurface = await page.locator('.game-card').filter({ has: page.getByRole('heading', { name: 'Sudoku', exact: true }) }).evaluate(card => getComputedStyle(card).backgroundColor)
   assert.equal(cardSurface, 'rgb(255, 253, 242)')
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
   await page.getByRole('button', { name: 'Favorites', exact: true }).click()
@@ -405,7 +407,7 @@ try {
     const adminPage = await desktop.newPage()
     await adminPage.goto(origin)
     const catalog = adminPage.locator('.library')
-    const card = catalog.locator('.game-card')
+    const card = catalog.locator('.game-card').filter({ has: adminPage.getByRole('heading', { name: 'Sudoku', exact: true }) })
     await card.waitFor()
     const tags = await card.locator('.badge').allTextContents()
     const cardColor = await card.evaluate(el => getComputedStyle(el).backgroundColor)
@@ -424,7 +426,7 @@ try {
     await card.waitFor()
     await search.clear()
     await adminPage.getByRole('button', { name: 'All games', exact: true }).click()
-    await adminPage.getByRole('link', { name: 'Edit', exact: true }).click()
+    await card.getByRole('link', { name: 'Edit', exact: true }).click()
     await adminPage.getByRole('heading', { name: 'My packs' }).waitFor()
     await adminPage.getByLabel('Pack title', { exact: true }).fill('Studio browser check')
     await adminPage.getByRole('button', { name: 'New pack', exact: true }).click()
@@ -753,6 +755,102 @@ try {
   assert.equal(legacyQuickPlay.grid, quickGrid)
   await quickPlayContext.close()
   console.info('Quick Play checks passed: random and shared seed offline, reload and resume, and sync after reconnecting.')
+
+  const nonogramApi = '/api/games/nonograms'
+  const [cockatoos] = await request(nonogramApi + '/packs', { headers: playbackHeaders })
+  assert.equal(cockatoos.data.puzzles.length, 5)
+  assert.ok(cockatoos.data.cover.startsWith('data:image/webp;base64,'))
+  const [egg, nest] = nonogramLevels(cockatoos)
+  const submitNonogram = (data, expected) => request('/api/progress', { method: 'POST', headers: playbackHeaders, expected,
+    body: { data, sessionId: crypto.randomUUID(), mutationId: crypto.randomUUID(), baseRevision: 0, archived: false } })
+  assert.equal((await submitNonogram(createNonogramAttempt(nest, cockatoos), 422)).code, 'pack_stop_locked')
+  const falseSolve = { ...createNonogramAttempt(egg, cockatoos), completed: true }
+  assert.equal((await submitNonogram(falseSolve, 422)).code, 'saved_solution_invalid')
+  if (playerToken) await request(nonogramApi + '/pack-drafts', { headers: playerHeaders, expected: 403 })
+
+  const nonogramContext = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  await nonogramContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
+  const nonogramPage = await nonogramContext.newPage()
+  await nonogramPage.goto(origin + '/games/nonograms')
+  await nonogramPage.getByRole('button', { name: /Sulphur-crested Cockatoos/ }).tap()
+  await nonogramPage.getByRole('button', { name: 'Play Cockatoo Egg' }).tap()
+  const squares = nonogramPage.locator('.nonogram-cell')
+  assert.deepEqual(await nonogramPage.locator('.pack-play-art').boundingBox(), { x: 0, y: 0, width: 390, height: 844 })
+  const middle = squares.nth(1)
+  await nonogramPage.getByRole('button', { name: 'Mark blank', exact: true }).tap()
+  await middle.tap()
+  await nonogramPage.getByRole('button', { name: 'Fill', exact: true }).tap()
+  await middle.tap()
+  assert.equal(await middle.getAttribute('data-mark'), '2')
+  const dragPoint = async index => {
+    const { x, y, width, height } = await squares.nth(index).boundingBox()
+    return [x + width / 2, y + height / 2]
+  }
+  await nonogramPage.mouse.move(...await dragPoint(0))
+  await nonogramPage.mouse.down()
+  await nonogramPage.mouse.move(...await dragPoint(2))
+  await nonogramPage.mouse.up()
+  assert.deepEqual(await squares.evaluateAll(items => items.slice(0, 3).map(item => item.dataset.mark)), ['1', '2', '1'])
+  await nonogramPage.getByRole('button', { name: 'Undo', exact: true }).click()
+  assert.deepEqual(await squares.evaluateAll(items => items.slice(0, 3).map(item => item.dataset.mark)), ['0', '2', '0'])
+  const target = solveByDeduction(egg.content).cells
+  for (const [index, mark] of target.entries()) if (mark === 1) await squares.nth(index).tap()
+  await nonogramPage.getByRole('heading', { name: 'Puzzle solved' }).waitFor()
+  await nonogramPage.getByRole('button', { name: 'Back to roadmap' }).tap()
+  await nonogramPage.getByRole('button', { name: 'Play Nest Hollow' }).waitFor()
+  await until(async () => (await request('/api/progress', { headers: playbackHeaders })).completions
+    .some(item => item.level === egg.id && item.revision === egg.revision), 'synced Nonograms completion')
+  await nonogramPage.getByRole('button', { name: 'Nonograms menu' }).tap()
+  await until(() => nonogramPage.evaluate(async () =>
+    Boolean(await caches.match('/__aviarium/last-played', { cacheName: 'aviarium-game-nonograms' }))), 'Nonograms offline download')
+  await nonogramContext.setOffline(true)
+  await nonogramPage.reload()
+  await nonogramPage.getByLabel('Grid size').selectOption('5')
+  await nonogramPage.getByRole('button', { name: 'New puzzle', exact: true }).tap()
+  await squares.first().tap()
+  assert.equal(await squares.count(), 25)
+  await nonogramPage.getByRole('button', { name: 'Game menu' }).tap()
+  await nonogramPage.reload()
+  await nonogramPage.getByRole('button', { name: 'Resume', exact: true }).first().tap()
+  assert.equal(await squares.first().getAttribute('data-mark'), '1')
+  await nonogramContext.setOffline(false)
+  await nonogramPage.getByRole('button', { name: 'Game menu' }).tap()
+  await until(async () => {
+    const progress = await request('/api/progress', { headers: playbackHeaders })
+    return progress.sessions.some(item => item.data.game === 'nonograms' && item.data.board[0] === 1 &&
+      progress.levels.some(level => level.id === item.data.level && level.source === 'Generated' && level.content.rows.length === 5))
+  }, 'offline Nonograms Quick Play sync')
+  await nonogramContext.close()
+  const otherDevice = await browser.newContext()
+  await otherDevice.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
+  const otherPage = await otherDevice.newPage()
+  await otherPage.goto(origin + '/games/nonograms')
+  await otherPage.getByRole('button', { name: 'Resume', exact: true }).first().click()
+  assert.equal(await otherPage.locator('.nonogram-cell').first().getAttribute('data-mark'), '1')
+  await otherDevice.close()
+
+  if (adminToken) {
+    const studio = await browser.newContext()
+    await studio.addCookies([{ name: 'aviarium', value: adminToken, url: origin }])
+    const author = await studio.newPage()
+    await author.goto(origin + '/studio/nonograms')
+    await author.getByLabel('Pack title', { exact: true }).fill('Nonograms browser pack')
+    await author.getByRole('button', { name: 'New pack', exact: true }).click()
+    await author.getByRole('button', { name: 'Add level', exact: true }).click()
+    await author.getByLabel('Puzzle title', { exact: true }).fill('One dot')
+    await author.getByRole('button', { name: 'Row 3, column 3', exact: true }).click()
+    await author.getByRole('button', { name: 'Test play', exact: true }).click()
+    await author.locator('.nonogram-play .nonogram-cell').nth(12).click()
+    await author.getByRole('heading', { name: 'Puzzle solved' }).waitFor()
+    await author.getByRole('button', { name: 'Back to editor', exact: true }).first().click()
+    await author.getByRole('button', { name: 'Publish pack', exact: true }).click()
+    await author.getByRole('button', { name: 'Publish to catalog', exact: true }).click()
+    await until(async () => (await request(nonogramApi + '/packs', { headers: playbackHeaders }))
+      .some(pack => pack.data.title === 'Nonograms browser pack' && pack.data.puzzles[0].title === 'One dot'),
+    'Nonograms pack published from Studio')
+    await studio.close()
+  }
+  console.info('Nonograms checks passed: shared pack and progress routes, validation, Studio publishing, drag, and offline Quick Play sync.')
 
   console.info('Browser checks passed: mobile controls, notes, history, keyboard, pause, e-reader, offline reload and resume', adminToken ? ', studio and admin' : '', playerToken ? ', two-browser sync' : '')
 } finally {

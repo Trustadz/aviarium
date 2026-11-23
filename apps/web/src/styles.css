@@ -89,6 +89,23 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --easy-bg: #1d4a3b; --easy-fg: var(--sudoku-mist); --medium-bg: #544025; --medium-fg: #fae0af; --hard-bg: #55363d; --hard-fg: #fed0d5;
   --card-art: linear-gradient(128deg, #29473b, #395c4d);
 }
+.nonogram-theme {
+  --game-page: #e5edf3;
+  --surface: #fffbf0; --text: #17374b; --muted: #455c6d;
+  --accent: #24536c; --accent-strong: #143f55; --button-text: #fffbf0;
+  --tint: #d8e6ef; --border: #758fa0; --grid-related: #edf3f7;
+  --error-background: #f8e5dc; --error-text: #8a3827; --feedback: #743b2c;
+  --card-art: linear-gradient(135deg, #b9cedf, #e0eaf0);
+  color: var(--text);
+}
+.app[data-theme=dark] .nonogram-theme {
+  --game-page: #112534;
+  --surface: #1a3345; --text: #fff4de; --muted: #becedc;
+  --accent: #accfe4; --accent-strong: #cce6f5; --button-text: #132938;
+  --tint: #2b495e; --border: #607f95; --grid-related: #1c3a4e;
+  --error-background: #593b35; --error-text: #ffd4c6; --feedback: #f5b49c;
+  --card-art: linear-gradient(135deg, #244960, #3b5972);
+}
 .frame { --frame-gutter: 32px; width: min(1120px, calc(100% - 2 * var(--frame-gutter))); margin-inline: auto; }
 .site-header { background: var(--surface); border-bottom: 1px solid var(--border); }
 .header-frame { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 58px; }
@@ -361,6 +378,8 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .game-packs { margin-top: 18px; }
 .game-packs > h2 { margin-bottom: 10px; }
 .pack-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 10px; }
+.pack-cockatoos { --pack-surface: #d5e5f0; --pack-text: #17374b; --pack-border: #ab654c; }
+.app[data-theme=dark]:not(.reader) .pack-cockatoos { --pack-surface: #254458; --pack-text: #fff4de; --pack-border: #cd8066; }
 .pack-meadow {
   --pack-surface: light-dark(#dce9cc, #2b412d);
   --pack-text: light-dark(#2b472c, #edfad8);
@@ -1026,3 +1045,11 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .studio-catalog { margin-top: 0; }
 .studio-catalog h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); }
 .game-card-image:focus-visible { outline-offset: -3px; }
+
+.nonogram-preview {
+  display: grid; grid-template-columns: repeat(var(--preview-size), 1fr); width: 126px; aspect-ratio: 1;
+  border: 1px solid var(--border); background: var(--surface); box-shadow: 0 8px 18px #11253433;
+}
+.nonogram-preview span { border: 1px solid var(--border); }
+.nonogram-preview [data-filled=true] { background: var(--accent); border-color: var(--accent); }
+.continue-preview .nonogram-preview { width: 100%; box-shadow: none; }
