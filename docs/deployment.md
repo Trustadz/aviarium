@@ -29,7 +29,9 @@ Use `docker compose ps` to see when both services are healthy.
 
 ## Custom URL
 
-Point your existing reverse proxy at the application's loopback port and configure HTTPS on the proxy. Set `PUBLIC_ORIGIN` to the external origin without a path, for example `https://puzzles.example.org`. If the proxy runs on another host, set `APP_BIND` to an interface it can reach.
+Point your existing reverse proxy at the application's loopback port. Set `PUBLIC_ORIGIN` to the origin players use, without a path, for example `https://puzzles.example.org`. If the proxy runs on another host, set `APP_BIND` to an interface it can reach.
+
+HTTPS is recommended for any instance reachable from the internet. A self-hosted LAN instance can use `http://`; in that mode session cookies travel without transport encryption, so keep it on a trusted network. Browsers only allow service workers, installation, and offline play in a secure context, so those features need HTTPS even though online play works over HTTP.
 
 On iPhone or iPad, open that HTTPS URL in Safari. Use **Share → Add to Home Screen**, turn on **Open as Web App** if offered, and tap **Add**. Launch Aviarium from its new Home Screen icon. [Apple’s iPhone instructions](https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios)
 
