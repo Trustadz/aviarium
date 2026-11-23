@@ -71,7 +71,7 @@ DATABASE_URL="$AVIARIUM_DEV_DB_URL" HOST=127.0.0.1 APP_BIND=127.0.0.1 \
 
 Use `http://127.0.0.1:4175/health/ready` to verify startup. Open
 `http://127.0.0.1:4175` and use **Account menu → Device settings → Test user
-role** for User, Sudoku Editor, and Admin flows. Use the built app to test
+role** for User, Editor, and Admin flows. Use the built app to test
 service worker installation, upgrades, and offline play. Each browser origin
 has its own cookies, IndexedDB, and service worker, so give parallel previews
 different ports. For backup changes, install the PostgreSQL client tools and

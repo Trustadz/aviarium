@@ -1,3 +1,4 @@
+import { accountRoles } from '../../../packages/game-sdk/src/roles.js'
 import { useIntl } from 'react-intl'
 import { knownMessage, useT } from './i18n.js'
 import { useEffect, useState } from 'react'
@@ -38,9 +39,9 @@ export default function Admin({ account, onCatalogChange, openPackStudio }: {acc
     setBusy(true); setProblem(''); setMessage('')
     void task().catch(error => setProblem(errorMessage(error))).finally(() => setBusy(false))
   }
-  function updateAccount(id: string, patch: { role: Account['role'] } | { editor: string; enabled: boolean }) {
+  function updateAccount(id: string, role: Account['role']) {
     run(async () => {
-      const updated = await api<Account>('/admin/users/' + id, json('PATCH', patch), account.id)
+      const updated = await api<Account>('/admin/users/' + id, json('PATCH', { role }), account.id)
       setAccounts(items => items.map(item => item.id === updated.id ? updated : item))
     })
   }
@@ -74,23 +75,21 @@ export default function Admin({ account, onCatalogChange, openPackStudio }: {acc
         {config?.archives.length ? <ul className="archive-list">{config.archives.map(name => <li key={name}>{name}</li>)}</ul> : <p>{t("No successful backups yet.")}</p>}
       </section>
       <section className="panel padded"><h2>{t("Users")}</h2>
-        <p>{t("Users can play every game. Editors can create and publish puzzles for the games you assign.")}</p>
+        <p>{t("Users can play every game and manage their settings. Editors can also create and publish puzzles for all games. Admins also manage Aviarium.")}</p>
         {accounts.map(user => <section className="user-permissions" key={user.id} aria-label={user.name}>
           <label className="setting-row"><strong>{user.name}</strong><select aria-label={t('Role for {name}', { name: user.name })}
             disabled={busy || user.id === account.id} value={user.role}
-            onChange={event => updateAccount(user.id, { role: event.target.value as Account['role'] })}>
-            <option value="user">{t("User")}</option><option value="admin">{t("Admin")}</option>
+            onChange={event => {
+              const role = accountRoles.find(role => role === event.target.value)
+              if (role) updateAccount(user.id, role)
+            }}>
+            <option value="user">{t("User")}</option><option value="editor">{t("Editor")}</option><option value="admin">{t("Admin")}</option>
           </select></label>
-          {games.map(game => <label className="setting-row" key={game.id}>{t('{game} editor', { game: game.title })}
-            <input type="checkbox" aria-label={t('{game} editor for {name}', { game: game.title, name: user.name })}
-              checked={user.role === 'admin' || user.editorGames.includes(game.id)} disabled={busy || user.role === 'admin'}
-              onChange={event => updateAccount(user.id, { editor: game.id, enabled: event.target.checked })}/>
-          </label>)}
         </section>)}
       </section>
       <section className="panel padded"><h2>{t("Packs")}</h2>
-        {games.filter(game => game.Studio).map(game => <button key={game.id} className="secondary" onClick={() => openPackStudio(game.id)}>
-          {games.filter(game => game.Studio).length === 1 ? t('Edit as admin') : t('Edit {game} as admin', { game: game.title })}
+        {games.map(game => <button key={game.id} className="secondary" onClick={() => openPackStudio(game.id)}>
+          {games.length === 1 ? t('Edit as admin') : t('Edit {game} as admin', { game: game.title })}
         </button>)}
       </section>
       <section className="panel padded"><h2>{t("Published puzzles")}</h2>

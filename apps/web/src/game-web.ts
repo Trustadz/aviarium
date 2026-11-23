@@ -37,7 +37,7 @@ export interface WebGame extends GameMetadata {
   theme: string
   guide?: Parameters<typeof GameGuide>[0]['sections']
   packs?: PackPresentation
-  Studio?: ComponentType<PackStudioProps>
+  Studio: ComponentType<PackStudioProps>
   Player: ComponentType<GamePlayerProps>
   menu?(context: GameMenuContext): ReactNode
   sample?(levels: readonly GameLevel[]): GameLevel | undefined

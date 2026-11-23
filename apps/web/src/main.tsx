@@ -1,3 +1,4 @@
+import { canEditGames } from '../../../packages/game-sdk/src/roles.js'
 import { liveQuery } from 'dexie'
 import type { Locale } from '../../../packages/game-sdk/src/locales.js'
 import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
@@ -435,12 +436,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const completed = new Set([...completions, ...sessions.filter(item => item.data.completed)
     .map(item => levelKey(item.data.level, item.data.levelRevision))])
 
-  const editableGames = account ? games.filter(game =>
-    account.role === 'admin' || account.editorGames.includes(game.id)) : []
-  const editors = editableGames.filter(game => game.Studio)
+  const canEdit = canEditGames(account?.role)
   const inLibrary = path === '/'
-  const inStudioCatalog = path === '/studio' && editors.length > 0
-  const availableGames = inStudioCatalog ? editors : games
+  const inStudioCatalog = path === '/studio' && canEdit
   const catalogCategories = ['All games', ...new Set(games.flatMap(game => game.tags)), 'Favorites']
   const catalogFeature = featuredGame
   const catalogPage = (game: (typeof games)[number]) => inStudioCatalog ? '/studio/' + game.id : game.url
@@ -470,7 +468,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       <div className="app-rail">
         <nav aria-label={t("Main navigation")} className="app-destinations">
           <a href="/" aria-current={inLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
-          {editors.length > 0 && <a href="/studio" aria-current={inStudio ? 'page' : undefined}
+          {canEdit && <a href="/studio" aria-current={inStudio ? 'page' : undefined}
             onClick={event => link(event, '/studio')}><Pencil size={21}/><span>{t("Studio")}</span></a>}
           <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>{t("News")}</span></a>
         </nav>
@@ -499,7 +497,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           </div>
           <div className={'hero-art ' + catalogFeature.theme} aria-hidden="true">{catalogFeature.preview(catalogFeature.sample?.(catalog))}</div>
         </section>}
-        <GameCatalog studio={inStudioCatalog} games={availableGames.filter(game => !reader || game.eReader).map(game => ({
+        <GameCatalog studio={inStudioCatalog} games={games.filter(game => !reader || game.eReader).map(game => ({
           ...game, description: t(inStudioCatalog ? game.studioDescription ?? game.description : game.description), href: catalogPage(game),
           artClass: game.theme, art: game.preview(game.sample?.(catalog)),
           favorite: Boolean(game.favorite && prefs[game.favorite]),
@@ -525,7 +523,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         leave={() => go(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
       : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && packPath(viewedPack) === path
         ? <PackRoadmap presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
-          canExport={Boolean(online && editableGames.includes(openGame) && (account?.role === 'admin' || viewedPack.ownedByViewer))}
+          canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))}
           leave={() => go(openGame.url)} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
               item.data.level === level.id && item.data.levelRevision === level.revision)
@@ -551,13 +549,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         <p>{t('Aviarium is a self-hosted puzzle library. Start with Sudoku, play the same published puzzles as everyone else, and pick up where you left off. You can download games to play offline, and creators can use Studio to build and share their own puzzles.')}</p>
         <a className="secondary" href="https://github.com/Trustadz/aviarium">{t("Aviarium on GitHub")}</a>
       </section>
-      : studioGame && account && editors.includes(studioGame) ? studioGame.Studio && (!adminPackStudio || (online && account.role === 'admin')) ? <>
+      : studioGame && account && canEdit && (!adminPackStudio || (online && account.role === 'admin')) ? <>
         <studioGame.Studio key={account.id + ':' + studioGame.id + (adminPackStudio ? ':admin' : '')} account={account} online={online}
           admin={adminPackStudio} reader={reader} theme={theme} packs={packs.filter(pack => pack.data.game === studioGame.id)}
           leave={() => go(adminPackStudio ? '/admin' : '/studio')} onPublish={() => perform(() => refreshPacks())}/>
-      </> : <section className="panel"><h1>{t('Access required')}</h1>
+      </>
+      : studioGame && canEdit ? <section className="panel"><h1>{t('Access required')}</h1>
         <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio games')}</a></section>
-
       : inAdmin && online && account?.role === 'admin' ? <>
         <Admin key={account.id} account={account} openPackStudio={game => go('/studio/' + game + '/admin')} onCatalogChange={() => { void refreshCatalog() }}/>
       </>
@@ -590,7 +588,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             <h3>{t("Test environment")}</h3>
             <label className="setting-row">{t("Test user role")}<select value={account.testRole} disabled={!online || changingRole}
               onChange={event => changeTestRole(event.target.value as TestRole)}>
-              <option value="user">{t("User")}</option><option value="editor">{t("Sudoku Editor")}</option><option value="admin">{t("Admin")}</option>
+              <option value="user">{t("User")}</option><option value="editor">{t("Editor")}</option><option value="admin">{t("Admin")}</option>
             </select></label>
           </>}
         </>}

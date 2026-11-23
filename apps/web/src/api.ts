@@ -1,8 +1,9 @@
+import type { AccountRole } from '../../../packages/game-sdk/src/roles.js'
 import { apiMessages, type ApiCode } from '../../../packages/game-sdk/src/api-messages.js'
 import { formatMessage } from './i18n.js'
 
-export interface Account { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
-export type TestRole = 'user' | 'editor' | 'admin'
+export interface Account { id: string; name: string; role: AccountRole }
+export type TestRole = AccountRole
 export interface SessionAccount extends Account {
   expiresAt: string
   testRole?: TestRole

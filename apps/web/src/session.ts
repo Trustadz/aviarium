@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { accountRoles } from '../../../packages/game-sdk/src/roles.js'
 import { api, json, type SessionAccount } from './api.js'
 
 const sessionKey = 'aviarium:session'
@@ -15,10 +16,12 @@ const validUntil = (account: SessionAccount) => Date.parse(account.expiresAt)
 
 function cachedSession(): SessionAccount | undefined {
   try {
-    const account: SessionAccount | null = JSON.parse(localStorage.getItem(sessionKey) ?? 'null')
+    const account: (SessionAccount & { editorGames?: string[] }) | null = JSON.parse(localStorage.getItem(sessionKey) ?? 'null')
     if (account && typeof account.id === 'string' && typeof account.name === 'string' &&
-        ['user', 'admin'].includes(account.role) && Array.isArray(account.editorGames) &&
-        validUntil(account) > Date.now()) return account
+        accountRoles.includes(account.role) && validUntil(account) > Date.now()) {
+      const legacyEditor = account.role === 'user' && Array.isArray(account.editorGames) && account.editorGames.length > 0
+      return legacyEditor ? { ...account, role: 'editor' } : account
+    }
   } catch { /* Ignore invalid cached session metadata. */ }
 }
 

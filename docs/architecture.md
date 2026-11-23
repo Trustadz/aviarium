@@ -14,8 +14,9 @@ an origin.
 | --- | --- | --- |
 | Navigation and library | [main.tsx](../apps/web/src/main.tsx), [GameCatalog.tsx](../apps/web/src/GameCatalog.tsx), [registry.ts](../apps/web/src/registry.ts) | Check direct navigation, refresh, signed-out and offline states. Check route handling in React, Fastify's HTML fallback, and the service worker. |
 | Sudoku play | [Player.tsx](../apps/web/src/Player.tsx), [Grid.tsx](../apps/web/src/Grid.tsx), [rules.ts](../packages/sudoku/src/rules.ts), [contracts.ts](../packages/sudoku/src/contracts.ts) | Keep the client, server verification, and persisted saves aligned. Exercise touch and keyboard play for input changes. |
+| Nonograms play | [Nonograms.tsx](../apps/web/src/Nonograms.tsx), [puzzles.ts](../packages/nonograms/src/puzzles.ts), [nonograms-game.ts](../apps/server/src/nonograms-game.ts) | Keep clue validation, saved marks, and seeded Quick Play aligned across the browser and server. |
 | Local and synced progress | [storage.ts](../apps/web/src/storage.ts), [progress.ts](../apps/server/src/progress.ts) | Check account isolation, reconnect and retry, concurrent edits, and old saves. |
-| Catalog and creation | [PackStudio.tsx](../apps/web/src/PackStudio.tsx), [SudokuStudio.tsx](../apps/web/src/SudokuStudio.tsx), [packs.ts](../apps/server/src/packs.ts) | Preserve draft ownership, offline edits, publication revisions, visibility, and the ability to resume a prior revision. |
+| Catalog and creation | [PackStudio.tsx](../apps/web/src/PackStudio.tsx), [SudokuStudio.tsx](../apps/web/src/SudokuStudio.tsx), [NonogramsStudio.tsx](../apps/web/src/NonogramsStudio.tsx), [packs.ts](../apps/server/src/packs.ts) | Preserve draft ownership, offline edits, publication revisions, visibility, and the ability to resume a prior revision. |
 | Downloads and updates | [offline.ts](../apps/web/src/offline.ts), [game-assets.ts](../apps/web/game-assets.ts), [vite.config.ts](../apps/web/vite.config.ts), [sw.txt](../apps/web/sw.txt) | Verify the generated build. Exercise first install, offline reopen, and upgrades when changing cached assets or routing. |
 | Authentication and roles | [auth.ts](../apps/server/src/auth.ts), [config.ts](../apps/server/src/config.ts) | Use the existing session and permission helpers. Exercise role changes and account switching. |
 | Translation and News | [messages.ts](../apps/web/src/messages.ts), [api-messages.ts](../packages/game-sdk/src/api-messages.ts), [news.ts](../apps/server/src/news.ts), [news-translation.ts](../apps/server/src/news-translation.ts) | Keep English and Dutch messages complete and preserve the shared announcement ID and likes across translations. |
@@ -29,8 +30,8 @@ an origin.
   independently when a level's puzzle or effective gameplay rules change.
   Draft edits and catalog visibility can change independently of saved
   attempts. Keep the referenced level revisions available.
-- **One Sudoku engine for play and verification.** The renderer-neutral SDK
-  defines common types. Sudoku owns its codecs, rules, and generation. A
+- **Shared game contracts with game-specific logic.** The renderer-neutral SDK
+  defines common types. Each game owns its codecs, rules, and generation. A
   stable ruleset, save format, and generator version let the browser and
   server agree on the meaning of older saves and shared seeds. Check the
   legacy version paths before changing generation or decoding.
@@ -42,7 +43,7 @@ an origin.
   guarantees when changing either side of synchronization.
 - **The server owns permissions.** Pocket ID supplies identity in the normal
   login flow. PostgreSQL stores Aviarium sessions and roles. Use
-  `requireUser` or `requireGameEditor` as appropriate and enforce resource
+  `requireUser` or `requireEditor` as appropriate and enforce resource
   ownership in the server operation. Write requests must match the configured
   origin. Local-only play and loopback test sessions have distinct behavior.
 - **PostgreSQL coordinates durable work.** The puzzle worker claims jobs
@@ -68,9 +69,10 @@ an origin.
 
 The library, Studio, account permissions, and game workflows are modules inside
 the application. Adding a game contributes a browser definition and a server
-definition, and declares its offline assets. Sudoku is the existing example.
+definition, and declares its offline assets. Sudoku and Nonograms both use
+these registration points.
 
-- Register the [browser definition](../apps/web/src/game-web.ts) in [registry.ts](../apps/web/src/registry.ts). Aviarium assigns the game its `/games/<id>` route. A game contributes its title, previews, player, and attempt creation. Guide, settings, menu actions, Studio, pack presentation, and history are optional. Library and Studio use the same catalog component. Studio starts at the catalog and uses the Studio palette. The game supplies the palette for its own screens. Games with editors implement the [Studio contract](../apps/web/src/game-studio.ts).
+- Register the [browser definition](../apps/web/src/game-web.ts) in [registry.ts](../apps/web/src/registry.ts). Aviarium assigns the game its `/games/<id>` route. A game contributes its title, previews, player, Studio editor, and attempt creation. Guide, settings, menu actions, pack presentation, and history are optional. Library and Studio use the same catalog component. Studio starts at the catalog and uses the Studio palette. The game supplies the palette for its own screens and implements the [Studio contract](../apps/web/src/game-studio.ts).
 - Register the [server definition](../apps/server/src/game-runtime.ts) in [games.ts](../apps/server/src/games.ts). It supplies content and save parsers, pack verification, level comparison, optional generated-level resolution, and any game-specific routes. Shared pack routes are under `/api/games/:game/packs` and `/api/games/:game/pack-drafts`. The existing Sudoku pack routes remain available to installed clients.
 - Declare the browser entry modules and any separately emitted workers in [game-assets.ts](../apps/web/game-assets.ts). The build follows the entries' static imports and includes the declared workers. The service worker uses the manifest to install and update assets and to recognize navigation for registered game IDs.
 
@@ -78,21 +80,23 @@ The shared types, rules for progression, revision assignment, and attempt metada
 
 ## Levels and checks
 
-Givens are 81 row-major digits. Zero means empty. A pack draft can be edited without affecting published revisions. The generation job records a seed and generator version. Validation jobs capture the draft revision and return one of invalid, unsolvable, unique, multiple, or inconclusive. The app processes the PostgreSQL job queue after startup. A bounded worker thread runs the solver off the HTTP event loop. The job lease survives browser close and app restart. An expired search budget is inconclusive. Publishing requires verification of the current pack draft. Published data is immutable and the newest revision of each ID forms the shared catalog. Previous revisions remain available for saved attempts. Admins can hide an editor’s publication from the catalog while retaining its saved attempts. Users can play every published game. Editing access is granted by game ID and checked by the server. Admins have editing access across the library.
+Givens are 81 row-major digits. Zero means empty. A pack draft can be edited without affecting published revisions. The generation job records a seed and generator version. Validation jobs capture the draft revision and return one of invalid, unsolvable, unique, multiple, or inconclusive. The app processes the PostgreSQL job queue after startup. A bounded worker thread runs the solver off the HTTP event loop. The job lease survives browser close and app restart. An expired search budget is inconclusive. Publishing requires verification of the current pack draft. Published data is immutable and the newest revision of each ID forms the shared catalog. Previous revisions remain available for saved attempts. Admins can hide an editor’s publication from the catalog while retaining its saved attempts. Users can play every published game and manage their profile, preferences, and device settings. Editors additionally have Studio access for every game, with ownership checks on pack drafts. Admins also have administration access. Existing game-specific grants are promoted to the Editor role during upgrade.
 
 New Sudoku publications use a deterministic, easiest-first logical solver. Easy uses singles, Medium adds pairs and locked candidates, and Hard adds techniques such as triples and X-Wing. Extreme requires an advanced technique and Genius uses at least three distinct Extreme families in the logical solve. Search is used to verify uniqueness, while grading, hints, and playback use named deductions. An incomplete logical solve needs review. Older puzzle revisions retain their published grades. Quick Play v2 uses verified puzzle pools and seeded grid transformations, and checks that the transformed board keeps its requested grade. Once Sudoku is downloaded, a bundled browser worker creates random or seeded Quick Play puzzles online or offline. The browser keeps the existing seed-derived puzzle ID. On the first sync for an unknown puzzle, the server regenerates its grid from the seed, difficulty and generator version before accepting the save. A shared seed code carries its difficulty and generator version. The installed web app can receive the code through the share sheet on browsers that support share targets.
 
 ## Packs and Studio
 
-Open Studio and choose Sudoku to work in **My packs**. Authored levels belong to a pack. The shared workspace provides pack navigation, level ordering, appearance, rule controls, and trail preview. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
+Open Studio and choose a game to work in **My packs**. Authored levels belong to a pack. The shared workspace provides pack navigation, level ordering, appearance, rule controls, and trail preview. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
 
 Owners manage their packs. Admins use **Administration → Packs → Edit as admin** to enter another creator’s workspace. Server permissions and draft version checks apply to both modes. The package records the last editor and logs admin publications. Publish verifies the exact draft in a server worker and atomically replaces the visible pack revision. Legacy standalone publications appear in recovered packs without changing their existing level or save keys.
 
 A pack revision determines order, rules and presentation. Stable level IDs survive changes in order, and each level has an independent revision. Changes to givens or play rules create a new level revision. Level access lives on the pack. Levels inherit gameplay defaults and may override the controls supplied by the game. Ordered packs preserve access earned on earlier snapshots, count inserted levels toward completion, and allow players to continue from the next new stop. The shared pack trail opens at that next stop and begins above the information card.
 
-The default packs live in `packages/sudoku/src/built-in-packs.ts` and bundled artwork lives in `apps/web/public`. Admins and a pack’s owner can export published packs as `.aviarium-pack` ZIP archives with a versioned manifest and optional artwork. Import requires editor rights and makes a separate draft with new level identities. Archives carry content and rules.
+Each game registers its built-in packs and bundled artwork lives in `apps/web/public`. Sudoku registers Budgies and Nonograms registers Sulphur-crested Cockatoos. Nonograms also uses the shared Studio with a drawing grid and verifies publication by logical deduction. Admins and a pack’s owner can export published packs as `.aviarium-pack` ZIP archives with a versioned manifest and optional artwork. Import requires editor rights and makes a separate draft with new level identities. Archives carry content and rules.
 
 ## Saves and offline storage
+
+Nonograms stores row and column clues as level content with a versioned mark grid and undo history in each attempt. Its Quick Play boards use a seed, size, difficulty, and generator version. The browser generates them offline and the server regenerates them when progress first syncs.
 
 The shared attempt identifies game, level ID and revision, ruleset, and save format. It tracks elapsed time and completion. Sudoku supplies the entries, note masks, and bounded undo/redo. Dexie saves the latest local state and pending upload. Server mutations are idempotent by UUID. A stale base revision creates a separate attempt rather than overwriting the server snapshot. Verified completion is stored independently of individual attempts.
 
@@ -102,7 +106,7 @@ The production service worker caches the library shell and installs game assets 
 
 ## Current scope
 
-The platform ships Sudoku, player accounts and roles, draft review and publishing, local and server progress, and scheduled PostgreSQL backups. It also ships Sudoku packs, seeded Quick Play, and completion history. Daily challenges and high scores are planned. The shared menu accepts optional actions and sections where those features can appear. Scheduling and rankings will belong to Aviarium. Each game will supply challenge content, completion validation, and how to interpret its results.
+The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, and scheduled PostgreSQL backups. It also ships Sudoku packs, seeded Quick Play, and completion history. Daily challenges and high scores are planned. The shared menu accepts optional actions and sections where those features can appear. Scheduling and rankings will belong to Aviarium. Each game will supply challenge content, completion validation, and how to interpret its results.
 
 ## Release announcements
 
