@@ -9,7 +9,7 @@ import type { ServerGame } from './game-runtime.js'
 
 export const nonogramsServer: ServerGame = {
   id: nonogramsId,
-  preferences: z.object({ favoriteNonograms: z.boolean() }),
+  preferences: z.object({ favoriteNonograms: z.boolean(), nonogramTimer: z.boolean() }),
   packs: {
     readManifest: input => nonogramPacks.manifest.parse(input),
     readDraft: input => nonogramPacks.draft.parse(input),

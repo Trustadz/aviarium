@@ -21,6 +21,7 @@ export const dutch = {
   "Wings in Flight": "Vleugels in de lucht",
   "Sulphur-crested Cockatoo": "Grote geelkuifkaketoe",
   "Nonograms menu": "Nonogrammenu",
+  "Nonogram settings": "Nonogram-instellingen",
   "Grid size": "Roostergrootte",
   "Drag across the grid to mark several squares. Start on a matching mark to clear those marks. Fill and Mark blank preserve each other’s marks. Use Erase to clear either kind. Undo reverses one stroke.": "Sleep over het rooster om meerdere vakjes te markeren. Begin op een vakje met dezelfde markering om die markeringen te wissen. Vullen en Leeg markeren laten elkaars markeringen staan. Gebruik Wissen om beide soorten te wissen. Ongedaan maken draait één sleepbeweging terug.",
   "Use row and column clues to reveal a picture.": "Gebruik de aanwijzingen bij rijen en kolommen om een afbeelding te onthullen.",
