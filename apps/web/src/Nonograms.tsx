@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
-import { ArrowLeft, Undo2 } from 'lucide-react'
+import { ArrowLeft, RotateCcw, Undo2 } from 'lucide-react'
 import { type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
 import { fillsFitClues, matchesClues, type Cell } from '../../../packages/nonograms/src/puzzles.js'
 import type { GamePlayerProps } from './game-web.js'
@@ -7,7 +7,7 @@ import { knownMessage, useT } from './i18n.js'
 import { errorMessage } from './api.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, leave, persist, trial = false }: GamePlayerProps & { trial?: boolean }) {
+export default function Nonograms({ level, pack, session, leave, persist, reset, trial = false }: GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
   const started = useRef(Date.now())
@@ -32,7 +32,7 @@ export default function Nonograms({ level, pack, session, leave, persist, trial 
   }
 
   return <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined}
-    leave={leave} committed={saved.board} undo={saved.undo} problem={problem} trial={trial} onMove={onMove}/>
+    leave={leave} reset={reset} committed={saved.board} undo={saved.undo} problem={problem} trial={trial} onMove={onMove}/>
 }
 
 function markValue(current: Cell, tool: Cell, value: Cell) {
@@ -40,11 +40,12 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, committed, undo, problem, trial, onMove }: {
+function PuzzleBoard({ puzzle, title, pack, leave, reset, committed, undo, problem, trial, onMove }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
   leave: () => void
+  reset: () => void
   committed: Cell[]
   undo: Cell[][]
   problem: string
@@ -160,7 +161,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, committed, undo, problem, tri
     </div>
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
     <div className="play-layout">
-      <div className="nonogram-board" data-solved={solved} style={{
+      <div className="nonogram-board" data-solved={solved} data-size={width} style={{
         '--columns': width,
         '--row-clues': Math.max(...puzzle.rows.map(clue => clue.length)),
       } as CSSProperties}>
@@ -211,6 +212,9 @@ function PuzzleBoard({ puzzle, title, pack, leave, committed, undo, problem, tri
             </button>)}
           <button disabled={solved || !undo.length} onClick={() => onMove(undo[undo.length - 1], undo.slice(0, -1))}><Undo2 size={18}/> {t('Undo')}</button>
         </div>
+        {!trial && !solved && <button className="text-button" onClick={() => {
+          if (confirm(t('Start over? Your current saved game will be deleted.'))) reset()
+        }}><RotateCcw size={16}/> {t('Reset puzzle')}</button>}
       </div>
     </div>
   </section>
