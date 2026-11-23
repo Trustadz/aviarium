@@ -152,18 +152,27 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   border: 1px solid #bdb694; touch-action: pan-y pinch-zoom;
 }
 .hero:focus-visible { outline: 2px solid var(--hero-text); outline-offset: 3px; }
-.hero-track { position: relative; display: flex; width: 100%; min-width: 0; cursor: grab; }
+/* Every slide shares one grid cell, so the hero keeps the tallest slide's height while one is active. */
+.hero-track { position: relative; display: grid; width: 100%; min-width: 0; cursor: grab; }
 .hero-track img { -webkit-user-drag: none; }
 .hero[data-dragging] { user-select: none; -webkit-user-select: none; }
 .hero[data-dragging] .hero-track { cursor: grabbing; }
-.hero-slide { position: relative; display: flex; align-items: center; width: 100%; padding-bottom: 36px; }
-.hero-slide[data-leaving] { position: absolute; inset: 0; pointer-events: none; }
-.hero-content { position: relative; z-index: 2; margin-left: clamp(26px, 6vw, 65px); }
+.hero-slide {
+  position: relative; grid-area: 1 / 1; display: flex; flex-direction: column; align-items: stretch;
+  width: 100%; padding: 26px 0 58px; z-index: 1;
+}
+.hero-slide[data-active] { z-index: 2; }
+.hero-slide[data-leaving] { pointer-events: none; }
+.hero-slide:not([data-active]):not([data-leaving]) { visibility: hidden; }
+.hero-content {
+  position: relative; z-index: 2; display: grid; grid-template-rows: auto auto auto 1fr;
+  flex: 1 1 auto; margin-left: clamp(26px, 6vw, 65px);
+}
 .hero-kicker { display: flex; align-items: center; gap: 9px; color: var(--hero-text); font-size: .73rem; font-weight: 730; letter-spacing: .14em; }
 .hero-kicker span { display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); }
 .hero h1 { font-size: clamp(3.05rem, 8vw, 5.4rem); margin: 10px 0 16px; }
 .hero-content > p:not(.hero-kicker) { color: var(--hero-text); font-size: clamp(.95rem, 2vw, 1.11rem); }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 23px; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 23px; align-self: end; }
 .hero-action { background: var(--hero-button); color: var(--hero-button-text); }
 .hero-action:focus-visible, .hero-dots button:focus-visible { outline-color: var(--hero-text); }
 .hero-action:hover:not(:disabled) { background: var(--hero-button-hover); }
@@ -214,8 +223,8 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 @media (prefers-reduced-motion: no-preference) {
   .hero-track[data-direction=forward] { --hero-enter: 100%; --hero-exit: -100%; }
   .hero-track[data-direction=backward] { --hero-enter: -100%; --hero-exit: 100%; }
-  .hero-track[data-direction] > .hero-slide { animation: hero-slide-in .8s ease-in-out both; }
-  .hero-track[data-direction] > .hero-slide[data-leaving] { animation-name: hero-slide-out; }
+  .hero-track[data-direction] > .hero-slide[data-active] { animation: hero-slide-in .8s ease-in-out both; }
+  .hero-track[data-direction] > .hero-slide[data-leaving] { animation: hero-slide-out .8s ease-in-out both; }
   @keyframes hero-slide-in { from { transform: translateX(var(--hero-enter)); } }
   @keyframes hero-slide-out { to { transform: translateX(var(--hero-exit)); } }
 }
