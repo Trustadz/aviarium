@@ -144,7 +144,6 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --hero-button: var(--ink);
   --hero-button-hover: #2e3046;
   --hero-button-text: var(--sand);
-  --hero-control: #fffdf28c;
   color: var(--hero-text); background: linear-gradient(115deg,var(--gold) 17%,var(--sage) 100%);
 }
 .hero {
@@ -152,7 +151,11 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   border-radius: 24px;
   border: 1px solid #bdb694; touch-action: pan-y pinch-zoom;
 }
-.hero-track { position: relative; display: flex; width: 100%; min-width: 0; }
+.hero:focus-visible { outline: 2px solid var(--hero-text); outline-offset: 3px; }
+.hero-track { position: relative; display: flex; width: 100%; min-width: 0; cursor: grab; }
+.hero-track img { -webkit-user-drag: none; }
+.hero[data-dragging] { user-select: none; -webkit-user-select: none; }
+.hero[data-dragging] .hero-track { cursor: grabbing; }
 .hero-slide { position: relative; display: flex; align-items: center; width: 100%; padding-bottom: 36px; }
 .hero-slide[data-leaving] { position: absolute; inset: 0; pointer-events: none; }
 .hero-content { position: relative; z-index: 2; margin-left: clamp(26px, 6vw, 65px); }
@@ -162,7 +165,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .hero-content > p:not(.hero-kicker) { color: var(--hero-text); font-size: clamp(.95rem, 2vw, 1.11rem); }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 23px; }
 .hero-action { background: var(--hero-button); color: var(--hero-button-text); }
-.hero-action:focus-visible, .hero-controls button:focus-visible { outline-color: var(--hero-text); }
+.hero-action:focus-visible, .hero-dots button:focus-visible { outline-color: var(--hero-text); }
 .hero-action:hover:not(:disabled) { background: var(--hero-button-hover); }
 .hero-art {
   position: absolute; width: var(--art-size); --art-size: min(53%, 440px);
@@ -170,33 +173,29 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   pointer-events: none;
 }
 .hero-art .board { box-shadow: 0 16px 44px #142c2644; border-radius: 16px; }
-.hero-controls {
-  display: flex; align-items: center; position: absolute; z-index: 3;
-  bottom: 13px; left: clamp(26px, 6vw, 65px); padding: 0 2px; border-radius: 999px;
-  background: var(--hero-control);
+.hero-dots {
+  display: flex; align-items: center; gap: 1px; position: absolute; z-index: 3;
+  bottom: 13px; left: clamp(24px, 6vw, 63px);
 }
-.hero-controls button {
-  display: grid; place-items: center; background: transparent; border: 0;
-  width: 36px; height: 36px; border-radius: 999px; color: var(--hero-text);
+.hero-dots button {
+  display: grid; place-items: center; width: 28px; height: 28px; padding: 0;
+  background: transparent; border: 0; border-radius: 999px;
+  color: var(--hero-text); opacity: .38; transition: opacity .2s ease;
 }
-.hero-controls button:hover { background: color-mix(in srgb, var(--hero-text) 15%, transparent); }
-.hero-controls .hero-dot { width: 28px; }
-.hero-dot span { width: 9px; height: 9px; border: 1px solid currentColor; border-radius: 50%; }
-.hero-dot[aria-pressed=true] span { background: currentColor; }
-.hero-timer {
-  display: grid; gap: 3px; margin: 0 12px 0 6px; min-width: 64px;
-  font-size: .7rem; line-height: 1.2; font-weight: 650;
+.hero-dots button:hover { opacity: .72; }
+.hero-dots button:focus-visible { opacity: 1; }
+.hero-dots button[aria-pressed=true] { opacity: .92; }
+.hero-dot span {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  transition: transform .2s ease;
 }
-.hero-timer-track { height: 3px; background: color-mix(in srgb, var(--hero-text) 25%, transparent); border-radius: 4px; overflow: hidden; }
-.hero-timer-fill { height: 100%; background: var(--hero-text); transform-origin: left; animation: hero-countdown linear both; }
-@keyframes hero-countdown { from { transform: scaleX(0); } }
+.hero-dot[aria-pressed=true] span { transform: scale(1.35); }
 .hero-nonograms {
   --hero-base: #16374b;
   --hero-text: #fff4df;
   --hero-button: #f5e8d2;
   --hero-button-hover: #fff6e6;
   --hero-button-text: #17374b;
-  --hero-control: #0e293dcb;
   background: var(--hero-base); border-color: #567486;
 }
 .app[data-theme=dark] .hero-nonograms { --hero-base: #102638; }
@@ -385,7 +384,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --feedback: #fff; --error-background: #303030; --error-text: #fff; --given-bg: #333; --card-art: var(--tint);
 }
 .reader .hero, .reader .hero-slide {
-  --hero-base: var(--surface); --hero-text: var(--text); --hero-control: var(--tint);
+  --hero-base: var(--surface); --hero-text: var(--text);
   background: var(--surface); color: var(--text);
 }
 .reader .hero { border: 2px solid var(--text); }
@@ -418,7 +417,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   .hero-slide { padding-block: 22px 58px; }
   .hero-art { right: -112px; top: 56px; opacity: .38; --art-size: 295px; }
   .hero-content { margin-left: 19px; margin-right: 12px; }
-  .hero-controls { left: 19px; }
+  .hero-dots { left: 19px; }
   .hero-slide.hero-nonograms .hero-content { width: min(72%, 320px); }
   .hero-slide.hero-nonograms h1 { font-size: clamp(2.5rem, 10vw, 3.2rem); }
   .hero-slide.hero-nonograms .hero-art { right: 0; }
