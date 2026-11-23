@@ -4,7 +4,7 @@ import type { Locale } from '../../../packages/game-sdk/src/locales.js'
 import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, ArrowRight, BookOpen, LogIn, LogOut, Newspaper,
+import { ArrowLeft, BookOpen, LogIn, LogOut, Newspaper,
   Pencil, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { packProgress, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
@@ -13,6 +13,7 @@ import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole }
 import { AccountMenu, ProfileForm } from './AccountSettings.js'
 import { News } from './News.js'
 import { ContinueGames } from './ContinueGames.js'
+import { LibraryHero } from './LibraryHero.js'
 import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
 import type { WebGame } from './game-web.js'
@@ -26,7 +27,6 @@ import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, 
   sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession, type MutationExtras, type ProfilePreferences } from './storage.js'
 import './styles.css'
 
-const featuredGame = games[0]
 const mutationExtras: MutationExtras = (game, level) => findGame(game)?.mutationExtras?.(level)
 const Admin = lazy(() => import('./Admin.js'))
 
@@ -440,7 +440,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const inLibrary = path === '/'
   const inStudioCatalog = path === '/studio' && canEdit
   const catalogCategories = ['All games', ...new Set(games.flatMap(game => game.tags)), 'Favorites']
-  const catalogFeature = featuredGame
   const catalogPage = (game: (typeof games)[number]) => inStudioCatalog ? '/studio/' + game.id : game.url
   const inNews = path === '/news'
   const inStudio = path === '/studio' || Boolean(studioGame)
@@ -484,19 +483,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       <Suspense fallback={<p role="status">{t("Loading…")}</p>}>
       {inLibrary || inStudioCatalog ? <>
         {inLibrary && continueRow()}
-        {inLibrary && <section className="hero">
-          <div className="hero-content">
-            <p className="hero-kicker"><span/>{" "}{t("PUZZLE LIBRARY")}</p>
-            <h1>Aviarium</h1>
-            <p>{t('A quiet place to play. Find your next puzzle or pick up where you left off.')}</p>
-            <div className="hero-actions">
-              <button className="primary hero-action" onClick={() => go(catalogPage(catalogFeature))}>
-                {t('Explore {game}', { game: catalogFeature.title })}{" "}<ArrowRight size={17}/>
-              </button>
-            </div>
-          </div>
-          <div className={'hero-art ' + catalogFeature.theme} aria-hidden="true">{catalogFeature.preview(catalogFeature.sample?.(catalog))}</div>
-        </section>}
+        {inLibrary && <LibraryHero catalog={catalog} packs={packs} reader={reader} open={game => go(game.url)}/>}
         <GameCatalog studio={inStudioCatalog} games={games.filter(game => !reader || game.eReader).map(game => ({
           ...game, description: t(inStudioCatalog ? game.studioDescription ?? game.description : game.description), href: catalogPage(game),
           artClass: game.theme, art: game.preview(game.sample?.(catalog)),

@@ -1,6 +1,16 @@
 import type { apiMessages } from '../../../packages/game-sdk/src/api-messages.js'
 
 export const dutch = {
+  "Featured games": "Uitgelichte spellen",
+  "Pause featured games": "Uitgelichte spellen pauzeren",
+  "Resume featured games": "Uitgelichte spellen hervatten",
+  "Next slide": "Volgende dia",
+  "Carousel paused": "Gepauzeerd",
+  "Auto-advance off": "Automatisch wisselen uit",
+  "Previous featured game": "Vorig uitgelicht spel",
+  "Next featured game": "Volgend uitgelicht spel",
+  "Show {game}": "Toon {game}",
+  "Use row and column clues to reveal a picture. Start with the Sulphur-crested Cockatoos pack.": "Gebruik rij- en kolomaanwijzingen om een afbeelding te onthullen. Begin met het pakket Grote geelkuifkaketoes.",
   "Filled squares conflict with the row clues.": "De gevulde vakjes passen niet bij de rijaanwijzingen.",
   "Filled squares conflict with the column clues.": "De gevulde vakjes passen niet bij de kolomaanwijzingen.",
   "Sulphur-crested Cockatoos": "Grote geelkuifkaketoes",
