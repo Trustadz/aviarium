@@ -19,6 +19,8 @@ import { GameHistory } from './GameHistory.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
+import { CelebrationOverlay } from './CelebrationOverlay.js'
+import { celebrationVisitors, type CelebrationVisitor } from './celebrations.js'
 import { registerOffline, useGameDownloads } from './offline.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
@@ -187,6 +189,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
   const [dialog, showDialog] = useState<'display' | 'game' | 'account'>()
+  const [celebrationPreview, setCelebrationPreview] = useState<CelebrationVisitor>()
   const [changingRole, setChangingRole] = useState(false)
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
@@ -455,6 +458,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   useLayoutEffect(() => setBrowserTheme(openGame ? gameSurface.current : app.current, surface === 'game' ? '--game-page' : '--surface'),
     [reader, surface, theme, openGame?.id, playPack?.data.theme])
   const settings = openGame?.settings
+  const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
+    item.data.game === playing.game.id && item.data.level === playing.level.id &&
+    item.data.levelRevision === playing.level.revision && item.data.completed).map(item => item.data.elapsedMs)) : Number.POSITIVE_INFINITY
 
   return <div ref={app} className={'app' + (reader ? ' reader' : '') + (inShell ? ' app-shell' : '')} data-theme={theme} data-surface={surface}>
     {inShell && <>
@@ -493,7 +499,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         }))} categories={catalogCategories} category={category} setCategory={setCategory} query={query} setQuery={setQuery} link={link}/>
       </>
       : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
-        preferences={prefs} reader={reader} persist={data => record(playing, data)}
+        preferences={prefs} reader={reader} bestMs={Number.isFinite(bestMs) ? bestMs : undefined} testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
         openSettings={settings ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
@@ -577,6 +583,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
               onChange={event => changeTestRole(event.target.value as TestRole)}>
               <option value="user">{t("User")}</option><option value="editor">{t("Editor")}</option><option value="admin">{t("Admin")}</option>
             </select></label>
+            <h3>{t("Celebration previews")}</h3>
+            <p className="muted">{t("Preview each completion celebration without solving a puzzle.")}</p>
+            <div className="celebration-test-grid">{celebrationVisitors.map(visitor =>
+              <button type="button" className="secondary" key={visitor.id}
+                onClick={() => setCelebrationPreview(visitor)}>{t(visitor.name)}</button>)}</div>
           </>}
         </>}
         {dialog === 'game' && settings?.toggles.map(setting => <label className="setting-row" key={setting.key}>
@@ -610,6 +621,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         </>}
       </section>
     </div>}
+    {celebrationPreview && <CelebrationOverlay visitor={celebrationPreview} preview reader={reader}
+      result={{ elapsedMs: 0, stats: [{ label: t('Test environment'), value: t('Preview') }] }}
+      actions={[{ label: t('Close'), onClick: () => setCelebrationPreview(undefined) }]}
+      onClose={() => setCelebrationPreview(undefined)}/>}
   </div>
 }
 

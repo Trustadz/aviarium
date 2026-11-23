@@ -854,6 +854,13 @@ try {
   await nonogramPage.getByRole('button', { name: 'Undo', exact: true }).click()
   const target = solveByDeduction(egg.content).cells
   for (const [index, mark] of target.entries()) if (mark === 1) await squares.nth(index).tap()
+  await nonogramPage.locator('.celebration-overlay').waitFor()
+  const celebrationBox = await nonogramPage.locator('.celebration-overlay').boundingBox()
+  assert.ok(celebrationBox && celebrationBox.width === 390 && celebrationBox.height === 844,
+    'completion celebration fills the viewport')
+  assert.equal(await nonogramPage.evaluate(() => document.querySelector('main')?.getAttribute('aria-hidden')), 'true',
+    'completion celebration hides the game from assistive technology')
+  await nonogramPage.getByRole('button', { name: 'Skip celebration' }).tap()
   await nonogramPage.getByRole('heading', { name: 'Puzzle solved' }).waitFor()
   await nonogramPage.getByRole('button', { name: 'Back to roadmap' }).tap()
   await nonogramPage.getByRole('button', { name: 'Play Nest Hollow' }).waitFor()
