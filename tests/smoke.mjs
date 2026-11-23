@@ -295,7 +295,24 @@ try {
   assert.equal(await cardPreview.locator('.cell').count(), 81)
   assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
   const featured = page.getByRole('region', { name: 'Featured games' })
-  const nextFeatured = featured.getByRole('button', { name: 'Next featured game' })
+  const heroTrack = featured.locator('.hero-track')
+  const swipeHero = async distance => {
+    const box = await heroTrack.boundingBox()
+    assert.ok(box)
+    const session = await context.newCDPSession(page)
+    const startX = box.x + 24
+    const startY = box.y + 24
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: startX, y: startY }] })
+    for (let step = 1; step <= 6; step++) {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchMove', touchPoints: [{ x: startX + (distance * step) / 6, y: startY }],
+      })
+      await new Promise(resolve => setTimeout(resolve, 16))
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await session.detach()
+  }
+  assert.equal(await featured.locator('.hero-controls, .hero-timer').count(), 0)
   const sudokuSlide = featured.locator('.hero-slide.hero-sudoku')
   const sudokuLayout = () => sudokuSlide.evaluate(slide => {
     const description = slide.querySelector('.hero-content > p:not(.hero-kicker)')
@@ -308,13 +325,14 @@ try {
   })
   const sudokuAtRest = await sudokuLayout()
   assert.notEqual(sudokuAtRest.boardRotation, 'none')
-  await nextFeatured.tap()
+  await swipeHero(-120)
   assert.deepEqual(await sudokuLayout(), sudokuAtRest)
   await featured.getByRole('heading', { name: 'Nonograms' }).waitFor()
   assert.equal(await featured.getByRole('button', { name: 'Show Nonograms' }).getAttribute('aria-pressed'), 'true')
   await featured.locator('.hero-cover img').evaluate(image => image.decode())
-  await nextFeatured.press('ArrowLeft')
+  await featured.press('ArrowLeft')
   await featured.getByRole('heading', { name: 'Aviarium' }).waitFor()
+  assert.equal(await featured.getByRole('button', { name: 'Show Sudoku' }).getAttribute('aria-pressed'), 'true')
   await featured.getByRole('button', { name: 'Show Nonograms' }).tap()
   await featured.getByRole('button', { name: 'Explore Nonograms' }).tap()
   await page.waitForURL('**/games/nonograms')

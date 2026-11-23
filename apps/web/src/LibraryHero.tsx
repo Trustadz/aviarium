@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react'
-import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import { starterPack } from '../../../packages/nonograms/src/puzzles.js'
@@ -21,6 +21,12 @@ const slides = [
 
 const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
 const rotationInterval = 8_000
+const slideTransition = 800
+const snapBackTransition = 240
+const dragThreshold = 8
+const flickDistance = 24
+const flickWindow = 280
+const interactiveSelector = 'button, a, input, select, textarea, [role="button"]'
 
 function subscribeToMotionPreference(notify: () => void) {
   motionPreference.addEventListener('change', notify)
@@ -28,6 +34,14 @@ function subscribeToMotionPreference(notify: () => void) {
 }
 
 const allowsMotion = () => !motionPreference.matches
+
+type DragState = {
+  id: number
+  startX: number
+  startY: number
+  startedAt: number
+  horizontal: boolean
+}
 
 export function LibraryHero({ catalog, packs, reader, open }: {
   catalog: readonly GameLevel[]
@@ -37,21 +51,24 @@ export function LibraryHero({ catalog, packs, reader, open }: {
 }) {
   const t = useT()
   const [{ index, outgoing, direction }, setSlide] = useState({ index: 0, outgoing: null as number | null, direction: 1 })
-  const [paused, setPaused] = useState(false)
   const [hovering, setHovering] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const motionAllowed = useSyncExternalStore(subscribeToMotionPreference, allowsMotion)
-  const swipe = useRef<{ id: number; x: number; y: number } | null>(null)
+  const drag = useRef<DragState | null>(null)
+  const track = useRef<HTMLDivElement>(null)
+  const settleTimer = useRef<number | null>(null)
   const canRotate = motionAllowed && !reader
-  const rotating = canRotate && !paused && !hovering && !focused
+  const rotating = canRotate && !hovering && !focused && !dragging
   const transitioning = canRotate && outgoing !== null
   const cockatooCover = packs.find(pack => pack.id === 'nonograms-' + starterPack.id)?.data.cover
 
-  function move(direction: number) {
+  function move(step: number) {
+    if (step === 0) return
     setSlide(current => ({
-      index: (current.index + direction + slides.length) % slides.length,
+      index: (current.index + step + slides.length) % slides.length,
       outgoing: canRotate ? current.index : null,
-      direction,
+      direction: Math.sign(step),
     }))
   }
 
@@ -61,20 +78,96 @@ export function LibraryHero({ catalog, packs, reader, open }: {
     return () => window.clearTimeout(timer)
   }, [index, rotating, canRotate])
 
-  function startSwipe(event: PointerEvent<HTMLElement>) {
+  function clearSettleTimer() {
+    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current)
+    settleTimer.current = null
+  }
+
+  function resetTrack() {
+    clearSettleTimer()
+    const element = track.current
+    if (!element) return
+    element.style.transition = ''
+    element.style.transform = ''
+  }
+
+  function settleTrack(duration: number, easing: 'ease-in-out' | 'ease-out') {
+    const element = track.current
+    if (!element) return
+    clearSettleTimer()
+    if (duration === 0) {
+      element.style.transition = ''
+      element.style.transform = ''
+      return
+    }
+    element.style.transition = `transform ${duration}ms ${easing}`
+    element.style.transform = 'translate3d(0, 0, 0)'
+    settleTimer.current = window.setTimeout(resetTrack, duration)
+  }
+
+  function startDrag(event: PointerEvent<HTMLElement>) {
     setFocused(false)
-    if (event.pointerType === 'touch' && event.isPrimary && !(event.target as HTMLElement).closest('button')) {
-      swipe.current = { id: event.pointerId, x: event.clientX, y: event.clientY }
+    if (!event.isPrimary) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    if (event.target instanceof Element && event.target.closest(interactiveSelector)) return
+    if (settleTimer.current !== null) resetTrack()
+    drag.current = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      horizontal: false,
     }
   }
 
-  function finishSwipe(event: PointerEvent<HTMLElement>) {
-    const start = swipe.current
-    if (!start || event.pointerId !== start.id) return
-    swipe.current = null
-    const x = event.clientX - start.x
-    const y = event.clientY - start.y
-    if (Math.abs(x) > Math.max(45, Math.abs(y) * 1.4)) move(x < 0 ? 1 : -1)
+  function dragMove(event: PointerEvent<HTMLElement>) {
+    const state = drag.current
+    if (!state || event.pointerId !== state.id) return
+    const dx = event.clientX - state.startX
+    const dy = event.clientY - state.startY
+    if (!state.horizontal) {
+      if (Math.abs(dx) < dragThreshold && Math.abs(dy) < dragThreshold) return
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        drag.current = null
+        return
+      }
+      state.horizontal = true
+      setDragging(true)
+      event.currentTarget.setPointerCapture(event.pointerId)
+      window.getSelection()?.removeAllRanges()
+    }
+    event.preventDefault()
+    const element = track.current
+    if (!element) return
+    const limit = Math.min(240, Math.max(64, element.clientWidth * 0.22))
+    const offset = limit * Math.tanh(dx / limit)
+    element.style.transition = 'none'
+    element.style.transform = `translate3d(${offset}px, 0, 0)`
+  }
+
+  function finishDrag(event: PointerEvent<HTMLElement>) {
+    const state = drag.current
+    if (!state || event.pointerId !== state.id) return
+    drag.current = null
+    if (!state.horizontal) return
+    setDragging(false)
+    const width = track.current?.clientWidth ?? 0
+    const dx = event.clientX - state.startX
+    const threshold = Math.min(90, Math.max(45, width * 0.08))
+    const flick = Math.abs(dx) > flickDistance && performance.now() - state.startedAt < flickWindow
+    const step = Math.abs(dx) > threshold || flick ? (dx < 0 ? 1 : -1) : 0
+    settleTrack(step === 0 ? snapBackTransition : canRotate ? slideTransition : 0,
+      step === 0 ? 'ease-out' : 'ease-in-out')
+    move(step)
+  }
+
+  function cancelDrag(event: PointerEvent<HTMLElement>) {
+    const state = drag.current
+    if (!state || event.pointerId !== state.id) return
+    drag.current = null
+    if (!state.horizontal) return
+    setDragging(false)
+    settleTrack(snapBackTransition, 'ease-out')
   }
 
   function renderSlide(position: number, leaving = false) {
@@ -99,48 +192,33 @@ export function LibraryHero({ catalog, packs, reader, open }: {
           </button>
         </div>
       </div>
-      {cover ? <div className="hero-cover" aria-hidden="true"><img src={cover} alt=""/></div>
+      {cover ? <div className="hero-cover" aria-hidden="true"><img src={cover} alt="" draggable={false}/></div>
         : <div className={'hero-art ' + game.theme} aria-hidden="true">{game.preview(game.sample?.(catalog))}</div>}
     </div>
   }
 
   return <section className={'hero hero-' + slides[index].game} aria-label={t('Featured games')}
+    tabIndex={0} data-dragging={dragging || undefined}
     onPointerEnter={event => { if (event.pointerType === 'mouse') setHovering(true) }}
     onPointerLeave={() => setHovering(false)}
     onFocus={event => setFocused(event.target.matches(':focus-visible'))}
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false) }}
-    onPointerDown={startSwipe} onPointerUp={finishSwipe} onPointerCancel={() => { swipe.current = null }}
+    onPointerDown={startDrag} onPointerMove={dragMove} onPointerUp={finishDrag} onPointerCancel={cancelDrag}
     onKeyDown={event => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
       event.preventDefault()
       setFocused(true)
       move(event.key === 'ArrowRight' ? 1 : -1)
     }}>
-    <div className="hero-track" id="featured-game"
+    <div className="hero-track" id="featured-game" ref={track}
       data-direction={transitioning ? (direction > 0 ? 'forward' : 'backward') : undefined}>
       {transitioning && renderSlide(outgoing, true)}
       {renderSlide(index)}
     </div>
-    <div className="hero-controls">
-      {canRotate && <button type="button" aria-label={t(paused ? 'Resume featured games' : 'Pause featured games')}
-        aria-controls="featured-game" onClick={() => setPaused(current => !current)}>
-        {paused ? <Play size={15}/> : <Pause size={15}/>}
-      </button>}
-      <button type="button" aria-label={t('Previous featured game')} aria-controls="featured-game" onClick={() => move(-1)}>
-        <ArrowLeft size={18}/>
-      </button>
+    <div className="hero-dots">
       {slides.map((item, position) => <button key={item.game} type="button" className="hero-dot"
         aria-label={t('Show {game}', { game: findGame(item.game)!.title })} aria-controls="featured-game"
         aria-pressed={index === position} onClick={() => { if (position !== index) move(position - index) }}><span/></button>)}
-      <button type="button" aria-label={t('Next featured game')} aria-controls="featured-game" onClick={() => move(1)}>
-        <ArrowRight size={18}/>
-      </button>
-      <div className="hero-timer">
-        <span>{t(rotating ? 'Next slide' : canRotate ? 'Carousel paused' : 'Auto-advance off')}</span>
-        <div className="hero-timer-track" aria-hidden="true">
-          {rotating && <div key={index} className="hero-timer-fill" style={{ animationDuration: `${rotationInterval}ms` }}/>}
-        </div>
-      </div>
     </div>
   </section>
 }
