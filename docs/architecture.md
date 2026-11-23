@@ -1,12 +1,80 @@
 # Aviarium architecture
 
+## Runtime and code map
+
+Aviarium is an npm-workspaces TypeScript application. Vite builds a React
+frontend, and TypeScript compiles the Fastify server and the shared modules.
+The production server serves the compiled frontend and API from one origin.
+One Aviarium process applies migrations, serves requests, and runs background
+loops alongside a separate PostgreSQL service. This keeps deployment to two
+services and allows browser requests, session cookies, and PWA routes to share
+an origin.
+
+| Area | Start here | When changing it |
+| --- | --- | --- |
+| Navigation and library | [main.tsx](../apps/web/src/main.tsx), [GameCatalog.tsx](../apps/web/src/GameCatalog.tsx), [registry.ts](../apps/web/src/registry.ts) | Check direct navigation, refresh, signed-out and offline states. Check route handling in React, Fastify's HTML fallback, and the service worker. |
+| Sudoku play | [Player.tsx](../apps/web/src/Player.tsx), [Grid.tsx](../apps/web/src/Grid.tsx), [rules.ts](../packages/sudoku/src/rules.ts), [contracts.ts](../packages/sudoku/src/contracts.ts) | Keep the client, server verification, and persisted saves aligned. Exercise touch and keyboard play for input changes. |
+| Nonograms play | [Nonograms.tsx](../apps/web/src/Nonograms.tsx), [puzzles.ts](../packages/nonograms/src/puzzles.ts), [nonograms-game.ts](../apps/server/src/nonograms-game.ts) | Keep clue validation, saved marks, and seeded Quick Play aligned across the browser and server. |
+| Local and synced progress | [storage.ts](../apps/web/src/storage.ts), [progress.ts](../apps/server/src/progress.ts) | Check account isolation, reconnect and retry, concurrent edits, and old saves. |
+| Catalog and creation | [PackStudio.tsx](../apps/web/src/PackStudio.tsx), [SudokuStudio.tsx](../apps/web/src/SudokuStudio.tsx), [NonogramsStudio.tsx](../apps/web/src/NonogramsStudio.tsx), [packs.ts](../apps/server/src/packs.ts) | Preserve draft ownership, offline edits, publication revisions, visibility, and the ability to resume a prior revision. |
+| Downloads and updates | [offline.ts](../apps/web/src/offline.ts), [game-assets.ts](../apps/web/game-assets.ts), [vite.config.ts](../apps/web/vite.config.ts), [sw.txt](../apps/web/sw.txt) | Verify the generated build. Exercise first install, offline reopen, and upgrades when changing cached assets or routing. |
+| Authentication and roles | [auth.ts](../apps/server/src/auth.ts), [config.ts](../apps/server/src/config.ts) | Use the existing session and permission helpers. Exercise role changes and account switching. |
+| Translation and News | [messages.ts](../apps/web/src/messages.ts), [api-messages.ts](../packages/game-sdk/src/api-messages.ts), [news.ts](../apps/server/src/news.ts), [news-translation.ts](../apps/server/src/news-translation.ts) | Keep English and Dutch messages complete and preserve the shared announcement ID and likes across translations. |
+| Startup, jobs, and persistence | [app.ts](../apps/server/src/app.ts), [migrate.ts](../apps/server/src/migrate.ts), [worker.ts](../apps/server/src/worker.ts), [backup-runner.ts](../apps/server/src/backup-runner.ts) | Check readiness, fresh installs and upgrades, and recovery from failed or interrupted work. |
+
+## Design choices and compatibility
+
+- **A shared, versioned puzzle library.** Published puzzle and pack revisions
+  are immutable because saved attempts refer to exact level versions. Pack
+  revisions track changes to the published pack. Level revisions advance
+  independently when a level's puzzle or effective gameplay rules change.
+  Draft edits and catalog visibility can change independently of saved
+  attempts. Keep the referenced level revisions available.
+- **Shared game contracts with game-specific logic.** The renderer-neutral SDK
+  defines common types. Each game owns its codecs, rules, and generation. A
+  stable ruleset, save format, and generator version let the browser and
+  server agree on the meaning of older saves and shared seeds. Check the
+  legacy version paths before changing generation or decoding.
+- **Offline play with server-verified sync.** The service worker handles assets
+  and app navigation. IndexedDB stores gameplay data and pending mutations.
+  The API verifies account, puzzle version, and claimed completion when
+  accepting a save. Retried mutations return the stored result for the same
+  ID and payload. Concurrent edits can create a separate attempt. Keep those
+  guarantees when changing either side of synchronization.
+- **The server owns permissions.** Pocket ID supplies identity in the normal
+  login flow. PostgreSQL stores Aviarium sessions and roles. Use
+  `requireUser` or `requireEditor` as appropriate and enforce resource
+  ownership in the server operation. Write requests must match the configured
+  origin. Local-only play and loopback test sessions have distinct behavior.
+- **PostgreSQL coordinates durable work.** The puzzle worker claims jobs
+  with a lease and runs expensive solving in a bounded worker thread.
+  Validation results refer to a draft revision. A publish request must
+  still verify the current revision. Backups and optional News translation
+  also run inside the app process.
+- **Schema upgrades travel with the app.** Startup applies the sorted SQL
+  files in [migrations](../apps/server/migrations/) in a transaction under an
+  advisory lock. The ledger records filenames. Add a new numbered file for a
+  schema or data change and preserve files already applied by deployments.
+  Check open PRs for numbering collisions and verify upgrades with existing
+  data when the change affects it. Use the existing transaction helper in
+  `config.ts` for multi-step writes.
+- **Verification and shipping are separate.** [Verify](../.github/workflows/verify.yml)
+  tests PRs and `main`. [Publish container](../.github/workflows/container.yml)
+  runs on explicit dispatch from `main`, verifies again, versions the image
+  from Git tags, and publishes the corresponding release. Use
+  [the release instructions](../README.md#publish-a-release) for a release.
+  In-app News is a separate, owner-requested change.
+
 ## Application and game registration
 
-Aviarium ships as one application with one PostgreSQL database. The library, Studio, account/permissions, and game workflows are modules inside that application. Adding a game contributes a browser definition and a server definition, and declares its offline assets.
+The library, Studio, account permissions, and game workflows are modules inside
+the application. Adding a game contributes a browser definition and a server
+definition, and declares its offline assets. Sudoku and Nonograms both use
+these registration points.
 
-- Register the browser definition in `apps/web/src/registry.ts`. Aviarium assigns the game its `/games/<id>` route. A game contributes its title, previews, player, Studio editor, and attempt creation. Guide, settings, menu actions, pack presentation, and history are optional. Library and Studio use the same catalog component. Studio starts at the catalog and uses the Studio palette. The game supplies the palette for its own screens.
-- Register the server definition in `apps/server/src/games.ts`. It supplies content and save parsers, pack verification, level comparison, optional generated-level resolution, and any game-specific routes. Shared pack routes are under `/api/games/:game/packs` and `/api/games/:game/pack-drafts`. The existing Sudoku pack routes remain available to installed clients.
-- Declare the browser entry modules and any separately emitted workers in `apps/web/game-assets.ts`. The build follows their static imports and uses the resulting manifest to install and update the game. The service worker recognizes navigation for registered game IDs.
+- Register the [browser definition](../apps/web/src/game-web.ts) in [registry.ts](../apps/web/src/registry.ts). Aviarium assigns the game its `/games/<id>` route. A game contributes its title, previews, player, Studio editor, and attempt creation. Guide, settings, menu actions, pack presentation, and history are optional. Library and Studio use the same catalog component. Studio starts at the catalog and uses the Studio palette. The game supplies the palette for its own screens and implements the [Studio contract](../apps/web/src/game-studio.ts).
+- Register the [server definition](../apps/server/src/game-runtime.ts) in [games.ts](../apps/server/src/games.ts). It supplies content and save parsers, pack verification, level comparison, optional generated-level resolution, and any game-specific routes. Shared pack routes are under `/api/games/:game/packs` and `/api/games/:game/pack-drafts`. The existing Sudoku pack routes remain available to installed clients.
+- Declare the browser entry modules and any separately emitted workers in [game-assets.ts](../apps/web/game-assets.ts). The build follows the entries' static imports and includes the declared workers. The service worker uses the manifest to install and update assets and to recognize navigation for registered game IDs.
 
 The shared types, rules for progression, revision assignment, and attempt metadata live in `packages/game-sdk`. A game can supply a different puzzle and board representation. Sudoku keeps its existing flat save and pack fields. New games can store a published level's game-specific payload in the `content` column. Level and pack identifiers are unique across the library. Prefix new built-in and generated IDs with the game ID. Existing Sudoku IDs stay valid.
 
