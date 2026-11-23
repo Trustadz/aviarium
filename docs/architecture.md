@@ -24,9 +24,11 @@ Owners manage their packs. Admins use **Administration → Packs → Edit as adm
 
 A pack revision determines order, rules and presentation. Stable level IDs survive changes in order, and each level has an independent revision. Changes to givens or play rules create a new level revision. Level access lives on the pack. Levels inherit gameplay defaults and may override the controls supplied by the game. Ordered packs preserve access earned on earlier snapshots, count inserted levels toward completion, and allow players to continue from the next new stop. The shared pack trail opens at that next stop and begins above the information card.
 
-The default packs live in `packages/sudoku/src/built-in-packs.ts` and bundled artwork lives in `apps/web/public`. Admins and a pack’s owner can export published packs as `.aviarium-pack` ZIP archives with a versioned manifest and optional artwork. Import requires editor rights and makes a separate draft with new level identities. Archives carry content and rules.
+Each game registers its built-in packs and bundled artwork lives in `apps/web/public`. Sudoku registers Budgies and Nonograms registers Sulphur-crested Cockatoos. Nonograms also uses the shared Studio with a drawing grid and verifies publication by logical deduction. Admins and a pack’s owner can export published packs as `.aviarium-pack` ZIP archives with a versioned manifest and optional artwork. Import requires editor rights and makes a separate draft with new level identities. Archives carry content and rules.
 
 ## Saves and offline storage
+
+Nonograms stores row and column clues as level content with a versioned mark grid and undo history in each attempt. Its Quick Play boards use a seed, size, difficulty, and generator version. The browser generates them offline and the server regenerates them when progress first syncs.
 
 The shared attempt identifies game, level ID and revision, ruleset, and save format. It tracks elapsed time and completion. Sudoku supplies the entries, note masks, and bounded undo/redo. Dexie saves the latest local state and pending upload. Server mutations are idempotent by UUID. A stale base revision creates a separate attempt rather than overwriting the server snapshot. Verified completion is stored independently of individual attempts.
 
@@ -36,7 +38,7 @@ The production service worker caches the library shell and installs game assets 
 
 ## Current scope
 
-The platform ships Sudoku, player accounts and roles, draft review and publishing, local and server progress, and scheduled PostgreSQL backups. It also ships Sudoku packs, seeded Quick Play, and completion history. Daily challenges and high scores are planned. The shared menu accepts optional actions and sections where those features can appear. Scheduling and rankings will belong to Aviarium. Each game will supply challenge content, completion validation, and how to interpret its results.
+The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, and scheduled PostgreSQL backups. It also ships Sudoku packs, seeded Quick Play, and completion history. Daily challenges and high scores are planned. The shared menu accepts optional actions and sections where those features can appear. Scheduling and rankings will belong to Aviarium. Each game will supply challenge content, completion validation, and how to interpret its results.
 
 ## Release announcements
 

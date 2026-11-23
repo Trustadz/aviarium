@@ -1,0 +1,51 @@
+.nonogram-board {
+  --clue-width: calc(var(--row-clues) * 0.85em + 0.5em);
+  --grid-rule: 1px solid var(--border);
+  width: min(100%, 410px);
+  font: 650 clamp(.75rem, 2.75vw, 1rem)/1.15 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.nonogram-column-clues, .nonogram-row {
+  display: grid;
+  grid-template-columns: var(--clue-width) repeat(var(--columns), minmax(0, 1fr));
+}
+.nonogram-column-clues::before { content: ''; }
+.nonogram-column-clues > div { display: grid; align-content: end; justify-items: center; padding-bottom: .3em; }
+.nonogram-row-clue { align-self: center; justify-self: end; padding-right: .3em; white-space: nowrap; }
+.nonogram-board [data-conflict=true] {
+  color: var(--error-text);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: .12em;
+}
+.nonogram-cell {
+  display: grid; place-items: center; min-width: 0; aspect-ratio: 1; padding: 0;
+  border: 0; border-right: var(--grid-rule); border-bottom: var(--grid-rule);
+  background: var(--surface); color: var(--text);
+}
+.nonogram-cell[data-mark="1"] { background: var(--accent); }
+.nonogram-cell:focus-visible { z-index: 1; outline-color: var(--text); outline-offset: 1px; }
+.nonogram-cell[aria-disabled=true] { cursor: default; }
+.nonogram-row:first-child .nonogram-cell { border-top: 1px solid var(--text); }
+.nonogram-row .nonogram-cell:first-of-type { border-left: 1px solid var(--text); }
+.nonogram-row .nonogram-cell:last-of-type { border-right-color: var(--text); }
+.nonogram-row:last-child .nonogram-cell { border-bottom-color: var(--text); }
+.nonogram-row .nonogram-cell:nth-of-type(5) { border-right-color: var(--text); }
+.nonogram-row:nth-child(5) .nonogram-cell { border-bottom-color: var(--text); }
+.nonogram-board[data-solved=true] .nonogram-cell { border-color: transparent; }
+.quick-play-actions.nonogram-options { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+.nonogram-cell { touch-action: none; user-select: none; }
+@media (max-width: 430px) {
+  .quick-play-actions.nonogram-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nonogram-options .primary { grid-column: 1 / -1; }
+}
+
+.nonogram-pack-cover { object-position: center 70%; }
+.nonogram-play .pack-play-art { position: fixed; border-radius: 0; }
+
+.nonogram-editor {
+  display: grid;
+  grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+  width: min(100%, 410px);
+  border: 1px solid var(--border);
+}
