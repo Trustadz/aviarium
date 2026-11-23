@@ -19,7 +19,7 @@
   text-underline-offset: .12em;
 }
 .nonogram-cell {
-  display: grid; place-items: center; min-width: 0; aspect-ratio: 1; padding: 0;
+  display: grid; place-items: center; position: relative; min-width: 0; aspect-ratio: 1; padding: 0;
   border: 0; border-right: var(--grid-rule); border-bottom: var(--grid-rule);
   background: var(--surface); color: var(--text);
 }
@@ -30,9 +30,18 @@
 .nonogram-row .nonogram-cell:first-of-type { border-left: 1px solid var(--text); }
 .nonogram-row .nonogram-cell:last-of-type { border-right-color: var(--text); }
 .nonogram-row:last-child .nonogram-cell { border-bottom-color: var(--text); }
-.nonogram-row .nonogram-cell:nth-of-type(5) { border-right-color: var(--text); }
-.nonogram-row:nth-child(5) .nonogram-cell { border-bottom-color: var(--text); }
+.nonogram-board[data-size="10"]:not([data-solved=true]) .nonogram-row .nonogram-cell:nth-of-type(5) { border-right: 2px solid var(--border); }
+.nonogram-board[data-size="10"]:not([data-solved=true]) .nonogram-row:nth-child(5) .nonogram-cell { border-bottom: 2px solid var(--border); }
 .nonogram-board[data-solved=true] .nonogram-cell { border-color: transparent; }
+/* Leave the cell itself visible around a filled square so neighbouring fills stay countable. */
+.nonogram-board .nonogram-cell[data-mark="1"] { background: var(--surface); }
+.nonogram-board .nonogram-cell[data-mark="1"]::after {
+  content: ''; position: absolute; inset: 9%; border-radius: 2px;
+  background: var(--accent); pointer-events: none;
+}
+/* The solved board reads as one picture, so fills meet and grid rules disappear. */
+.nonogram-board[data-solved=true] .nonogram-cell[data-mark="1"] { background: var(--accent); }
+.nonogram-board[data-solved=true] .nonogram-cell[data-mark="1"]::after { content: none; }
 .quick-play-actions.nonogram-options { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
 .nonogram-cell { touch-action: none; user-select: none; }
 @media (max-width: 430px) {
