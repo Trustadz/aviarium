@@ -5,7 +5,7 @@ import { isResumable, mutationHeader, savedGameLimit, type SavedAttempt } from '
 import { effectivePackRules, packProgress, packProgressPath, type PackCompletion, type PackDocument, type PackRevision, type ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
 import type { LevelRecord } from './game-runtime.js'
 import { serverGames } from './games.js'
-import { digest, HttpError, requireUser, userFields, type User } from './auth.js'
+import { accountRoleSchema, digest, HttpError, requireUser, userFields, withLegacyEditorGames, type User } from './auth.js'
 import { pool, transaction } from './config.js'
 import { packHistory } from './pack-progress.js'
 
@@ -123,24 +123,16 @@ export function registerProgress(app: FastifyInstance) {
   })
   app.get('/api/admin/users', async request => {
     await requireUser(request, 'admin')
-    return (await pool.query<User>(`SELECT ${userFields} FROM users u ORDER BY u.name,u.id`)).rows
+    return (await pool.query<User>(`SELECT ${userFields} FROM users u ORDER BY u.name,u.id`)).rows.map(withLegacyEditorGames)
   })
   app.patch('/api/admin/users/:id', async request => {
     const admin = await requireUser(request, 'admin')
     const id = z.uuid().parse((request.params as { id: string }).id)
-    const patch = z.union([
-      z.strictObject({ role: z.enum(['user', 'admin']) }),
-      z.strictObject({ editor: z.string().refine(id => serverGames.has(id)), enabled: z.boolean() }),
-    ]).parse(request.body)
-    if ('role' in patch && id === admin.id && patch.role !== 'admin')
+    const { role } = z.strictObject({ role: accountRoleSchema }).parse(request.body)
+    if (id === admin.id && role !== 'admin')
       throw new HttpError(409, 'admin_role_self_change')
-    return transaction(async db => {
-      const found = await db.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [id])
-      if (!found.rowCount) throw new HttpError(404, 'account_not_found')
-      if ('role' in patch) await db.query('UPDATE users SET role=$1 WHERE id=$2', [patch.role, id])
-      else if (patch.enabled) await db.query('INSERT INTO game_editors (user_id,game_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, patch.editor])
-      else await db.query('DELETE FROM game_editors WHERE user_id=$1 AND game_id=$2', [id, patch.editor])
-      return (await db.query<User>(`SELECT ${userFields} FROM users u WHERE u.id=$1`, [id])).rows[0]
-    })
+    const { rows: [updated] } = await pool.query<User>(`UPDATE users u SET role=$1 WHERE u.id=$2 RETURNING ${userFields}`, [role, id])
+    if (!updated) throw new HttpError(404, 'account_not_found')
+    return withLegacyEditorGames(updated)
   })
 }

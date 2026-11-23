@@ -3,14 +3,15 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import * as openid from 'openid-client'
 import { z } from 'zod'
-import { sudoku } from '../../../packages/sudoku/src/metadata.js'
+import { accountRoles, canEditGames, type AccountRole } from '../../../packages/game-sdk/src/roles.js'
+import { serverGames } from './games.js'
 import { callback, loginEnabled, oidc, origin, pool, testEnvironment, transaction } from './config.js'
 
-export interface User { id: string; name: string; role: 'user' | 'admin'; editorGames: string[] }
-const testRoleSchema = z.enum(['user', 'editor', 'admin'])
+export interface User { id: string; name: string; role: AccountRole }
+export const accountRoleSchema = z.enum(accountRoles)
 interface SessionUser extends User {
   expiresAt: Date
-  testRole?: z.infer<typeof testRoleSchema>
+  testRole?: AccountRole
   avatar?: string | null
   pocketAvatar?: string | null
   customAvatar?: boolean
@@ -19,8 +20,12 @@ const profileInput = z.strictObject({
   name: z.string().trim().min(1).max(120),
   avatar: z.string().max(120_000).regex(/^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/).nullable().optional(),
 })
-export const userFields = `u.id,COALESCE(u.display_name,u.name) AS name,u.role,
-  ARRAY(SELECT game_id FROM game_editors WHERE user_id=u.id ORDER BY game_id) AS "editorGames"`
+export const userFields = 'u.id,COALESCE(u.display_name,u.name) AS name,u.role'
+
+// Older installed clients read editorGames until their application shell updates.
+export function withLegacyEditorGames<T extends User>(user: T) {
+  return { ...user, editorGames: canEditGames(user.role) ? [...serverGames.keys()] : [] }
+}
 export class HttpError extends Error {
   constructor(readonly statusCode: number, readonly code: ApiCode, readonly values: Record<string, string> = {}) {
     super(apiMessages[code].replace(/\{(\w+)\}/g, (placeholder, key) => values[key] ?? placeholder))
@@ -43,7 +48,7 @@ export async function currentUser(request: FastifyRequest, withProfile = false):
     ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now() AND (u.issuer=$2)=$3`, [digest(cookie), testIssuer, testEnvironment])
   const user = result.rows[0]
   if (user && testEnvironment) {
-    user.testRole = user.role === 'admin' ? 'admin' : user.editorGames.includes(sudoku.id) ? 'editor' : 'user'
+    user.testRole = user.role
     if (withProfile) {
       user.pocketAvatar = '/aviarium.svg'
       user.avatar ??= user.pocketAvatar
@@ -62,9 +67,9 @@ export async function requireUser(request: FastifyRequest, permission?: 'admin')
   return user
 }
 
-export async function requireGameEditor(request: FastifyRequest, game: string): Promise<User> {
+export async function requireEditor(request: FastifyRequest): Promise<User> {
   const user = await requireUser(request)
-  if (user.role !== 'admin' && !user.editorGames.includes(game))
+  if (!canEditGames(user.role))
     throw new HttpError(403, 'game_edit_denied')
   return user
 }
@@ -83,9 +88,10 @@ function provider() {
 }
 
 export function registerAuth(app: FastifyInstance) {
-  app.get('/api/me', async request => ({
-    user: await currentUser(request, true) ?? null, signIn: Boolean(oidc), loginEnabled, testEnvironment,
-  }))
+  app.get('/api/me', async request => {
+    const user = await currentUser(request, true)
+    return { user: user ? withLegacyEditorGames(user) : null, signIn: Boolean(oidc), loginEnabled, testEnvironment }
+  })
   if (loginEnabled || testEnvironment) {
     app.patch('/api/me/profile', async (request, reply) => {
       const user = await requireUser(request)
@@ -97,7 +103,7 @@ export function registerAuth(app: FastifyInstance) {
   }
   if (testEnvironment) {
     app.post('/api/auth/test-role', async (request, reply) => {
-      const { role } = z.object({ role: testRoleSchema }).parse(request.body)
+      const { role } = z.object({ role: accountRoleSchema }).parse(request.body)
       const cookie = request.cookies[sessionCookie]
       const next = await transaction(async db => {
         const current = cookie ? (await db.query<{id: string}>(`SELECT u.id FROM users u JOIN auth_sessions s ON s.user_id=u.id
@@ -105,12 +111,9 @@ export function registerAuth(app: FastifyInstance) {
         const expectedId = request.headers['x-aviarium-account']
         if (expectedId && current?.id !== expectedId)
           throw new HttpError(409, 'test_session_changed')
-        const accountRole = role === 'admin' ? 'admin' : 'user'
         const user = current ?? (await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role)
-          VALUES($1,$2,'Test user',$3) RETURNING id`, [testIssuer, token(), accountRole])).rows[0]
-        if (current) await db.query('UPDATE users SET role=$1 WHERE id=$2', [accountRole, user.id])
-        if (role === 'editor') await db.query('INSERT INTO game_editors(user_id,game_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [user.id, sudoku.id])
-        else await db.query('DELETE FROM game_editors WHERE user_id=$1', [user.id])
+          VALUES($1,$2,'Test user',$3) RETURNING id`, [testIssuer, token(), role])).rows[0]
+        if (current) await db.query('UPDATE users SET role=$1 WHERE id=$2', [role, user.id])
         if (current) return undefined
         const session = token()
         await db.query('DELETE FROM auth_sessions WHERE expires_at<=now()')

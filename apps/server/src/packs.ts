@@ -5,7 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { PoolClient } from 'pg'
 import { z } from 'zod'
 import { assignPackLevels, authoringPack, packUploadBytes, type PackDocument, type PackDraftRecord, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
-import { HttpError, requireGameEditor, requireUser, type User } from './auth.js'
+import { HttpError, requireEditor, requireUser, type User } from './auth.js'
 import { loginEnabled, pool, testEnvironment, transaction } from './config.js'
 import type { LevelRecord, ServerGame } from './game-runtime.js'
 import { packHistory } from './pack-progress.js'
@@ -109,7 +109,7 @@ export function registerPacks(app: FastifyInstance, game: ServerGame, prefix: st
     return { ...pack, history, ownedByViewer: Boolean(user && user.id === ownerId) }
   })
   app.get(path('/packs/:id/:revision/export'), async (request, reply) => {
-    const user = await requireGameEditor(request, game.id)
+    const user = await requireEditor(request)
     const pack = await loadPack(request)
     if (user.role !== 'admin' && pack.ownerId !== user.id)
       throw new HttpError(403, 'pack_export_denied')
@@ -129,7 +129,7 @@ export function registerPacks(app: FastifyInstance, game: ServerGame, prefix: st
 
   async function draftAccess(request: FastifyRequest): Promise<{ actor: User; admin: boolean }> {
     const admin = (request.query as { mode?: string }).mode === 'admin'
-    return { actor: admin ? await requireUser(request, 'admin') : await requireGameEditor(request, game.id), admin }
+    return { actor: admin ? await requireUser(request, 'admin') : await requireEditor(request), admin }
   }
 
   app.get(path('/pack-drafts'), async request => {
@@ -139,12 +139,12 @@ export function registerPacks(app: FastifyInstance, game: ServerGame, prefix: st
       FROM packs WHERE owner_id IS NOT NULL AND (owner_id=$1 OR $2) AND game_id=$3 AND deleted_at IS NULL ORDER BY draft->>'title',id`, [actor.id, admin, game.id])).rows.map(draft => ({ ...draft, data: authoringPack(draft.data) }))
   })
   app.post(path('/pack-drafts'), { bodyLimit: limit }, async request => {
-    const user = await requireGameEditor(request, game.id)
+    const user = await requireEditor(request)
     const { localId } = z.object({ localId: z.uuid().optional() }).parse(request.body)
     return newDraft(user.id, readPackDraft(game.packs, request.body), localId)
   })
   app.post(path('/pack-drafts/import'), { bodyLimit: limit }, async request => {
-    const user = await requireGameEditor(request, game.id)
+    const user = await requireEditor(request)
     const { content } = z.object({ content: z.string().max(limit).regex(/^[A-Za-z0-9+/]+={0,2}$/) }).parse(request.body)
     const draft = importPack(game.packs, Buffer.from(content, 'base64'))
     // Imported levels get new identities on this installation.

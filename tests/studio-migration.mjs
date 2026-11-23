@@ -27,6 +27,9 @@ try {
   })
   const { rows: [{ id: owner }] } = await pool.query(
     "INSERT INTO users(issuer,subject,name,role) VALUES('fixture','legacy','Legacy editor','admin') RETURNING id")
+  const { rows: [{ id: priorEditor }, { id: priorUser }] } = await pool.query(
+    "INSERT INTO users(issuer,subject,name,role) VALUES('fixture','granted','Earlier editor','user'), ('fixture','player','Earlier player','user') RETURNING id")
+  await pool.query("INSERT INTO game_editors(user_id,game_id) VALUES($1,'sudoku'),($2,'sudoku')", [priorEditor, owner])
   const visibleId = randomUUID(), hiddenId = randomUUID()
   const sessionId = randomUUID(), token = randomUUID()
   await pool.query(`INSERT INTO published_levels(id,revision,ruleset,title,grid,difficulty,source,author_id,validation)
@@ -52,6 +55,11 @@ try {
   await pool.query("INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",
     [createHash('sha256').update(token).digest('hex'), owner])
   await migrate()
+  const { rows: migrated } = await pool.query('SELECT id,role FROM users WHERE id=ANY($1::uuid[])', [[owner, priorEditor, priorUser]])
+  const roles = new Map(migrated.map(({ id, role }) => [id, role]))
+  assert.equal(roles.get(owner), 'admin')
+  assert.equal(roles.get(priorEditor), 'editor')
+  assert.equal(roles.get(priorUser), 'user')
 
   app = await makeApp()
   const headers = { cookie: 'aviarium=' + token, origin: process.env.PUBLIC_ORIGIN }
