@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowRight, X } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { BudgieFlock, CelebrationBurst, CelebrationSparkle, celebrationStyleFor, type CelebrationVisitor } from './celebrations.js'
 import { useT } from './i18n.js'
 import { displayTime } from './SudokuMenu.js'
@@ -34,10 +34,9 @@ export function CelebrationOverlay({ visitor, result, actions, onClose, reader, 
   preview?: boolean
 }) {
   const t = useT()
-  const [celebrating, setCelebrating] = useState(true)
   const [reduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [celebrating, setCelebrating] = useState(() => !reduced)
   const overlay = useRef<HTMLDivElement>(null)
-  const skip = useRef<HTMLButtonElement>(null)
   const results = useRef<HTMLElement>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
@@ -102,17 +101,12 @@ export function CelebrationOverlay({ visitor, result, actions, onClose, reader, 
     data-species={visitor.id} style={celebrationStyleFor(visitor)} role="dialog" aria-modal="true" data-phase={celebrating ? 'celebrate' : 'results'}
     aria-label={title} aria-describedby="celebration-visitor">
     <p id="celebration-visitor" className="sr-only">{t(visitor.name)}. {t(visitor.line)}</p>
+    <div className="celebration-scrim" aria-hidden="true"/>
     <div className="celebration-glow" aria-hidden="true"/>
     <div className="celebration-flock" aria-hidden="true"><BudgieFlock/></div>
     <div className="celebration-burst" aria-hidden="true"><CelebrationBurst/></div>
     <div className="celebration-sparkle" aria-hidden="true"><CelebrationSparkle/></div>
     <div className="celebration-flash" aria-hidden="true"/>
-    <header className="celebration-top">
-      {celebrating && <button type="button" ref={skip} className="celebration-skip" onClick={() => setCelebrating(false)}>
-        {t('Skip celebration')}
-      </button>}
-      <button type="button" className="celebration-close" aria-label={t('Close')} onClick={() => closeRef.current()}><X size={20}/></button>
-    </header>
     <section ref={results} className="celebration-results" tabIndex={-1}>
       <div className="celebration-results-card">
         <div className="celebration-result-head">
