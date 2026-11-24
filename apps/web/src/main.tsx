@@ -194,6 +194,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     replay?: { label: string; backLabel?: string }
     challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string } }>()
   const [challengeSummary, setChallengeSummary] = useState<{ enabled: boolean; open: number }>()
+  const featureChallenges = Boolean(accountId && online && challengeSummary?.enabled)
   const [challengeDay, setChallengeDay] = useState<ChallengeDayView>()
   const [challengeRefresh, setChallengeRefresh] = useState(0)
   const [query, setQuery] = useState('')
@@ -728,7 +729,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       <Suspense fallback={<p role="status">{t("Loading…")}</p>}>
       {inLibrary || inStudioCatalog ? <>
         {inLibrary && continueRow()}
-        {inLibrary && <LibraryHero packs={packs} reader={reader} open={game => go(game.url)}/>}
+        {inLibrary && <LibraryHero key={String(featureChallenges)} packs={packs} reader={reader} open={game => go(game.url)}
+          openChallenges={featureChallenges ? () => go('/challenges') : undefined}/>}
         <GameCatalog studio={inStudioCatalog}
           action={inLibrary && canEdit && <a className="secondary studio-door" href="/studio"
             onClick={event => link(event, '/studio')}><Pencil size={16} aria-hidden="true"/> {t('Studio')}</a>}

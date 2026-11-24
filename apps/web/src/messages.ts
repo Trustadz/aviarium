@@ -1,8 +1,12 @@
 import type { apiMessages } from '../../../packages/game-sdk/src/api-messages.js'
 
 export const dutch = {
+  "Featured": "Uitgelicht",
   "Featured games": "Uitgelichte spellen",
   "Show {game}": "Toon {game}",
+  "New in Aviarium": "Nieuw in Aviarium",
+  "A fresh set of puzzles to solve before the next reset.": "Los een nieuwe reeks puzzels op vóór de volgende wissel.",
+  "View challenges": "Bekijk uitdagingen",
   "Use row and column clues to reveal a picture. Start with the Sulphur-crested Cockatoos pack.": "Gebruik rij- en kolomaanwijzingen om een afbeelding te onthullen. Begin met het pakket Grote geelkuifkaketoes.",
   "Filled squares conflict with the row clues.": "De gevulde vakjes passen niet bij de rijaanwijzingen.",
   "Filled squares conflict with the column clues.": "De gevulde vakjes passen niet bij de kolomaanwijzingen.",
