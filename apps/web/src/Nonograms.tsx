@@ -9,7 +9,7 @@ import { displayTime } from './SudokuMenu.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences, leave, persist, restart, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel, replay }:
+export default function Nonograms({ level, pack, session, preferences, leave, finish, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel, replay }:
 GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const challengeMode = Boolean(challenge)
@@ -99,15 +99,15 @@ GamePlayerProps & { trial?: boolean }) {
       ' · ' + t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
-    { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
-    ...(trial || challengeMode ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: restart }]),
+    { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: finish ?? leave },
+    ...(trial || challengeMode ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
 
   return <>
     <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} testMode={testMode}
-      leave={exit} resetInput={resetInput} openSettings={openSettings} committed={saved.board} undo={saved.undo}
+      leave={exit} finish={finish} reset={reset} resetInput={resetInput} openSettings={openSettings} committed={saved.board} undo={saved.undo}
       problem={problem} trial={trial} challengeMode={challengeMode} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard} replay={replay}/>
     {celebration !== undefined && <CelebrationOverlay reader={reader}
       result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
@@ -123,11 +123,13 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard, replay }: {
+function PuzzleBoard({ puzzle, title, pack, leave, finish, reset, resetInput, openSettings, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard, replay }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
   leave: () => void
+  finish?: () => void
+  reset: () => void
   resetInput: () => void
   openSettings?: () => void
   testMode: boolean
@@ -256,7 +258,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, com
     aria-labelledby="nonogram-puzzle-title">
     {art && <img className="pack-play-art" src={art} alt=""/>}
     <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Game menu')}</button>
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : 'Back')}</button>
       <div className="game-nav-tools">
         {testMode && !solved && <button className="text-button" onClick={autoSolve} title={t('Test environment')}>
           <WandSparkles size={17}/> {t('Auto solve')}
@@ -325,7 +327,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, com
             <strong>{displayTime(elapsedMs)}</strong>
             <span>{t(problem ? 'Save failed' : 'Saved')}</span>
           </div>}
-          <button className="primary" onClick={leave}>{t(trial ? 'Back to editor' : challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
+          <button className="primary" onClick={finish ?? leave}>{t(trial ? 'Back to editor' : challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
           {!trial && leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
         </section>}
         <div className="tools nonogram-tools" role="group" aria-label={t('Mark squares')}>

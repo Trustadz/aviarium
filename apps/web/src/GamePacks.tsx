@@ -83,7 +83,7 @@ export function PackRoadmap({ game, presentation, pack, completed, sessions, can
   })
   return <section className={`catalog pack-roadmap pack-${pack.data.theme}`}>
     <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(preview ? 'Back to editor' : presentation.menuLabel)}</button>
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(preview ? 'Back to editor' : 'Back')}</button>
       {canExport && <a className="text-button" href={packExportUrl(pack)} download><Download size={17}/> {t('Export pack')}</a>}
     </div>
     <header className="pack-banner">

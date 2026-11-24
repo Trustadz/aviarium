@@ -22,7 +22,7 @@ interface CatalogEntry extends LeaderboardSummary { game: string; player: Leader
 interface CatalogData { games: CatalogEntry[]; player: LeaderboardPlayerSummary }
 interface HubLevel extends LeaderboardSummary { level: GameLevel }
 interface HubData {
-  game: string; quick: LeaderboardSummary[]; packs: LeaderboardPackSummary[]; standalone: HubLevel[]
+  game: string; quick: LeaderboardSummary[]; packs: LeaderboardPackSummary[]
   player: LeaderboardPlayerSummary
 }
 interface BoardDetail extends LeaderboardSummary { level?: GameLevel; cooldown?: LeaderboardCooldown | null }
@@ -327,7 +327,7 @@ export function GameLeaderboards({ game, accountId, online, link, back }: {
   }, [accountId, game.id, online])
   return <section className="catalog leaderboard-hub">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {knownMessage(t, game.title)}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <a className="text-button" href="/leaderboards" onClick={event => link(event, '/leaderboards')}>{t('All leaderboards')}</a></div>
     <div className="section-heading"><h1>{t('{game} leaderboards', { game: knownMessage(t, game.title) })}</h1></div>
     {!online && <p className="notice">{t('Connect to view leaderboards.')}</p>}
@@ -345,12 +345,6 @@ export function GameLeaderboards({ game, accountId, online, link, back }: {
           <span className="badge">{t('{count, plural, one {# pack} other {# packs}}', { count: hub.packs.length })}</span></div>
         <div className="leaderboard-games leaderboard-packs">{hub.packs.map(pack =>
           <PackCard key={pack.id + ':' + pack.revision} pack={pack} game={game} link={link}/>)}</div>
-      </section>}
-      {hub.standalone.length > 0 && <section className="leaderboard-section">
-        <div className="section-heading"><h2>{t('Puzzles')}</h2>
-          <span className="badge">{t('{count, plural, one {# board} other {# boards}}', { count: hub.standalone.length })}</span></div>
-        <div className="panel leaderboard-board-list">{hub.standalone.map(entry =>
-          <BoardRow key={entry.board.key} entry={entry} game={game} link={link}/>)}</div>
       </section>}
     </> : online ? <p role="status">{t('Loading…')}</p> : null}
   </section>
@@ -497,7 +491,7 @@ export function LeaderboardBoardView({ game, boardKey, accountId, online, back, 
   const title = detail ? leaderboardBoardTitle(t, detail.board, game) : ''
   return <section className="catalog leaderboard-board">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {t('{game} leaderboards', { game: knownMessage(t, game.title) })}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <button className="text-button" onClick={copyLink} aria-live="polite">{copied ? t('Copied') : t('Copy link')}</button></div>
     {detail ? <>
       <div className="leaderboard-board-heading">
@@ -571,7 +565,7 @@ export function LeaderboardPackView({ game, packId, revision, accountId, online,
   const title = detail ? knownMessage(t, detail.title) : ''
   return <section className="catalog leaderboard-board leaderboard-pack-view">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {t('{game} leaderboards', { game: knownMessage(t, game.title) })}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <button className="text-button" onClick={copyLink} aria-live="polite">{copied ? t('Copied') : t('Copy link')}</button></div>
     {detail ? <>
       <div className="leaderboard-board-heading"><div>

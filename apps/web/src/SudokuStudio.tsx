@@ -38,7 +38,7 @@ function SudokuTrial({ level, pack, profile, reader, leave }: StudioTrialProps) 
   const session = { id, revision: 0, data: createSave(gameLevel, gamePack), profile,
     updated: Date.now(), archived: false, dirty: false }
   return <Player key={attempt} level={gameLevel} pack={gamePack} session={session} trial testMode
-    preferences={defaults} reader={reader} persist={async () => {}} leave={leave} restart={() => reset(value => value + 1)}/>
+    preferences={defaults} reader={reader} persist={async () => {}} leave={leave} reset={() => reset(value => value + 1)}/>
 }
 
 const checkKey = (entry: PackEntry, rules: ProgressionRules) =>

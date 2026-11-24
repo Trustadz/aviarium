@@ -3,8 +3,8 @@ import { liveQuery } from 'dexie'
 import type { Locale } from '../../../packages/game-sdk/src/locales.js'
 import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
-import { createRoot } from 'react-dom/client'
 import { useIntl } from 'react-intl'
+import { createRoot } from 'react-dom/client'
 import { ArrowLeft, BookOpen, CalendarDays, LogIn, LogOut, Newspaper,
   Pencil, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
@@ -19,8 +19,6 @@ import { LibraryHero } from './LibraryHero.js'
 import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
-import { ResultStandingsPanel } from './ResultStandingsPanel.js'
-import { createGameAttempt, gameBoardHref, gameDefinition, hasLeaderboard, packLevels } from './game-definitions.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, formatChallengeDate, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
@@ -31,12 +29,14 @@ import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
 import { PackCards, PackRoadmap, packApi, packPath } from './GamePacks.js'
-import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory } from './navigation.js'
+import { packLevels } from './game-definitions.js'
+import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory, type ScreenRef } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
   sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession, type MutationExtras, type ProfilePreferences } from './storage.js'
+import { isUntouched } from './attempt.js'
 import './styles.css'
 
-const mutationExtras: MutationExtras = (game, level) => gameDefinition(game)?.generation?.describe?.(level as never)
+const mutationExtras: MutationExtras = (game, level) => findGame(game)?.mutationExtras?.(level)
 const Admin = lazy(() => import('./Admin.js'))
 
 type ColorScheme = 'light' | 'dark'
@@ -62,7 +62,6 @@ function subscribeToSystemTheme(change: () => void) {
 
 function AppleInstallHelp() {
   const t = useT()
-  const intl = useIntl()
   const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   const standalone = (navigator as Navigator & { standalone?: boolean }).standalone ||
@@ -121,7 +120,6 @@ function Application() {
 
 function App({ session, languageError }: { session: ReturnType<typeof useSession>; languageError: string }) {
   const t = useT()
-  const intl = useIntl()
   const { account, localPlay, checking, online, signIn, refresh, forget } = session
   const [preference, setPreference] = useState(() => themePreference(localStorage.getItem(themeKey)))
   const system = useSyncExternalStore(subscribeToSystemTheme, readSystemTheme)
@@ -173,19 +171,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const intl = useIntl()
   const accountId = account?.id
   const profile = accountId ?? localProfile
-  const catalogKey = 'aviarium:catalog:' + profile
   const packIndexKey = 'aviarium:pack-index:' + profile
   const [path, setPath] = useState(location.pathname.replace(/\/$/, '') || '/')
-  const [catalog, setCatalog] = useState<GameLevel[]>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(catalogKey) ?? 'null')
-      return Array.isArray(saved) ? saved : []
-    } catch { return [] }
-  })
   const [sessions, setSessions] = useState<LocalSession[]>([])
   const [savedLevels, setSavedLevels] = useState<ReadonlyMap<string, GameLevel>>(new Map())
   const [packs, setPacks] = useState<PackRevision[]>([])
-  const latestCatalog = useRef(catalog)
   const latestPacks = useRef(packs)
   const [packStatuses, setPackStatuses] = useState<Record<string, PackLoadStatus>>({})
   const [packRetry, setPackRetry] = useState(0)
@@ -195,12 +185,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [prefs, setPrefs] = useState<ProfilePreferences>({})
   const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
   const [manageInstalls, setManageInstalls] = useState(() => localStorage.getItem('aviarium:manage-installs') === 'on')
-  const [active, setActive] = useState<{
-    session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision; parent: string
-    playerPath?: string
+  const [active, setActive] = useState<{ session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision
+    parent: string; from?: ScreenRef; persisted: boolean; playerPath?: string
     replay?: { label: string; backLabel?: string }
-    challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
-  }>()
+    challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string } }>()
   const [challengeSummary, setChallengeSummary] = useState<{ enabled: boolean; open: number }>()
   const [challengeDay, setChallengeDay] = useState<ChallengeDayView>()
   const [challengeRefresh, setChallengeRefresh] = useState(0)
@@ -219,26 +207,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const { installed, remove, recordActivity } = useGameDownloads(studioGame?.id ?? openGame?.id, online)
   const canPlay = (game: WebGame) => online || installed.includes(game.id)
   const saves = useRef<Promise<void>>(Promise.resolve())
-  const refreshCatalog = useCallback(async () => {
-    const requests = games.map(game => ({ game: game.id,
-      promise: api<GameLevel[]>('/games/' + game.id + '/catalog', undefined, accountId) }))
-    const results = await Promise.allSettled(requests.map(request => request.promise))
-    const updated = new Map<string, GameLevel[]>()
-    for (const [index, result] of results.entries()) {
-      const game = requests[index].game
-      if (result.status === 'fulfilled') updated.set(game, result.value.map(level => ({ ...level, game })))
-      else if (result.reason instanceof ApiError && [401, 409].includes(result.reason.status)) void refreshSession()
-    }
-    if (!updated.size) return
-    const levels = [
-      ...latestCatalog.current.filter(level => !updated.has(level.game ?? '')),
-      ...[...updated.values()].flat(),
-    ]
-    latestCatalog.current = levels
-    setCatalog(levels)
-    try { localStorage.setItem(catalogKey, JSON.stringify(levels)) } catch { /* The current catalog stays available. */ }
-    await cacheLevels(levels).catch(() => undefined)
-  }, [accountId, catalogKey, refreshSession])
   const refreshPacks = useCallback(async (signal?: AbortSignal) => {
     if (online) setPackStatuses(Object.fromEntries(packGames.map(game => [game.id, 'loading'])))
     const results = online ? await Promise.allSettled(packGames.map(game =>
@@ -321,7 +289,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       window.removeEventListener('keydown', closeOnEscape)
     }
   }, [])
-  useEffect(() => { if (online) void refreshCatalog() }, [refreshCatalog, online])
   useEffect(() => {
     const controller = new AbortController()
     void refreshPacks(controller.signal)
@@ -339,7 +306,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   }, [path, openGame, findPack])
   useEffect(() => { void refreshLocal().catch(error => setNotice(errorMessage(error))) }, [refreshLocal, active])
   useEffect(() => {
-    if (!accountId || !online) { setChallengeSummary(undefined); return }
+    if (!accountId || !online) { setChallengeSummary(undefined); setChallengeDay(undefined); return }
     let current = true
     void api<{ enabled: boolean; open: number }>('/challenges/summary', undefined, accountId).then(
       value => { if (current) setChallengeSummary(value) },
@@ -410,14 +377,18 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     event.preventDefault(); back(fallback)
   }
   function record(attempt: NonNullable<typeof active>, data: GameAttempt) {
+    // Time checkpoints and other bookkeeping do not create a saved game. A
+    // level opened by mistake stays absent from Continue and the roadmap.
+    if (isUntouched(attempt.session.data, data)) return Promise.resolve()
     recordActivity(attempt.game.id)
     const result = saves.current.catch(() => undefined).then(async () => {
+      if (!attempt.persisted) {
+        await saveLocal(attempt.head)
+        attempt.persisted = true
+      }
       attempt.head = await writeAttempt(attempt.head, data)
       if (attempt.head.id !== attempt.session.id) setNotice('This attempt changed in another tab or device. Your moves are saved in a separate copy.')
-      if (data.completed && online && account)
-        void sync(profile, mutationExtras).then(() => {
-          if (attempt.challenge) setChallengeRefresh(value => value + 1)
-        }).catch(() => undefined)
+      if (data.completed && attempt.challenge) setChallengeRefresh(value => value + 1)
     })
     saves.current = result
     return result
@@ -431,32 +402,24 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (!existing && pack && level.pack &&
         !packProgress(pack, packCompletionEvents(completed, sessions)).playable[level.pack.stop - 1])
       throw new Error('Solve the previous stop in this pack first.')
-    const session = existing ?? { id: randomId(), revision: 0, data: createGameAttempt(game.id, level, pack),
+    const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
-    if (!existing) await saveLocal(session)
     const parent = options.parent ?? (pack ? packPath(pack) : game.url)
+    // A new attempt is only written on the first real move. This keeps a
+    // mis-click from becoming a resumable game that Back can land on later.
     if (options.replace) {
       replaceLayer(game.url, { player: true })
     } else {
-      // Lay down the selector and menu when a game starts from a shortcut
-      // such as Continue or History, so back never skips a level.
-      if (path !== parent) {
-        if (path === game.url) {
-          if (parent !== game.url) pushLayer(parent)
-        } else if (path.startsWith(game.url + '/')) {
-          replaceLayer(parent)
-        } else {
-          if (path !== game.url) pushLayer(game.url)
-          if (parent !== game.url) pushLayer(parent)
-        }
-      }
-      pushLayer(game.url, { player: true })
+      pushLayer(game.url, { player: true, from: { path } })
     }
-    setNotice(''); setActive({ game, session, level, head: session, pack, parent, playerPath: game.url, replay: options.replay })
+    const from = options.replace ? navigationLayer(history.state)?.from : { path }
+    setNotice(''); setActive({ game, session, level, head: session, pack, parent, from, persisted: Boolean(existing),
+      playerPath: game.url, replay: options.replay })
     setPath(game.url)
     window.scrollTo(0, 0)
   }
+
   async function openChallengeSession(session: LocalSession, level: GameLevel, game: WebGame) {
     const claim = session.challenge
     const occurrenceId = claim?.occurrenceId
@@ -471,10 +434,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       if (path.startsWith('/challenges/')) replaceLayer(dayPath)
       else pushLayer(dayPath)
     }
-    pushLayer(playerPath, { player: true })
+    pushLayer(playerPath, { player: true, from: { path: dayPath } })
     recordActivity(game.id)
     setNotice('')
-    setActive({ game, session, level, head: session, parent: dayPath, playerPath, challenge })
+    setActive({ game, session, level, head: session, parent: dayPath, playerPath, challenge,
+      from: { path: dayPath }, persisted: true })
     setPath(playerPath)
     setChallengeRefresh(value => value + 1)
     window.scrollTo(0, 0)
@@ -515,7 +479,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : response.save
         ? { id: response.sessionId, revision: response.save.revision, data: response.save.data as GameAttempt,
             archived: response.save.archived, profile, updated: response.save.updatedAt ?? Date.now(), dirty: false, challenge }
-        : { id: response.sessionId, revision: 0, data: createGameAttempt(game.id, level), archived: false,
+        : { id: response.sessionId, revision: 0, data: await game.createAttempt(level), archived: false,
             profile, updated: Date.now(), dirty: true, challenge }
     await saveLocal(session)
     await openChallengeSession(session, level, game)
@@ -534,7 +498,17 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     })
   }
 
-
+  async function finishGame(attempt: NonNullable<typeof active>) {
+    const target = attempt.pack ? packPath(attempt.pack) : attempt.game.url
+    setActive(undefined)
+    if (attempt.from?.path === target) {
+      back(target)
+      return
+    }
+    replaceLayer(target)
+    setPath(target)
+    window.scrollTo(0, 0)
+  }
   async function resume(id: string) {
     const session = await db.sessions.get(id)
     if (!session || session.profile !== profile || !isResumable(session)) throw new Error('This saved game is unavailable.')
@@ -612,7 +586,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     }]
   })
   const dailySlot = challengeDay?.enabled
-    ? challengeDay.slots.find(slot => slot.player.status === 'available' || slot.player.status === 'started')
+    ? challengeDay.slots.find(slot => slot.player.status === 'started') ??
+      challengeDay.slots.find(slot => slot.player.status === 'available')
     : undefined
   const dailyGame = dailySlot ? games.find(game => game.id === dailySlot.game) : undefined
   const dailyCards: ContinueGame[] = dailySlot && dailyGame && challengeDay?.occurrence ? [{
@@ -651,11 +626,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
 
   const canEdit = canEditGames(account?.role)
   const inLibrary = path === '/'
-  const challengeParts = path.split('/').filter(Boolean)
-  const inChallenges = challengeParts[0] === 'challenges'
-  const challengeOccurrence = inChallenges ? challengeParts[1] : undefined
-  const challengeGame = inChallenges && challengeParts.length === 3 ? challengeParts[2] : undefined
-  const challengeBoard = Boolean(challengeOccurrence && challengeGame)
   const inLeaderboards = path === '/leaderboards'
   const inStudioCatalog = path === '/studio' && canEdit
   const catalogCategories = ['All games', ...new Set(games.flatMap(game => game.tags)), 'Favorites']
@@ -666,10 +636,14 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const studioLeaveLabel = studioOrigin === 'game' && studioGame ? t('{game} menu', { game: studioGame.title }) : t('Studio')
   const inAdmin = path === '/admin'
   const inAbout = path === '/about'
+  const challengeParts = path.split('/').filter(Boolean)
+  const inChallenges = challengeParts[0] === 'challenges'
+  const challengeOccurrence = inChallenges ? challengeParts[1] : undefined
+  const challengeBoard = Boolean(inChallenges && challengeOccurrence && challengeParts.length === 3)
+  const challengeGame = challengeBoard ? challengeParts[2] : undefined
   const playingNow = active && path === (active.playerPath ?? active.game.url) ? active : undefined
-  const activeGame = openGame ?? playingNow?.game
-  const themeGame = activeGame ?? studioGame
   const inGame = Boolean(openGame) || Boolean(playingNow)
+  const inGameLeaderboards = Boolean(openGame && path.startsWith(openGame.url + '/leaderboards'))
   const leaderboardTail = openGame && path.startsWith(openGame.url + '/leaderboards')
     ? path.slice((openGame.url + '/leaderboards').length) : undefined
   let leaderboardBoardKey: string | undefined
@@ -681,15 +655,24 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (id && Number.isInteger(Number(revision))) leaderboardPack = { id: decodeURIComponent(id), revision: Number(revision) }
   }
   const activeRemoval = removalNotices[0]
-  const inShell = !inGame
   const playing = playingNow
+  const inPackRoadmap = Boolean(openGame?.packs && path.startsWith(openGame.url + '/packs/'))
+  // Gameplay and the pack roadmap are immersive pack modes. Everything else,
+  // including the game menu, history, guide, and leaderboards, is inside the
+  // app shell so the player always has a way out.
+  const immersive = Boolean(playing) || inPackRoadmap
+  const inShell = !immersive
   const playPack = playing?.pack
-  const surface = inGame ? 'game' : inStudio ? 'studio' : 'library'
+  const surface = immersive ? 'game' : inStudio ? 'studio' : 'library'
+  const navLibrary = inLibrary || Boolean(inGame && !inGameLeaderboards && !inChallenges)
+  const navChallenges = inChallenges
+  const navLeaderboards = inLeaderboards || inGameLeaderboards
   const app = useRef<HTMLDivElement>(null)
   const gameSurface = useRef<HTMLElement>(null)
-  useLayoutEffect(() => setBrowserTheme(themeGame ? gameSurface.current : app.current, surface === 'game' ? '--game-page' : '--surface'),
+  const themeGame = openGame ?? playing?.game ?? studioGame
+  const settings = (openGame ?? playing?.game)?.settings
+  useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
     [reader, surface, theme, themeGame?.id, playPack?.data.theme])
-  const settings = activeGame?.settings
   const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
     item.data.game === playing.game.id && item.data.level === playing.level.id &&
     item.data.levelRevision === playing.level.revision && item.data.completed).map(item => item.data.elapsedMs)) : Number.POSITIVE_INFINITY
@@ -698,27 +681,42 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     {inShell && <>
       <header className="site-header"><div className="frame header-frame">
         <a className="brand" href="/" aria-label={t("Aviarium home")} onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/>
-          <span>{studioGame ? t('{game} Studio', { game: studioGame.title }) : inStudio ? t("Studio") : inNews ? t("News") : inAdmin ? t("Administration") : inAbout ? t("About") : inChallenges ? t("Challenges") : inLeaderboards ? t("Leaderboards") : 'Aviarium'}</span>
+          <span>Aviarium</span>
         </a>
-        {!online && <span className="offline-tag"><WifiOff size={16}/>{" "}{t("Offline")}</span>}
+        <div className="header-actions">
+          {!online && <span className="offline-tag" aria-label={t("Offline")}><WifiOff size={16}/><span>{t("Offline")}</span></span>}
+          <div className="header-account">
+            <AccountMenu account={account} open={showDialog} about={() => go('/about')}
+              administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
+          </div>
+        </div>
       </div></header>
       <div className="app-rail">
+        <div className="rail-brand">
+          <a className="brand" href="/" aria-label={t("Aviarium home")} onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/>
+            <span>Aviarium</span>
+          </a>
+        </div>
         <nav aria-label={t("Main navigation")} className="app-destinations">
-          <a href="/" aria-current={inLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
-          {account && challengeSummary?.enabled === true && <a href="/challenges" aria-current={inChallenges ? 'page' : undefined}
+          <a href="/" aria-current={navLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
+          {account && challengeSummary?.enabled === true && <a href="/challenges" aria-current={navChallenges ? 'page' : undefined}
             aria-label={challengeSummary?.open ? t('Challenges, {count} open', { count: challengeSummary.open }) : t('Challenges')}
             onClick={event => link(event, '/challenges')}><span className="nav-icon"><CalendarDays size={21}/>
               {Boolean(challengeSummary?.open) && <span className="nav-badge" aria-hidden="true">{challengeSummary!.open > 9 ? '9+' : challengeSummary!.open}</span>}</span>
             <span>{t('Challenges')}</span></a>}
-          {account && <a href="/leaderboards" aria-current={inLeaderboards ? 'page' : undefined}
+          {account && <a href="/leaderboards" aria-current={navLeaderboards ? 'page' : undefined}
             onClick={event => link(event, '/leaderboards')}><Trophy size={21}/><span>{t("Leaderboards")}</span></a>}
           <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>{t("News")}</span></a>
         </nav>
-        <AccountMenu account={account} open={showDialog} about={() => go('/about')}
-          administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
+        <div className="rail-account">
+          {!online && <span className="offline-tag" aria-label={t("Offline")}><WifiOff size={16}/><span>{t("Offline")}</span></span>}
+          <AccountMenu account={account} open={showDialog} about={() => go('/about')}
+            administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
+        </div>
       </div>
     </>}
-    <main ref={gameSurface} className={(inGame ? 'game-frame' : 'frame main-frame') + (themeGame ? ' game-theme ' + themeGame.theme : '') + (studioGame ? ' studio-game-canvas' : '') +
+    <main ref={gameSurface} className={(immersive ? 'game-frame' : inGame ? 'main-frame game-content' : 'frame main-frame') +
+      (themeGame ? ' game-theme ' + themeGame.theme : '') + (studioGame ? ' studio-game-canvas' : '') +
       (playPack ? ` pack-palette pack-${playPack.data.theme}` : '')}>
       {notice && <div className="notice" role="alert">{knownMessage(t, notice)}<button onClick={() => setNotice('')}>{t("Dismiss")}</button></div>}
       {inLibrary && networkNotice && <p role="status" className="network-notice">{t("Sync delayed.")}{" "}{knownMessage(t, networkNotice)}</p>}
@@ -726,13 +724,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       <Suspense fallback={<p role="status">{t("Loading…")}</p>}>
       {inLibrary || inStudioCatalog ? <>
         {inLibrary && continueRow()}
-        {inLibrary && <LibraryHero catalog={catalog} packs={packs} reader={reader} open={game => go(game.url)}/>}
+        {inLibrary && <LibraryHero packs={packs} reader={reader} open={game => go(game.url)}/>}
         <GameCatalog studio={inStudioCatalog}
           action={inLibrary && canEdit && <a className="secondary studio-door" href="/studio"
             onClick={event => link(event, '/studio')}><Pencil size={16} aria-hidden="true"/> {t('Studio')}</a>}
           games={games.filter(game => !reader || game.eReader).map(game => ({
             ...game, description: t(inStudioCatalog ? game.studioDescription ?? game.description : game.description), href: catalogPage(game),
-            artClass: game.theme, art: game.preview(game.sample?.(catalog)),
+            artClass: game.theme, art: game.preview(game.sample?.(packs)),
             favorite: Boolean(game.favorite && prefs[game.favorite]),
             toggleFavorite: game.favorite ? () => changePrefs({ [game.favorite!]: !prefs[game.favorite!] }) : undefined,
             removeDownload: manageInstalls && installed.includes(game.id) ? () => perform(() => remove(game.id)) : undefined,
@@ -744,43 +742,46 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
         challenge={playing.challenge ? { occurrenceId: playing.challenge.occurrenceId, slotId: playing.challenge.slotId,
           game: playing.challenge.game, attemptId: playing.challenge.attemptId, endsAt: playing.challenge.endsAt } : undefined}
-        replay={playing.replay}
         standingsPanel={playing.challenge ? <ChallengeStandingsPanel occurrenceId={playing.challenge.occurrenceId}
-          gameId={playing.challenge.game} accountId={account?.id} online={online}/>
-          : hasLeaderboard(playing.game.id) ? <ResultStandingsPanel game={playing.game} level={playing.level}
-            accountId={account?.id} online={online}/> : undefined}
+          gameId={playing.challenge.game} accountId={account?.id} online={online}/> : undefined}
+        replay={playing.replay}
         leaderboard={playing.challenge
           ? { open: () => go('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
-          : hasLeaderboard(playing.game.id) ? { open: () => viewLeaderboard(gameBoardHref(playing.game.id, playing.level)!) } : undefined}
+          : playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
         openSettings={settings ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
           try { await refreshLocal() }
           finally { back(playing.parent) }
         })}
-        restart={playing.challenge ? () => undefined : () => perform(async () => {
+        finish={playing.challenge || playing.replay ? undefined : () => perform(async () => {
+          await saves.current.catch(() => undefined)
+          try { await refreshLocal() }
+          finally { await finishGame(playing) }
+        })}
+        reset={playing.challenge ? () => undefined : () => perform(async () => {
           await deleteAttempt(playing.head.id)
           await open(playing.game, playing.level, undefined, playing.pack, { replace: true })
         })}/>
       : inChallenges && challengeBoard ? <ChallengeBoard occurrenceId={challengeOccurrence!} gameId={challengeGame!}
-        accountId={account?.id} online={online} back={() => go('/challenges/' + challengeOccurrence)}/>
+        accountId={account?.id} online={online} back={() => back('/challenges/' + challengeOccurrence)}/>
       : inChallenges ? <ChallengesPage occurrenceId={challengeOccurrence} accountId={account?.id} online={online} link={link}
         start={(day, slot) => perform(() => startChallenge(day, slot))}
         replay={replay => perform(() => playReplay(replay))}
         openDay={occurrenceId => go('/challenges/' + occurrenceId)}
         openToday={() => go('/challenges')}/>
-      : openGame && hasLeaderboard(openGame.id) && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
-        accountId={account?.id} online={online} link={link} back={() => go(openGame.url)}/>
-      : openGame && hasLeaderboard(openGame.id) && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
+      : openGame?.leaderboards && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
+        accountId={account?.id} online={online} link={link} back={() => back(openGame.url)}/>
+      : openGame?.leaderboards && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
         boardKey={leaderboardBoardKey} accountId={account?.id} online={online}
-        back={() => go(openGame.url + '/leaderboards')} play={level => perform(() => open(openGame, level))}
+        back={() => back(openGame.url + '/leaderboards')} play={level => perform(() => open(openGame, level))}
         openGame={() => go(openGame.url)}/>
-      : openGame && hasLeaderboard(openGame.id) && leaderboardPack ? <LeaderboardPackView game={openGame} packId={leaderboardPack.id}
+      : openGame?.leaderboards && leaderboardPack ? <LeaderboardPackView game={openGame} packId={leaderboardPack.id}
         revision={leaderboardPack.revision} accountId={account?.id} online={online}
-        back={() => go(openGame.url + '/leaderboards')} link={link}/>
+        back={() => back(openGame.url + '/leaderboards')} link={link}/>
       : openGame?.guide && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
         sections={openGame.guide} leave={event => backLink(event, openGame.url)}/>
-      : openGame && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions.filter(item => !item.challenge)} levels={savedLevels} packs={packs}
+      : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
         leave={() => back(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
       : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && packPath(viewedPack) === path
         ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
@@ -790,13 +791,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
               item.data.level === level.id && item.data.levelRevision === level.revision)
             return existing ? resume(existing.id) : open(openGame, level, undefined, viewedPack)
           })}/>
-        : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
+        : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t('Back')}</button>
           <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
       : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
-        leaderboard={hasLeaderboard(openGame.id) ? { href: openGame.url + '/leaderboards',
+        leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
           open: event => link(event, openGame.url + '/leaderboards') } : undefined}
         editor={canEdit ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
-        history={() => go(openGame.url + '/history')}
+        history={openGame.history ? () => go(openGame.url + '/history') : undefined}
         settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
         guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
         {continueRow(openGame.id)}
@@ -822,7 +823,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : studioGame && canEdit ? <section className="panel"><h1>{t('Access required')}</h1>
         <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio')}</a></section>
       : inAdmin && online && account?.role === 'admin' ? <>
-        <Admin key={account.id} account={account} openPackStudio={game => go('/studio/' + game + '/admin')} onCatalogChange={() => { void refreshCatalog() }}/>
+        <Admin key={account.id} account={account} openPackStudio={game => go('/studio/' + game + '/admin')}/>
       </>
       : <section className="panel"><h1>{t("Access required")}</h1><p>{t("Sign in with an authorized account.")}</p><button className="secondary" onClick={() => go('/')}>{t("Return to library")}</button></section>}
       </Suspense>

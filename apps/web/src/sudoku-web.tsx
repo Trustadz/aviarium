@@ -1,16 +1,14 @@
 import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
 import { lazy } from 'react'
-import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
-import { defaults, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
+import { defaults, quickPlayVersion, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
-import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
-import { api } from './api.js'
+import { packLevels, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { sudokuBoardKey } from '../../../packages/sudoku/src/leaderboards.js'
 import type { GuideSection } from './GameGuide.js'
 import type { GamePlayerProps, WebGame } from './game-web.js'
 import { SudokuPreview } from './Grid.js'
 import { levelTitle } from './sudoku-copy.js'
 import { displayTime, PuzzleShare, QuickPlay, sudokuPackPresentation } from './SudokuMenu.js'
-import { useT } from './i18n.js'
 import type { LocalSession } from './storage.js'
 
 const sudokuGuide: readonly GuideSection[] = [
@@ -51,21 +49,11 @@ const SudokuPlayer = lazy(async () => {
   } }
 })
 
-function SudokuMenuOptions({ canPlay, online, profile, params, launch, perform }: Parameters<NonNullable<WebGame['menu']>>[0]) {
-  const t = useT()
-  const sharedId = params.get('puzzle')
-  const sharedRevision = params.get('revision')
-  return <>
-    {sharedId && sharedRevision && <button className="secondary" disabled={!online} onClick={() => perform(async () => {
-      const level = await api<PublishedLevel>(`/games/sudoku/levels/${encodeURIComponent(sharedId)}/${encodeURIComponent(sharedRevision)}`,
-        undefined, profile)
-      await launch(level)
-    })}>{t('Play shared puzzle')}</button>}
-    <QuickPlay canPlay={canPlay} profile={profile} generate={async (difficulty, seed, version) => {
-      const { createQuickPlayLevel } = await import('./Player.js')
-      await launch(await createQuickPlayLevel(difficulty, seed, version))
-    }}/>
-  </>
+function SudokuMenuOptions({ canPlay, profile, launch }: Parameters<NonNullable<WebGame['menu']>>[0]) {
+  return <QuickPlay canPlay={canPlay} profile={profile} generate={async (difficulty, seed, version) => {
+    const { createQuickPlayLevel } = await import('./Player.js')
+    await launch(await createQuickPlayLevel(difficulty, seed, version))
+  }}/>
 }
 
 export const sudokuWeb: Omit<WebGame, 'url'> = {
@@ -73,7 +61,10 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
   theme: 'sudoku-theme', guide: sudokuGuide,
   Studio: lazy(() => import('./SudokuStudio.js')), Player: SudokuPlayer, packs: sudokuPackPresentation,
   menu: context => <SudokuMenuOptions {...context}/>,
-  sample: levels => levels.find(level => level.id === 'first-light') ?? levels.find(level => !level.game || level.game === sudoku.id),
+  sample: packs => {
+    const pack = packs.find(pack => pack.builtIn && pack.data.game === sudoku.id)
+    return pack ? packLevels(pack as PublishedPack)[0] : undefined
+  },
   preview: (level, data) => level || data ? <SudokuPreview grid={(level as PublishedLevel | undefined)?.grid}
     entries={(data as SudokuSave | undefined)?.board.entries}/> : null,
   levelTitle: (t, level) => levelTitle(t, level as PublishedLevel),
@@ -83,7 +74,15 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
     return t('{filled} of {total} cells filled', { filled: entries.filter(Boolean).length, total: entries.length })
   },
   share: level => <PuzzleShare level={level as PublishedLevel}/>,
-
+  async createAttempt(level, pack) {
+    const { createSave } = await import('./Player.js')
+    return createSave(level as PublishedLevel, pack as PublishedPack | undefined)
+  },
+  mutationExtras: input => {
+    const level = input as PublishedLevel | undefined
+    return level?.id.startsWith('quick-') && level.seed && level.generatorVersion === quickPlayVersion
+      ? { quickPlay: { seed: level.seed, difficulty: level.difficulty, version: quickPlayVersion } } : undefined
+  },
   favorite: 'favorite',
   settings: { title: 'Sudoku settings', toggles: [
     { key: 'mistakes', label: 'Highlight conflicts', default: defaults.mistakes },
@@ -93,4 +92,6 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
     { key: 'autoNoteDeletion', label: 'Automatically remove conflicting notes', default: defaults.autoNoteDeletion },
   ] },
   connectMessage: 'Connect to install Sudoku on this device.',
+  history: true,
+  leaderboards: { boardHref: level => '/games/sudoku/leaderboards/board/' + encodeURIComponent(sudokuBoardKey(level).key) },
 }

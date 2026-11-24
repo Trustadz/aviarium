@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
-import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import { starterPack } from '../../../packages/nonograms/src/puzzles.js'
 import type { WebGame } from './game-web.js'
@@ -43,8 +42,7 @@ type DragState = {
   horizontal: boolean
 }
 
-export function LibraryHero({ catalog, packs, reader, open }: {
-  catalog: readonly GameLevel[]
+export function LibraryHero({ packs, reader, open }: {
   packs: readonly PackRevision[]
   reader: boolean
   open: (game: WebGame) => void
@@ -193,7 +191,7 @@ export function LibraryHero({ catalog, packs, reader, open }: {
         </div>
       </div>
       {cover ? <div className="hero-cover" aria-hidden="true"><img src={cover} alt="" draggable={false}/></div>
-        : <div className={'hero-art ' + game.theme} aria-hidden="true">{game.preview(game.sample?.(catalog))}</div>}
+        : <div className={'hero-art ' + game.theme} aria-hidden="true">{game.preview(game.sample?.(packs))}</div>}
     </div>
   }
 

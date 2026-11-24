@@ -250,13 +250,6 @@ async function visiblePacks(db: Pool | PoolClient, game: ServerGame) {
     ORDER BY p.owner_id IS NOT NULL,r.data->>'title',p.id`, [game.id])).rows
 }
 
-async function standaloneLevels(db: Pool | PoolClient, game: ServerGame) {
-  return (await db.query<LevelRecord>(`SELECT ${levelFields} FROM published_levels l
-    WHERE l.game_id=$1 AND l.catalog_visible AND l.pack IS NULL
-      AND NOT EXISTS (SELECT 1 FROM hidden_levels h WHERE h.level_id=l.id)
-    ORDER BY l.title,l.id`, [game.id])).rows
-}
-
 /**
  * Called inside the existing progress transaction when a completed attempt is
  * accepted. Every completion is stored; a second completion of the same exact
@@ -366,7 +359,8 @@ export function registerLeaderboards(app: FastifyInstance, serverGames: Readonly
     const user = await requireUser(request)
     const entries = await Promise.all([...serverGames.values()].filter(game => game.leaderboards).map(async game => {
       const { rows: [busiest] } = await pool.query<{ board_key: string }>(`SELECT board_key FROM leaderboard_results
-        WHERE game_id=$1 AND status='active' AND board_kind <> 'challenge' GROUP BY board_key ORDER BY count(*) DESC, board_key LIMIT 1`, [game.id])
+        WHERE game_id=$1 AND status='active' AND (board_kind='quick' OR pack_id IS NOT NULL)
+        GROUP BY board_key ORDER BY count(*) DESC, board_key LIMIT 1`, [game.id])
       const board = (busiest && game.leaderboards!.parseBoard(busiest.board_key)) || game.leaderboards!.quickBoards[0]!
       const level = board.kind === 'level' ? await levelForBoard(pool, game, board) : undefined
       const info = boardInfo(game, board, level, level ? await packTitleFor(pool, level) : undefined)
@@ -381,22 +375,13 @@ export function registerLeaderboards(app: FastifyInstance, serverGames: Readonly
     const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const packs = await visiblePacks(pool, game)
-    const standalone = await standaloneLevels(pool, game)
     const quick = game.leaderboards!.quickBoards
-    const keys = [
-      ...quick.map(board => board.key),
-      ...standalone.map(level => game.leaderboards!.boardKey(level).key),
-    ]
-    const summaries = await boardSummaries(pool, game, keys, user.id, summaryLimit)
+    const summaries = await boardSummaries(pool, game, quick.map(board => board.key), user.id, summaryLimit)
     const summaryFor = (key: string) => summaries.get(key) ?? { top: [], you: null, total: 0 }
     return {
       game: game.id,
       quick: quick.map(board => ({ board: boardInfo(game, board), ...summaryFor(board.key) })),
       packs: await Promise.all(packs.map(pack => packSummary(pool, game, pack, user.id))),
-      standalone: standalone.map(level => {
-        const board = game.leaderboards!.boardKey(level)
-        return { level, board: boardInfo(game, board, level), ...summaryFor(board.key) }
-      }),
       player: await playerSummary(pool, user.id, game.id, serverGames),
     }
   })

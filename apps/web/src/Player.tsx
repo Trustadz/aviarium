@@ -21,7 +21,7 @@ export { createQuickPlayLevel } from './quick-play.js'
 
 interface Props {
   session: LocalSession<SudokuSave>; level: PublishedLevel; preferences: Preferences; reader: boolean; pack?: PublishedPack
-  persist: (data: SudokuSave) => Promise<void>; leave: () => void; restart: () => void; openSettings?: () => void; trial?: boolean
+  persist: (data: SudokuSave) => Promise<void>; leave: () => void; finish?: () => void; reset: () => void; openSettings?: () => void; trial?: boolean
   leaderboard?: { open: () => void }
   bestMs?: number; testMode?: boolean
   challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
@@ -34,7 +34,7 @@ function digitUsedUp(entries: readonly number[], digit: number) {
   return entries.filter(value => value === digit).length >= 9
 }
 
-export default function Player({ session, level, preferences, reader, pack, persist, leave, restart, openSettings, trial = false, bestMs, testMode = false, leaderboard, challenge, standingsPanel, replay }: Props) {
+export default function Player({ session, level, preferences, reader, pack, persist, leave, finish, reset, openSettings, trial = false, bestMs, testMode = false, leaderboard, challenge, standingsPanel, replay }: Props) {
   const t = useT()
   const challengeMode = Boolean(challenge)
   const givens = useMemo(() => Array.from(level.grid, Number), [level.grid])
@@ -251,15 +251,15 @@ export default function Player({ session, level, preferences, reader, pack, pers
     ...(data.lives !== undefined && lifeLimit ? [{ label: t('Lives left'), value: data.lives + ' / ' + lifeLimit }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
-    { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
-    ...(trial || challengeMode ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: restart }]),
+    { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: finish ?? leave },
+    ...(trial || challengeMode ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
   return <div className={pack ? `play-page pack-play pack-${pack.data.theme}` : 'play-page'}>
     {packArt && <img className="pack-play-art" alt="" src={packArt}/>}
     <div className="game-navigation">
-      <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/>{" "}{trial ? t("Back to editor") : replay?.backLabel ?? t(challengeMode ? "Back to challenges" : pack ? "Back to roadmap" : "Game menu")}</button>
+      <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/>{" "}{trial ? t("Back to editor") : replay?.backLabel ?? t(challengeMode ? "Back to challenges" : "Back")}</button>
       <div className="game-nav-tools">
         {testMode && !finished && <button className="text-button" disabled={paused} onClick={autoSolve}
           title={t("Test environment")}><WandSparkles size={17}/>{" "}{t("Auto solve")}</button>}
@@ -289,7 +289,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
               <strong>{displayTime(data.elapsedMs)}</strong>
               <span>{t(trial ? 'Test complete' : 'Saved')}</span>
             </div>}
-          <button className="primary" onClick={gameOver ? (challengeMode ? leave : restart) : leave}>{gameOver ? (challengeMode ? t('Back to challenges') : t('Retry puzzle')) : challengeMode ? t('Back to challenges') : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
+          <button className="primary" onClick={gameOver ? (challengeMode ? leave : reset) : finish ?? leave}>{gameOver ? (challengeMode ? t('Back to challenges') : t('Retry puzzle')) : challengeMode ? t('Back to challenges') : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
           {!gameOver && <div className="button-bar">
             {leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
             <PuzzleShare level={level}/>

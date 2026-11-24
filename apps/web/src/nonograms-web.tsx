@@ -1,10 +1,11 @@
 import { lazy, useState } from 'react'
 import { Shuffle } from 'lucide-react'
 import {
-  gridSizeSchema, nonogramsId, quickNonogram, quickDescriptor,
-  type NonogramLevel, type NonogramPack, type NonogramSave,
+  createNonogramAttempt, gridSizeSchema, nonogramsId, quickNonogram, quickDescriptor,
+  type NonogramLevel, type NonogramSave,
 } from '../../../packages/nonograms/src/contracts.js'
 import { randomDifficulties, randomSizes, type RandomOptions } from '../../../packages/nonograms/src/puzzles.js'
+import { nonogramBoardKey } from '../../../packages/nonograms/src/leaderboards.js'
 import { knownMessage, useT, type Translate } from './i18n.js'
 import { randomId } from './random.js'
 import type { GameMenuContext, WebGame } from './game-web.js'
@@ -110,9 +111,18 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
     const { board } = attempt as NonogramSave
     return t('{filled} of {total} cells marked', { filled: board.filter(Boolean).length, total: board.length })
   },
-
+  createAttempt: async (level, pack) => createNonogramAttempt(level as NonogramLevel, pack),
+  mutationExtras: input => {
+    const level = input as NonogramLevel | undefined
+    if (level?.source !== 'Generated') return
+    const parsed = quickDescriptor.safeParse({ seed: level.seed, size: level.content.rows.length,
+      difficulty: level.difficulty, version: level.generatorVersion })
+    return parsed.success ? { quickPlay: parsed.data } : undefined
+  },
   favorite: 'favoriteNonograms',
   settings: { title: 'Nonogram settings', toggles: [
     { key: 'nonogramTimer', label: 'Show timer', default: true },
   ] },
+  history: true,
+  leaderboards: { boardHref: level => '/games/nonograms/leaderboards/board/' + encodeURIComponent(nonogramBoardKey(level as NonogramLevel).key) },
 }

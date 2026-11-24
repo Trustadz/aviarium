@@ -2,6 +2,15 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { navigationLayer, routeTrail } from './navigation.js'
 
+
+test('challenge screens keep the day and player layers', () => {
+  assert.deepEqual(routeTrail('/challenges'), ['/', '/challenges'])
+  assert.deepEqual(routeTrail('/challenges/abc'), ['/', '/challenges', '/challenges/abc'])
+  assert.deepEqual(routeTrail('/challenges/abc/sudoku'), ['/', '/challenges', '/challenges/abc', '/challenges/abc/sudoku'])
+  assert.deepEqual(routeTrail('/challenges/abc/sudoku/play'),
+    ['/', '/challenges', '/challenges/abc', '/challenges/abc/sudoku/play'])
+})
+
 test('a game trail moves through the library, menu, and level selector', () => {
   assert.deepEqual(routeTrail('/'), ['/'])
   assert.deepEqual(routeTrail('/games/sudoku'), ['/', '/games/sudoku'])
@@ -12,12 +21,13 @@ test('a game trail moves through the library, menu, and level selector', () => {
     ['/', '/games/sudoku', '/games/sudoku/packs/budgies/1'])
 })
 
-test('challenge screens keep the day and player layers', () => {
-  assert.deepEqual(routeTrail('/challenges'), ['/', '/challenges'])
-  assert.deepEqual(routeTrail('/challenges/abc'), ['/', '/challenges', '/challenges/abc'])
-  assert.deepEqual(routeTrail('/challenges/abc/sudoku'), ['/', '/challenges', '/challenges/abc', '/challenges/abc/sudoku'])
-  assert.deepEqual(routeTrail('/challenges/abc/sudoku/play'),
-    ['/', '/challenges', '/challenges/abc', '/challenges/abc/sudoku/play'])
+test('leaderboard deep links keep the game and leaderboard layers', () => {
+  assert.deepEqual(routeTrail('/games/sudoku/leaderboards'),
+    ['/', '/games/sudoku', '/games/sudoku/leaderboards'])
+  assert.deepEqual(routeTrail('/games/sudoku/leaderboards/board/quick%3AHard'),
+    ['/', '/games/sudoku', '/games/sudoku/leaderboards', '/games/sudoku/leaderboards/board/quick%3AHard'])
+  assert.deepEqual(routeTrail('/games/sudoku/leaderboards/pack/budgies/1'),
+    ['/', '/games/sudoku', '/games/sudoku/leaderboards', '/games/sudoku/leaderboards/pack/budgies/1'])
 })
 
 test('sections and Studio screens return to their entry layer', () => {
@@ -30,7 +40,7 @@ test('sections and Studio screens return to their entry layer', () => {
   assert.deepEqual(routeTrail('/studio/nonograms/admin'), ['/', '/admin', '/studio/nonograms/admin'])
 })
 
-test('history markers only accept a valid layer depth', () => {
+test('history markers only accept a valid layer depth and origin', () => {
   assert.equal(navigationLayer(undefined), undefined)
   assert.equal(navigationLayer(null), undefined)
   assert.equal(navigationLayer({ aviarium: {} }), undefined)
@@ -38,6 +48,9 @@ test('history markers only accept a valid layer depth', () => {
   assert.equal(navigationLayer({ aviarium: { depth: 1.5 } }), undefined)
   assert.deepEqual(navigationLayer({ aviarium: { depth: 2 } }), { depth: 2 })
   assert.deepEqual(navigationLayer({ aviarium: { depth: 3, player: true } }), { depth: 3, player: true })
+  assert.deepEqual(navigationLayer({ aviarium: { depth: 3, from: { path: '/games/sudoku' } } }),
+    { depth: 3, from: { path: '/games/sudoku' } })
+  assert.deepEqual(navigationLayer({ aviarium: { depth: 3, from: { path: 'games/sudoku' } } }), { depth: 3 })
   assert.deepEqual(navigationLayer({ aviarium: { depth: 4, studio: 'pack', studioPack: 'draft-1' } }),
     { depth: 4, studio: 'pack', studioPack: 'draft-1' })
   assert.deepEqual(navigationLayer({ aviarium: { depth: 5, studio: 'trial' } }), { depth: 5, studio: 'trial' })

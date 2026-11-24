@@ -65,9 +65,12 @@ export async function makeApp(registry: GameRegistry = gameRegistry) {
   registerAuth(app)
   registerNews(app)
   registerGameRoutes(app, registry)
+  const legacyPackGame = serverGames.keys().next().value
   for (const game of serverGames.values()) {
     game.routes?.(app)
     registerPacks(app, game, '/api/games/' + game.id)
+    // Main keeps the pre-platform Sudoku pack alias alive for existing clients.
+    if (game.id === legacyPackGame) registerPacks(app, game, '/api')
   }
   registerProgress(app, serverGames, challengeGames)
   registerLeaderboards(app, serverGames)
