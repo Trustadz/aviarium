@@ -3,7 +3,8 @@ import {
   nonogramMutation, nonogramPacks, nonogramsId, nonogramLevels, quickNonogram, sameNonogramLevel,
   nonogramSaveSchema, puzzleSchema, type NonogramEntry, type NonogramPack,
 } from '../../../packages/nonograms/src/contracts.js'
-import { matchesClues, solveByDeduction, starterPack } from '../../../packages/nonograms/src/puzzles.js'
+import { matchesClues, solveByDeduction } from '../../../packages/nonograms/src/puzzles.js'
+import { nonogramBuiltInPacks } from '../../../packages/nonograms/src/built-in-packs.js'
 import {
   nonogramBoardKey, nonogramLeaderboardRulesVersion, nonogramPuzzleContent, nonogramQuickBoards, parseNonogramBoard,
 } from '../../../packages/nonograms/src/leaderboards.js'
@@ -26,16 +27,7 @@ export const nonogramsServer: ServerGame = {
     },
     levels: pack => nonogramLevels(pack as NonogramPack),
     sameLevel: (entry, _rules, previous) => sameNonogramLevel(entry as NonogramEntry, previous as NonogramEntry),
-    builtIn: [{
-      id: 'nonograms-' + starterPack.id, revision: starterPack.revision, coverFile: 'cockatoos-portrait.webp',
-      data: {
-        format: 1, game: nonogramsId, title: starterPack.title, description: starterPack.description,
-        theme: 'cockatoos', rules: { inOrder: true },
-        puzzles: starterPack.puzzles.map(({ id, title, puzzle }) => ({
-          levelId: 'nonograms-' + id, title, content: puzzle, ruleset: 1,
-        })),
-      },
-    }],
+    builtIn: nonogramBuiltInPacks,
   },
   readMutation: input => nonogramMutation.parse(input),
   leaderboards: {

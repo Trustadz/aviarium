@@ -171,7 +171,7 @@ The production service worker caches the library shell and installs game assets 
 The shared game contract is documented in [game contract](game-contract.md). A
 game supplies its level/attempt codecs, generation, pack materialization and
 result interpretation; the platform owns routing, packs, leaderboards, saves and
-daily challenges. The Sudoku `GameDefinition`, the runtime registry and a
+daily challenges. The Sudoku and Nonograms `GameDefinition` adapters, the runtime registry and a
 fake-game fixture are in place; server/web registry injection is the next slice.
 
 ## Current scope

@@ -1,10 +1,10 @@
 # Game contract
 
-Status: the shared `GameDefinition`, the Sudoku adapter, the game registry and a
-fake third-game fixture are implemented on `agent/game-platform`. The server and
-web platform adoption (injecting the registry into the existing progress,
-leaderboard and pack modules) is the next slice. Until that lands, the existing
-`ServerGame`/`WebGame` registration remains the runtime path.
+Status: the shared `GameDefinition`, the Sudoku and Nonograms adapters, the game
+registry and a fake third-game fixture are implemented on `agent/game-platform`.
+The server and web platform adoption (injecting the registry into the existing
+progress, leaderboard and pack modules) is the next slice. Until that lands, the
+existing `ServerGame`/`WebGame` registration remains the runtime path.
 
 The target is simple: a new game supplies **gameplay and level creation**. The
 platform supplies everything around it.
@@ -92,7 +92,6 @@ branch. If one does, the contract is missing a hook.
 
 ## Current gaps
 
-- Nonograms' `GameDefinition` adapter is the next adapter.
 - The server still imports the global `serverGames` map; J3 injects the registry.
 - Generic Quick Play/level endpoints and the legacy Sudoku quarantine are J4.
 - The web platform still consumes `WebGame`; J5 shrinks it to the contract.

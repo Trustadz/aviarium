@@ -5,6 +5,7 @@ import { GameRuleError, gameContractVersion, type GameDefinition } from '../../.
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { PackDocument } from '../../../packages/game-sdk/src/packs.js'
 import { sudokuGame } from '../../../packages/sudoku/src/game.js'
+import { nonogramsGame } from '../../../packages/nonograms/src/game.js'
 import { createGameRegistry } from './game-registry.js'
 
 const packSchema = z.object({
@@ -61,10 +62,10 @@ const fixture: GameDefinition<GameLevel, FixtureSave, Record<string, never>, { d
 }
 
 test('a new game is added through one definition and becomes discoverable', () => {
-  const registry = createGameRegistry([sudokuGame, fixture])
-  assert.deepEqual(registry.all().map(game => game.definition.id), ['sudoku', 'fixture'])
+  const registry = createGameRegistry([sudokuGame, nonogramsGame, fixture])
+  assert.deepEqual(registry.all().map(game => game.definition.id), ['sudoku', 'nonograms', 'fixture'])
   assert.equal(registry.get('fixture')?.definition.meta.title, 'Fixture')
-  assert.deepEqual(registry.challengeCapable().map(game => game.definition.id), ['sudoku', 'fixture'])
+  assert.deepEqual(registry.challengeCapable().map(game => game.definition.id), ['sudoku', 'nonograms', 'fixture'])
 })
 
 test('registry validation rejects duplicate ids and malformed definitions', () => {
