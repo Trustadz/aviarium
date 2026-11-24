@@ -18,7 +18,7 @@ ID account or translation provider credentials.
    affected PRs when changes depend on each other. Use a single contributor
    per branch at a time and verify overlapping work against the resulting
    `main` when the dependency lands.
-3. For a new change, start a dedicated `codex/` branch from the current
+3. For a new change, start a dedicated `agent/` branch from the current
    `origin/main`. A linked worktree keeps existing work and local files in
    place. Pick a unique branch and directory and run from the new worktree.
    For a continuation, use the existing PR branch after checking that its
@@ -26,7 +26,7 @@ ID account or translation provider credentials.
 
    ```sh
    git fetch origin main
-   git worktree add -b codex/short-description ../aviarium-short-description origin/main
+   git worktree add -b agent/short-description ../aviarium-short-description origin/main
    cd ../aviarium-short-description
    npm ci
    ```
@@ -127,8 +127,8 @@ named feature branch. Create a draft PR against `main` or update the existing
 draft. For example, after confirming GitHub CLI authentication:
 
 ```sh
-git push -u origin codex/short-description
-gh pr create --draft --base main --head codex/short-description \
+git push -u origin agent/short-description
+gh pr create --draft --base main --head agent/short-description \
   --title "Describe the change" --body-file /tmp/aviarium-pr-body.md
 ```
 
