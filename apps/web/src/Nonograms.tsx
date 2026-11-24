@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import { ArrowLeft, RotateCcw, Settings2, Timer, Undo2, WandSparkles } from 'lucide-react'
-import { type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
+import { resetNonogramInput, type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
 import { fillsFitClues, matchesClues, solveByDeduction, type Cell } from '../../../packages/nonograms/src/puzzles.js'
 import type { GamePlayerProps } from './game-web.js'
 import { knownMessage, useT } from './i18n.js'
@@ -9,7 +9,7 @@ import { displayTime } from './SudokuMenu.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard }:
+export default function Nonograms({ level, pack, session, preferences, leave, persist, restart, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard }:
 GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
@@ -60,6 +60,12 @@ GamePlayerProps & { trial?: boolean }) {
     leave()
   }
 
+  /** Clear the marks only: keep the attempt, elapsed time and revisions. */
+  function resetInput() {
+    if (previous.current.completed) return
+    void commit(resetNonogramInput({ ...previous.current, elapsedMs: takeElapsed() }))
+  }
+
   useEffect(() => {
     if (saved.completed) return
     const tick = showTimer ? setInterval(() => {
@@ -92,14 +98,14 @@ GamePlayerProps & { trial?: boolean }) {
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
-    ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
+    ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: restart }]),
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
 
   return <>
     <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} testMode={testMode}
-      leave={exit} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
+      leave={exit} resetInput={resetInput} openSettings={openSettings} committed={saved.board} undo={saved.undo}
       problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard}/>
     {celebration !== undefined && <CelebrationOverlay reader={reader}
       result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
@@ -115,12 +121,12 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committed, undo, problem, trial, testMode, elapsedMs, showTimer, onMove, leaderboard }: {
+function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, committed, undo, problem, trial, testMode, elapsedMs, showTimer, onMove, leaderboard }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
   leave: () => void
-  reset: () => void
+  resetInput: () => void
   openSettings?: () => void
   testMode: boolean
   committed: Cell[]
@@ -325,7 +331,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
           <button disabled={solved || !undo.length} onClick={() => onMove(undo[undo.length - 1], undo.slice(0, -1))}><Undo2 size={18}/> {t('Undo')}</button>
         </div>
         {!trial && !solved && <button className="text-button" onClick={() => {
-          if (confirm(t('Start over? Your current saved game will be deleted.'))) reset()
+          if (confirm(t('Reset the board? Your board clears, the game stays saved, and the timer keeps running.'))) resetInput()
         }}><RotateCcw size={16}/> {t('Reset puzzle')}</button>}
       </div>
     </div>

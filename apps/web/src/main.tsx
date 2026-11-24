@@ -596,7 +596,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           try { await refreshLocal() }
           finally { back(playing.parent) }
         })}
-        reset={() => perform(async () => {
+        restart={() => perform(async () => {
           await deleteAttempt(playing.head.id)
           await open(playing.game, playing.level, undefined, playing.pack, { replace: true })
         })}/>
