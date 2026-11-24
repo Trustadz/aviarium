@@ -127,7 +127,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
     max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 .main-frame.game-content {
-  width: 100%; min-width: 0; padding-inline: var(--frame-gutter);
+  width: 100%; min-width: 0; padding-inline: 32px;
   background: var(--game-page);
 }
 .main-frame.game-content > .catalog { max-width: 960px; margin-inline: auto; }
@@ -431,7 +431,8 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .reader .cell.wrong:not(.studio-preview :is(.cell.wrong)), .studio-preview.reader .cell.wrong { text-decoration: underline double; }
 .settings-panel > .section-heading { margin-bottom: 12px; }
 @media (max-width: 800px) {
-  .frame { --frame-gutter: 18px; }
+  .frame, .app-shell { --frame-gutter: 18px; }
+  .main-frame.game-content { padding-inline: 18px; }
   .hero-art { right: 0; top: 55px; }
   .play-layout, .studio-layout, .admin-layout { grid-template-columns: minmax(0,1fr); }
   .play-page, .studio-layout { max-width: 540px; margin-inline: auto; }
@@ -442,8 +443,9 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   .number-pad button:nth-child(6) { grid-column: 2 / span 2; }
 }
 @media (max-width: 530px) {
-  .frame { --frame-gutter: 13px; }
+  .frame, .app-shell { --frame-gutter: 13px; }
   .main-frame { padding-top: 18px; }
+  .main-frame.game-content { padding-inline: 13px; }
   .hero { height: auto; min-height: 265px; border-radius: 17px; }
   .hero-slide { padding-block: 22px 58px; }
   .hero-art { right: -112px; top: 56px; opacity: .38; --art-size: 295px; }
@@ -863,6 +865,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .studio-tools label { display: grid; gap: 4px; color: var(--muted); font-weight: 650; }
 .studio-tools select { min-width: 145px; }
 .studio-tools .tabs { margin: 0; }
+.app-shell { --frame-gutter: 32px; }
 @media (min-width: 900px) {
   .app-shell {
     display: grid; grid-template-columns: 188px minmax(0, 1fr); grid-template-rows: 1fr;
@@ -1743,3 +1746,9 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
 .challenge-all-done p { margin: 1px 0 0; color: var(--muted); font-size: .78rem; }
 .challenge-parrot { width: 42px; height: 42px; flex: 0 0 42px; }
 .reader .challenge-parrot { filter: grayscale(1); }
+
+/* The library's first Continue section should sit close to the app header. */
+.main-frame:has(> .continue-games:first-child) { padding-top: 14px; }
+.main-frame > .continue-games:first-child { margin-top: 0; }
+@media (max-width: 800px) { .app-shell { --frame-gutter: 18px; } }
+@media (max-width: 530px) { .app-shell { --frame-gutter: 13px; } }
