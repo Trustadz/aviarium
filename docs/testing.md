@@ -63,6 +63,13 @@ For the API and browser flow, use a disposable instance with
 8. Check the nav badge, 360/393 px and 200% text, English/Dutch, offline and
    terminal-sync states.
 
+The browser suite runs `tests/challenges-smoke.mjs` on a disposable database. It
+starts its own `TEST_ENVIRONMENT=true` server, enables a two-game series,
+claims and completes one Sudoku with a second start rejected, verifies the
+server time floor, starts a late attempt before reset and completes it after
+reset, checks that the late result is saved but not posted, then checks history,
+the replay descriptor, the next day and the nav badge.
+
 `TEST_ENVIRONMENT=true` also accepts the test-only
 `X-Aviarium-Test-Now: <ISO>` header on challenge and progress requests so
 boundary/late scenarios do not wait for real time. Production ignores it.

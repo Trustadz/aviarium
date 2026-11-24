@@ -79,6 +79,10 @@ try {
     AVIARIUM_TEST_PLAYER2: tokens.player2, AVIARIUM_TEST_DATABASE_URL: database,
     AVIARIUM_CHROMIUM: process.env.AVIARIUM_CHROMIUM,
   })
+  await run('tests/challenges-smoke.mjs', {
+    AVIARIUM_CHALLENGE_TEST_DATABASE_URL: await isolatedDatabase(),
+    AVIARIUM_CHROMIUM: process.env.AVIARIUM_CHROMIUM,
+  })
 } finally {
   await stopApp()
   try {

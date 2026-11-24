@@ -160,8 +160,10 @@ rank-gap separators and tab keyboard/roving-focus polish.
   one attempt; a second start after completion is rejected; late completion is
   saved but not posted; duplicate sync is idempotent; the challenge level is
   rejected by a normal progress mutation; challenge rows do not affect general
-  cooldowns, player summaries or the busiest board. A repeatable automated
-  lifecycle test is still on the J6 list.
+  cooldowns, player summaries or the busiest board. The browser suite now runs
+  `tests/challenges-smoke.mjs`, which covers two slots, one claim, the second
+  start rejection, the server time floor, a late close, history, replay and the
+  nav badge using the test clock.
 - Manual browser: nav/badge, today/day/closed/replay, start/resume, input-only reset,
   challenge board, after-game panel, admin settings, en/nl, 360/393/200%,
   offline/error states.
