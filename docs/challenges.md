@@ -84,8 +84,11 @@ extension.
   row remains excluded from general summaries.
 - Standings show the best active result per account (one result per account in a
   challenge), tie ranks, avatars for the top three and the viewer, and the
-  viewer's own row when it falls outside the visible list. The current player
-  is highlighted in every leaderboard table and mini list.
+  viewer's own row when it falls outside the visible list. The after-game
+  modal separates the top three from the viewer neighbourhood with a dashed
+  divider, so a jump from rank 3 to rank 7 is not mistaken for consecutive
+  ranks. The current player is highlighted in every leaderboard table and mini
+  list.
 - The challenge summary/hub returns a **replay descriptor** for past slots:
   `{ game, seed, options, rules, generatorVersion }`. **Play this game** launches
   a normal Quick Play/generated game, not a new challenge attempt. Its result

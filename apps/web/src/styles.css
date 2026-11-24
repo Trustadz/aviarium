@@ -1716,6 +1716,9 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
 .challenge-static-setting { display: grid; gap: 3px; color: var(--muted); font-weight: 650; }
 .challenge-static-setting strong { color: var(--text); }
 
+.challenges-page > .section-heading { margin-bottom: 14px; }
+.challenge-gap { display: flex !important; grid-column: 1 / -1; align-items: center; gap: 7px; min-height: 13px; padding: 1px 0; color: var(--muted); font-size: .72rem; }
+.challenge-gap::before, .challenge-gap::after { content: ""; flex: 1; border-top: 1px dashed var(--border); }
 .challenge-all-done {
   display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 9px 12px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface);

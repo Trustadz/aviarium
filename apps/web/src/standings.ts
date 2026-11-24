@@ -27,3 +27,11 @@ export function resultRows(top: readonly LeaderboardStanding[], you: Leaderboard
   add(you)
   return rows
 }
+
+/** Split the after-game rows into top-three and the viewer neighbourhood. */
+export function resultGroups(top: readonly LeaderboardStanding[], you: LeaderboardStanding | null,
+  total: number): LeaderboardStanding[][] {
+  const rows = resultRows(top, you, total)
+  if (rows.length <= 3 || !you) return [rows]
+  return [rows.slice(0, 3), rows.slice(3)]
+}

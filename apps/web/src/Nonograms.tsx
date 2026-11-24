@@ -111,8 +111,7 @@ GamePlayerProps & { trial?: boolean }) {
       problem={problem} trial={trial} challengeMode={challengeMode} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard} replay={replay}/>
     {celebration !== undefined && <CelebrationOverlay reader={reader}
       result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
-        saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) })
-          : t('Your completion has been saved.'),
+        saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) }) : undefined,
         saveError: Boolean(problem) && !trial }}
       actions={celebrationActions} heading={challengeMode ? t('Daily challenge completed') : undefined}
       onClose={() => setCelebration(undefined)}>{standingsPanel}</CelebrationOverlay>}

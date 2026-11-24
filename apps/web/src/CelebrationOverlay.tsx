@@ -102,9 +102,8 @@ export function CelebrationOverlay({ result, actions, onClose, reader, preview =
 
   return createPortal(<div ref={overlay} className="celebration-overlay" data-reader={reader}
     role="dialog" aria-modal="true" data-phase={celebrating ? 'celebrate' : 'results'}
-    aria-label={title} aria-describedby="celebration-visitor"
+    aria-label={title}
     style={{ '--results-reveal-at': `${duration - resultsLeadMs}ms` } as CSSProperties}>
-    <p id="celebration-visitor" className="sr-only">{t('Budgies')}. {t('A flutter of applause.')}</p>
     <div className="celebration-scrim" aria-hidden="true"/>
     <div className="celebration-glow" aria-hidden="true"/>
     {celebrating && <BudgieFlock/>}
@@ -114,10 +113,7 @@ export function CelebrationOverlay({ result, actions, onClose, reader, preview =
     <section ref={results} className="celebration-results" tabIndex={-1}>
       <div className="celebration-results-card">
         <div className="celebration-result-head">
-          <p className="eyebrow">{t('A visitor from the aviary')}</p>
           <h2 id="celebration-result-title">{title}</h2>
-          <p className="celebration-species">{t('Budgies')}</p>
-          <p className="celebration-line">{t('A flutter of applause.')}</p>
         </div>
         {!preview && <div className="celebration-time">
           <span>{t('Time')}</span>

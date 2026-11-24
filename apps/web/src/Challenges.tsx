@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CalendarDays, Clock3, Play, RotateCcw, Trophy } from 'lucide-react'
 import { useIntl } from 'react-intl'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
@@ -6,7 +6,7 @@ import type { LeaderboardStanding } from '../../../packages/game-sdk/src/leaderb
 import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { api, errorMessage } from './api.js'
 import { Avatar } from './Avatar.js'
-import { resultRows } from './standings.js'
+import { resultGroups, resultRows } from './standings.js'
 import { findGame } from './registry.js'
 import { knownMessage, useT } from './i18n.js'
 import type { Message } from './messages.js'
@@ -367,12 +367,16 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
   if (problem) return <p className="challenge-panel-note" role="alert">{t('Standings unavailable.')}</p>
   if (!data) return <p className="challenge-panel-note" role="status">{t('Posting your result…')}</p>
   const rows = resultRows(data.top, data.you, data.total)
+  const groups = resultGroups(data.top, data.you, data.total)
   return <section className="challenge-panel" aria-label={t('Challenge standings')}>
     <div className="challenge-panel-head"><span className="eyebrow">{t('Challenge standings')}</span><span className="muted">{t('{count, plural, one {# player} other {# players}}', { count: data.total })}</span></div>
-    <ol className="challenge-mini">{rows.map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
-      <span className="challenge-rank">{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/><span className="challenge-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
-      <strong>{formatLeaderboardValue(row.value, row.unit)}</strong>
-    </li>)}</ol>
+    <ol className="challenge-mini">{groups.map((group, index) => <Fragment key={index}>
+      {index > 0 && <li className="challenge-gap" aria-hidden="true">…</li>}
+      {group.map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
+        <span className="challenge-rank">{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/><span className="challenge-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
+        <strong>{formatLeaderboardValue(row.value, row.unit)}</strong>
+      </li>)}
+    </Fragment>)}</ol>
     {!rows.length && <p className="challenge-panel-note">
       {data.you ? t('You’re first — no other times yet.')
         : attempts < 4 ? t('Syncing your result…') : t('No posted times yet.')}</p>}

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { formatLeaderboardValue, type LeaderboardStanding } from '../../../packages/game-sdk/src/leaderboards.js'
 import { api, errorMessage } from './api.js'
 import { Avatar } from './Avatar.js'
 import { gameBoardHref } from './game-definitions.js'
-import { resultRows } from './standings.js'
+import { resultGroups, resultRows } from './standings.js'
 import type { WebGame } from './game-web.js'
 import { useT } from './i18n.js'
 
@@ -52,11 +52,14 @@ export function ResultStandingsPanel({ game, level, accountId, online }: {
   return <section className="challenge-panel" aria-label={t('Leaderboard standings')}>
     <div className="challenge-panel-head"><span className="eyebrow">{t(level.pack ? 'This puzzle’s standings' : 'Standings')}</span>
       <span className="muted">{t('{count, plural, one {# player} other {# players}}', { count: data.total })}</span></div>
-    <ol className="challenge-mini">{rows.map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
+    <ol className="challenge-mini">{resultGroups(data.top, data.you, data.total).map((group, index) => <Fragment key={index}>
+      {index > 0 && <li className="challenge-gap" aria-hidden="true">…</li>}
+      {group.map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
       <span className="challenge-rank">{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/>
       <span className="challenge-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
       <strong>{formatLeaderboardValue(row.value, row.unit)}</strong>
-    </li>)}</ol>
+      </li>)}
+    </Fragment>)}</ol>
     {!rows.length && !data.you && attempts >= 5 && <p className="challenge-panel-note">{t('No posted times yet.')}</p>}
     {!data.you && attempts < 5 && <p className="challenge-panel-note" role="status">{t('Syncing your result…')}</p>}
     {!data.you && attempts >= 5 && <p className="challenge-panel-note">{t('Your result is not on this board.')}</p>}
