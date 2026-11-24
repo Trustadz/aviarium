@@ -15,7 +15,7 @@ export interface GamePlayerProps {
   /** Optional compact standings block rendered inside the after-game overlay. */
   standingsPanel?: ReactNode
   /** Present when a closed challenge seed is being replayed outside the daily board. */
-  replay?: { label: string }
+  replay?: { label: string; backLabel?: string }
   level: GameLevel
   pack?: PackRevision
   session: LocalSession

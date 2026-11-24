@@ -150,6 +150,7 @@ try {
     await replayPage.waitForURL(/\/games\/sudoku/, { timeout: 10000 })
     await replayPage.locator('.replay-notice').waitFor()
     assert.match(await replayPage.locator('.replay-notice').innerText(), /Replay/)
+    assert.match(await replayPage.locator('.game-navigation .back').innerText(), /Back to challenge/)
     await replayContext.context.close()
     await replayContext.launched.close()
     const next = await request('/api/challenges', { headers: headers1, now: clock.after })

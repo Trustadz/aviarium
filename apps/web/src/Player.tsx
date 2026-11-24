@@ -26,7 +26,7 @@ interface Props {
   bestMs?: number; testMode?: boolean
   challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
   standingsPanel?: ReactNode
-  replay?: { label: string }
+  replay?: { label: string; backLabel?: string }
 }
 type Hint = { cell?: number } & ({ stage: 1 | 2 | 3; step: LogicalStep } | { stage?: never; message: Message })
 
@@ -259,7 +259,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
   return <div className={pack ? `play-page pack-play pack-${pack.data.theme}` : 'play-page'}>
     {packArt && <img className="pack-play-art" alt="" src={packArt}/>}
     <div className="game-navigation">
-      <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/>{" "}{t(trial ? "Back to editor" : challengeMode ? "Back to challenges" : pack ? "Back to roadmap" : "Game menu")}</button>
+      <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/>{" "}{trial ? t("Back to editor") : replay?.backLabel ?? t(challengeMode ? "Back to challenges" : pack ? "Back to roadmap" : "Game menu")}</button>
       <div className="game-nav-tools">
         {testMode && !finished && <button className="text-button" disabled={paused} onClick={autoSolve}
           title={t("Test environment")}><WandSparkles size={17}/>{" "}{t("Auto solve")}</button>}

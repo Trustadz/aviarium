@@ -141,7 +141,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, com
   showTimer: boolean
   onMove: (cells: Cell[], undo: Cell[][]) => void
   leaderboard?: { open: () => void }
-  replay?: { label: string }
+  replay?: { label: string; backLabel?: string }
 }) {
   const t = useT()
   const width = puzzle.columns.length
@@ -257,7 +257,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, com
     aria-labelledby="nonogram-puzzle-title">
     {art && <img className="pack-play-art" src={art} alt=""/>}
     <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(trial ? 'Back to editor' : challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Game menu')}</button>
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Game menu')}</button>
       <div className="game-nav-tools">
         {testMode && !solved && <button className="text-button" onClick={autoSolve} title={t('Test environment')}>
           <WandSparkles size={17}/> {t('Auto solve')}

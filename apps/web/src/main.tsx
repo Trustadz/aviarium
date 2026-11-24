@@ -194,7 +194,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [active, setActive] = useState<{
     session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision; parent: string
     playerPath?: string
-    replay?: { label: string }
+    replay?: { label: string; backLabel?: string }
     challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
   }>()
   const [challengeSummary, setChallengeSummary] = useState<{ enabled: boolean; open: number }>()
@@ -410,7 +410,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     return result
   }
   async function open(game: WebGame, level: GameLevel, existing?: LocalSession, suppliedPack?: PackRevision,
-    options: { replace?: boolean; parent?: string; replay?: { label: string } } = {}) {
+    options: { replace?: boolean; parent?: string; replay?: { label: string; backLabel?: string } } = {}) {
     if (!canPlay(game)) throw new Error(game.connectMessage)
     if (level.source === 'Challenge' && !existing?.challenge)
       throw new Error('Open this from Daily Challenges.')
@@ -522,7 +522,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       json('POST', { ...replay.options, seed: replay.seed, version: replay.generatorVersion }), accountId)
     await open(game, level, undefined, undefined, {
       ...(replay.occurrenceId ? { parent: '/challenges/' + replay.occurrenceId } : {}),
-      replay: { label: t('Replay · {date} · daily board closed', { date: replay.periodKey ?? '' }) },
+      replay: { label: t('Replay · {date} · daily board closed', { date: replay.periodKey ?? '' }),
+        backLabel: t('Back to challenge') },
     })
   }
 
