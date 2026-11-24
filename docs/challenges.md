@@ -24,7 +24,8 @@ extension.
 - **Slot** (`challenge_slots`): one game in the occurrence. Exactly one slot per
   game per day. It stores the chosen options/choices, the slot seed, and the
   exact `published_levels` revision (`source='Challenge'`,
-  `catalog_visible=false`).
+  `catalog_visible=false`). With X=2 the current Sudoku and Nonograms slots
+  appear as separate cards and boards.
 - **Attempt** (`challenge_attempts`): one player's claim. `session_id` is the
   server-issued save id; `(slot_id, owner_id)` is unique.
 - **Result** (`leaderboard_results`): one row per completed attempt,
@@ -122,9 +123,11 @@ limit are admin settings in the database.
 **Administration → Challenge settings** provides:
 
 - enable/disable;
+- games per day (1–2 with the current eligible games);
 - reset time as 24-hour hour/minute selects;
 - read-only timezone from the environment;
-- enabled generation options (Sudoku difficulties; no pack-rule variants yet);
+- per-game enabled generation options (Sudoku difficulties; Nonograms grid size
+  and difficulties);
 - current/next occurrence status and **Prepare now**.
 
 There is no challenge editor. Puzzle content is generated from the game and the
@@ -132,13 +135,13 @@ enabled options; an admin cannot pin or author a daily puzzle.
 
 ## First-release scope and deferred work
 
-Shipped in this slice: Sudoku daily, fixed Medium profile, one attempt,
-input-only reset, closed-at-reset challenge board, after-game challenge
-standings, nav/badge, minimal admin settings, replay seed to the general board,
-English/Dutch, mobile and offline/error states.
+Shipped in this slice: Sudoku and Nonograms daily challenges, X 1–2 with one
+slot per game, one attempt, input-only reset, closed-at-reset challenge boards,
+after-game challenge standings, nav/badge, minimal admin settings, replay seed
+to the general board, English/Dutch, mobile and offline/error states.
 
-Deferred: Nonograms and X=2; a full Past list/top-level Challenges tab;
-all-mode after-game standings; pack-rule variants (hints/Auto notes/lives/timer/
+Deferred: a full Past list/top-level Challenges tab; all-mode after-game
+standings (general/pack); pack-rule variants (hints/Auto notes/lives/timer/
 diagonal); admin recovery UI; per-game custom challenge profiles.
 
 ## Verification

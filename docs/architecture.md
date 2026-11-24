@@ -174,8 +174,9 @@ persists the exact level once; claims one attempt per player per game; closes th
 challenge board at the next reset; and exposes the current day, a closed day and
 a seed replay. A game supplies its normal generation, attempt validation and
 result interpretation; it does not implement scheduling, boards, attempts or
-challenge UI. The first release uses the game's default rules and a fixed Sudoku
-Medium profile; pack-rule variants are a future option-group extension.
+challenge UI. The current release uses each game's default rules; Sudoku and Nonograms are
+eligible, X can be 1 or 2, and each enabled game contributes at most one slot.
+Pack-rule variants are a future option-group extension.
 
 Occurrence boundaries use an instance-wide IANA timezone from
 `CHALLENGE_TIMEZONE` (default UTC) and an admin reset minute. Spring-forward gap
@@ -193,7 +194,7 @@ product rules are documented in [daily challenges](challenges.md).
 
 ## Current scope
 
-The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships Sudoku packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges use the platform-owned scheduling and ranking model described above; the first release is Sudoku-only and disabled until an admin enables it.
+The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships Sudoku packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges use the platform-owned scheduling and ranking model described above; Sudoku and Nonograms are eligible, X is configured by an admin (1–2), and the feature is disabled until enabled.
 
 ## Release announcements
 
