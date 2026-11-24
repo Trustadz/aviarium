@@ -16,8 +16,8 @@ export function GameMenu({ title, leave, guide, history, settings, leaderboard, 
   return <section className="catalog game-menu" aria-labelledby="game-menu-title">
     <div className="game-menu-heading">
       <div className="game-navigation">
-        <button className="text-button back" aria-label={t('Exit to library')} onClick={leave}>
-          <ArrowLeft size={17}/> {t('Library')}
+        <button className="text-button back" onClick={leave}>
+          <ArrowLeft size={17}/> {t('Back')}
         </button>
         <div className="game-nav-tools">
           {leaderboard && <a className="icon-button" href={leaderboard.href} onClick={leaderboard.open}

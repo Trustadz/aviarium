@@ -307,7 +307,7 @@ export function GameLeaderboards({ game, accountId, online, link, back }: {
   }, [accountId, game.id, online])
   return <section className="catalog leaderboard-hub">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {knownMessage(t, game.title)}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <a className="text-button" href="/leaderboards" onClick={event => link(event, '/leaderboards')}>{t('All leaderboards')}</a></div>
     <div className="section-heading"><h1>{t('{game} leaderboards', { game: knownMessage(t, game.title) })}</h1></div>
     {!online && <p className="notice">{t('Connect to view leaderboards.')}</p>}
@@ -471,7 +471,7 @@ export function LeaderboardBoardView({ game, boardKey, accountId, online, back, 
   const title = detail ? leaderboardBoardTitle(t, detail.board, game) : ''
   return <section className="catalog leaderboard-board">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {t('{game} leaderboards', { game: knownMessage(t, game.title) })}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <button className="text-button" onClick={copyLink} aria-live="polite">{copied ? t('Copied') : t('Copy link')}</button></div>
     {detail ? <>
       <div className="leaderboard-board-heading">
@@ -545,7 +545,7 @@ export function LeaderboardPackView({ game, packId, revision, accountId, online,
   const title = detail ? knownMessage(t, detail.title) : ''
   return <section className="catalog leaderboard-board leaderboard-pack-view">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {t('{game} leaderboards', { game: knownMessage(t, game.title) })}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <button className="text-button" onClick={copyLink} aria-live="polite">{copied ? t('Copied') : t('Copy link')}</button></div>
     {detail ? <>
       <div className="leaderboard-board-heading"><div>

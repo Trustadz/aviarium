@@ -268,9 +268,9 @@ try {
   })
   await page.getByRole('button', { name: '1', exact: true }).click()
   await cell('1').waitFor()
-  await page.getByRole('button', { name: 'Back to roadmap' }).click()
-  await page.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
-  await page.getByRole('button', { name: 'Exit to library' }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
   await page.reload()
   await page.getByRole('heading', { name: 'Game library' }).waitFor()
   await page.getByRole('button', { name: 'Remove Sudoku from favorites' }).waitFor()
@@ -279,10 +279,12 @@ try {
   await cell('1').waitFor()
   assert.deepEqual(syncRequests, [])
 
+  // A game opened from the game menu has two layers to pop: the level and the
+  // menu. (A level opened from the pack roadmap has the roadmap in between.)
   const toLibrary = async () => {
-    await page.getByRole('button', { name: 'Back to roadmap' }).click()
-    await page.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
-    await page.getByRole('button', { name: 'Exit to library' }).click()
+    await page.getByRole('button', { name: 'Back' }).click()
+    await page.getByRole('button', { name: 'Back', exact: true }).click()
+    await page.getByRole('heading', { name: 'Game library' }).waitFor()
   }
   await toLibrary()
   assert.equal(await page.getByRole('banner').getByText('Local play', { exact: true }).count(), 0)
@@ -307,7 +309,7 @@ try {
 
   const backgroundGame = await context.newPage()
   await backgroundGame.goto(origin + '/games/sudoku')
-  await backgroundGame.getByRole('button', { name: 'Exit to library' }).waitFor()
+  await backgroundGame.getByRole('button', { name: 'Back' }).waitFor()
   await backgroundGame.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
   await page.bringToFront()
   await context.setOffline(true)
@@ -321,7 +323,7 @@ try {
   assert.equal(await cachedGame(), false)
   await page.getByRole('button', { name: 'Explore Sudoku' }).click()
   await page.getByText('Connect to install Sudoku on this device.').waitFor()
-  await page.getByRole('button', { name: 'Exit to library' }).click()
+  await page.getByRole('button', { name: 'Back' }).click()
 
   await context.setOffline(false)
   await backgroundGame.bringToFront()

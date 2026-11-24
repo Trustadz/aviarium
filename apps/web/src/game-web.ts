@@ -19,6 +19,8 @@ export interface GamePlayerProps {
   testMode?: boolean
   persist: (data: GameAttempt) => Promise<void>
   leave: () => void
+  /** Leave through the canonical progress action (roadmap, menu, or editor). */
+  finish?: () => void
   reset: () => void
   openSettings?: () => void
   leaderboard?: { open: () => void }

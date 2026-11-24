@@ -27,9 +27,10 @@ import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
 import { PackCards, PackRoadmap, packApi, packPath } from './GamePacks.js'
-import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory } from './navigation.js'
+import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory, type ScreenRef } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
   sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession, type MutationExtras, type ProfilePreferences } from './storage.js'
+import { isUntouched } from './attempt.js'
 import './styles.css'
 
 const mutationExtras: MutationExtras = (game, level) => findGame(game)?.mutationExtras?.(level)
@@ -180,7 +181,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [prefs, setPrefs] = useState<ProfilePreferences>({})
   const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
   const [manageInstalls, setManageInstalls] = useState(() => localStorage.getItem('aviarium:manage-installs') === 'on')
-  const [active, setActive] = useState<{ session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision; parent: string }>()
+  const [active, setActive] = useState<{ session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision
+    parent: string; from?: ScreenRef; persisted: boolean }>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
   const [dialog, showDialog] = useState<'display' | 'game' | 'account'>()
@@ -350,8 +352,15 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     event.preventDefault(); back(fallback)
   }
   function record(attempt: NonNullable<typeof active>, data: GameAttempt) {
+    // Time checkpoints and other bookkeeping do not create a saved game. A
+    // level opened by mistake stays absent from Continue and the roadmap.
+    if (isUntouched(attempt.session.data, data)) return Promise.resolve()
     recordActivity(attempt.game.id)
     const result = saves.current.catch(() => undefined).then(async () => {
+      if (!attempt.persisted) {
+        await saveLocal(attempt.head)
+        attempt.persisted = true
+      }
       attempt.head = await writeAttempt(attempt.head, data)
       if (attempt.head.id !== attempt.session.id) setNotice('This attempt changed in another tab or device. Your moves are saved in a separate copy.')
     })
@@ -368,27 +377,28 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
-    if (!existing) await saveLocal(session)
     const parent = pack ? packPath(pack) : game.url
+    // A new attempt is only written on the first real move. This keeps a
+    // mis-click from becoming a resumable game that Back can land on later.
     if (options.replace) {
       replaceLayer(game.url, { player: true })
     } else {
-      // Lay down the selector and menu when a game starts from a shortcut
-      // such as Continue or History, so back never skips a level.
-      if (path !== parent) {
-        if (path === game.url) {
-          if (parent !== game.url) pushLayer(parent)
-        } else if (path.startsWith(game.url + '/')) {
-          replaceLayer(parent)
-        } else {
-          if (path !== game.url) pushLayer(game.url)
-          if (parent !== game.url) pushLayer(parent)
-        }
-      }
-      pushLayer(game.url, { player: true })
+      pushLayer(game.url, { player: true, from: { path } })
     }
-    setNotice(''); setActive({ game, session, level, head: session, pack, parent })
+    const from = options.replace ? navigationLayer(history.state)?.from : { path }
+    setNotice(''); setActive({ game, session, level, head: session, pack, parent, from, persisted: Boolean(existing) })
     setPath(game.url)
+    window.scrollTo(0, 0)
+  }
+  async function finishGame(attempt: NonNullable<typeof active>) {
+    const target = attempt.pack ? packPath(attempt.pack) : attempt.game.url
+    setActive(undefined)
+    if (attempt.from?.path === target) {
+      back(target)
+      return
+    }
+    replaceLayer(target)
+    setPath(target)
     window.scrollTo(0, 0)
   }
   async function resume(id: string) {
@@ -494,6 +504,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const inAdmin = path === '/admin'
   const inAbout = path === '/about'
   const inGame = Boolean(openGame)
+  const inGameLeaderboards = Boolean(openGame && path.startsWith(openGame.url + '/leaderboards'))
   const leaderboardTail = openGame && path.startsWith(openGame.url + '/leaderboards')
     ? path.slice((openGame.url + '/leaderboards').length) : undefined
   let leaderboardBoardKey: string | undefined
@@ -505,13 +516,20 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (id && Number.isInteger(Number(revision))) leaderboardPack = { id: decodeURIComponent(id), revision: Number(revision) }
   }
   const activeRemoval = removalNotices[0]
-  const inShell = !inGame
   const playing = active && path === active.game.url ? active : undefined
+  const inPackRoadmap = Boolean(openGame?.packs && path.startsWith(openGame.url + '/packs/'))
+  // Gameplay and the pack roadmap are immersive pack modes. Everything else,
+  // including the game menu, history, guide, and leaderboards, is inside the
+  // app shell so the player always has a way out.
+  const immersive = Boolean(playing) || inPackRoadmap
+  const inShell = !immersive
   const playPack = playing?.pack
-  const surface = inGame ? 'game' : inStudio ? 'studio' : 'library'
+  const surface = immersive ? 'game' : inStudio ? 'studio' : 'library'
+  const navLibrary = inLibrary || Boolean(inGame && !inGameLeaderboards)
+  const navLeaderboards = inLeaderboards || inGameLeaderboards
   const app = useRef<HTMLDivElement>(null)
   const gameSurface = useRef<HTMLElement>(null)
-  useLayoutEffect(() => setBrowserTheme(openGame ? gameSurface.current : app.current, surface === 'game' ? '--game-page' : '--surface'),
+  useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
     [reader, surface, theme, openGame?.id, playPack?.data.theme])
   const settings = openGame?.settings
   const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
@@ -522,22 +540,37 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     {inShell && <>
       <header className="site-header"><div className="frame header-frame">
         <a className="brand" href="/" aria-label={t("Aviarium home")} onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/>
-          <span>{studioGame ? t('{game} Studio', { game: studioGame.title }) : inStudio ? t("Studio") : inNews ? t("News") : inAdmin ? t("Administration") : inAbout ? t("About") : inLeaderboards ? t("Leaderboards") : 'Aviarium'}</span>
+          <span>Aviarium</span>
         </a>
-        {!online && <span className="offline-tag"><WifiOff size={16}/>{" "}{t("Offline")}</span>}
+        <div className="header-actions">
+          {!online && <span className="offline-tag" aria-label={t("Offline")}><WifiOff size={16}/><span>{t("Offline")}</span></span>}
+          <div className="header-account">
+            <AccountMenu account={account} open={showDialog} about={() => go('/about')}
+              administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
+          </div>
+        </div>
       </div></header>
       <div className="app-rail">
+        <div className="rail-brand">
+          <a className="brand" href="/" aria-label={t("Aviarium home")} onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/>
+            <span>Aviarium</span>
+          </a>
+        </div>
         <nav aria-label={t("Main navigation")} className="app-destinations">
-          <a href="/" aria-current={inLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
-          {account && <a href="/leaderboards" aria-current={inLeaderboards ? 'page' : undefined}
+          <a href="/" aria-current={navLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
+          {account && <a href="/leaderboards" aria-current={navLeaderboards ? 'page' : undefined}
             onClick={event => link(event, '/leaderboards')}><Trophy size={21}/><span>{t("Leaderboards")}</span></a>}
           <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>{t("News")}</span></a>
         </nav>
-        <AccountMenu account={account} open={showDialog} about={() => go('/about')}
-          administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
+        <div className="rail-account">
+          {!online && <span className="offline-tag" aria-label={t("Offline")}><WifiOff size={16}/><span>{t("Offline")}</span></span>}
+          <AccountMenu account={account} open={showDialog} about={() => go('/about')}
+            administration={online && account?.role === 'admin' ? () => go('/admin') : undefined}/>
+        </div>
       </div>
     </>}
-    <main ref={gameSurface} className={(inGame ? 'game-frame' : 'frame main-frame') + (openGame || studioGame ? ' game-theme ' + (openGame || studioGame)?.theme : '') + (studioGame ? ' studio-game-canvas' : '') +
+    <main ref={gameSurface} className={(immersive ? 'game-frame' : inGame ? 'main-frame game-content' : 'frame main-frame') +
+      (openGame || studioGame ? ' game-theme ' + (openGame || studioGame)?.theme : '') + (studioGame ? ' studio-game-canvas' : '') +
       (playPack ? ` pack-palette pack-${playPack.data.theme}` : '')}>
       {notice && <div className="notice" role="alert">{knownMessage(t, notice)}<button onClick={() => setNotice('')}>{t("Dismiss")}</button></div>}
       {inLibrary && networkNotice && <p role="status" className="network-notice">{t("Sync delayed.")}{" "}{knownMessage(t, networkNotice)}</p>}
@@ -567,19 +600,24 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           try { await refreshLocal() }
           finally { back(playing.parent) }
         })}
+        finish={() => perform(async () => {
+          await saves.current.catch(() => undefined)
+          try { await refreshLocal() }
+          finally { await finishGame(playing) }
+        })}
         reset={() => perform(async () => {
           await deleteAttempt(playing.head.id)
           await open(playing.game, playing.level, undefined, playing.pack, { replace: true })
         })}/>
       : openGame?.leaderboards && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
-        accountId={account?.id} online={online} link={link} back={() => go(openGame.url)}/>
+        accountId={account?.id} online={online} link={link} back={() => back(openGame.url)}/>
       : openGame?.leaderboards && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
         boardKey={leaderboardBoardKey} accountId={account?.id} online={online}
-        back={() => go(openGame.url + '/leaderboards')} play={level => perform(() => open(openGame, level))}
+        back={() => back(openGame.url + '/leaderboards')} play={level => perform(() => open(openGame, level))}
         openGame={() => go(openGame.url)}/>
       : openGame?.leaderboards && leaderboardPack ? <LeaderboardPackView game={openGame} packId={leaderboardPack.id}
         revision={leaderboardPack.revision} accountId={account?.id} online={online}
-        back={() => go(openGame.url + '/leaderboards')} link={link}/>
+        back={() => back(openGame.url + '/leaderboards')} link={link}/>
       : openGame?.guide && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
         sections={openGame.guide} leave={event => backLink(event, openGame.url)}/>
       : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
@@ -592,7 +630,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
               item.data.level === level.id && item.data.levelRevision === level.revision)
             return existing ? resume(existing.id) : open(openGame, level, undefined, viewedPack)
           })}/>
-        : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
+        : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t('Back')}</button>
           <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
       : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
         leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
