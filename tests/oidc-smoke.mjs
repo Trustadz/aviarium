@@ -223,7 +223,7 @@ try {
   await otherTab.getByRole('link', { name: 'Login with Pocket ID', exact: true }).waitFor()
   assert.equal(await who(), null)
   assert.equal(await page.evaluate(() => localStorage.getItem('aviarium:session')), null)
-  assert.equal((await context.request.get(origin + '/api/catalog')).status(), 401)
+  assert.equal((await context.request.get(origin + '/api/games/sudoku/packs')).status(), 401)
   console.info('OIDC smoke passed: real callback and PKCE, role bootstrap, account selection, isolated preferences, device display, logout.')
   await otherTab.close()
   await page.getByRole('link', { name: 'Login with Pocket ID', exact: true }).click()
@@ -233,8 +233,6 @@ try {
 
   const me = await (await context.request.get(origin + '/api/me')).json()
   assert.deepEqual(me, { user: null, signIn: false, loginEnabled: false, testEnvironment: false })
-  const catalog = await (await context.request.get(origin + '/api/catalog')).json()
-  assert.ok(catalog.some(level => level.id === 'first-light'))
   const packs = await (await context.request.get(origin + '/api/packs')).json()
   const level = packs.find(pack => pack.id === 'budgies')?.data.puzzles[0]
   assert.ok(level)

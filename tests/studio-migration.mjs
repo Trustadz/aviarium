@@ -77,8 +77,8 @@ try {
   assert.equal(retried.json().revision, 1)
   const sharedPacks = (await app.inject({ url: '/api/games/sudoku/packs', headers })).json()
   assert.deepEqual(sharedPacks, packs)
-  assert.equal((await app.inject({ url: '/api/sudoku/level/' + visibleId + '/6', headers })).statusCode, 200)
-  assert.equal((await app.inject({ url: '/api/sudoku/level/' + hiddenId + '/4', headers })).statusCode, 404)
+  const { rows: [oldRevision] } = await pool.query('SELECT 1 FROM published_levels WHERE id=$1 AND revision=6', [visibleId])
+  assert.ok(oldRevision)
   const updated = await app.inject({ method: 'POST', url: '/api/progress', headers,
     payload: { sessionId, mutationId: randomUUID(), baseRevision: 1, archived: false, data: save } })
   assert.equal(updated.statusCode, 200, updated.body)

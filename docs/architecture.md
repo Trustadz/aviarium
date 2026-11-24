@@ -29,7 +29,7 @@ an origin.
   are immutable because saved attempts refer to exact level versions. Pack
   revisions track changes to the published pack. Level revisions advance
   independently when a level's puzzle or effective gameplay rules change.
-  Draft edits and catalog visibility can change independently of saved
+  Draft edits and pack visibility can change independently of saved
   attempts. Keep the referenced level revisions available.
 - **Back retraces the navigation path; progression is explicit.** Gameplay and
   the pack roadmap are immersive screens with no app chrome. The game menu,
@@ -39,13 +39,12 @@ an origin.
   a non-sticky header carries the brand, account, and offline status, and a
   fixed bottom destination bar stays visible. Browser, hardware, and in-app
   back pop the screen the player actually visited. Opening a game from
-  Continue, History, a leaderboard, or a shared puzzle returns to that screen;
-  only a directly opened URL is seeded with its canonical parents. Back never
-  starts or resumes a level, and the completion screen's roadmap or
-  choose-another action is a separate forward action. Every exit from an
-  immersive pack screen returns to a shelled screen. Studio pack editing and
-  test play keep their existing layers. Keep this rule when adding screens
-  under a game or Studio.
+  Continue, History, or a leaderboard returns to that screen; a directly opened
+  URL is seeded with its canonical parents. Back never starts or resumes a
+  level, and the completion screen's roadmap or choose-another action is a
+  separate forward action. Every exit from an immersive pack screen returns to
+  a shelled screen. Studio pack editing and test play keep their existing
+  layers. Keep this rule when adding screens under a game or Studio.
 - **Game play fits the viewport.** The Sudoku and Nonograms play screens fill
   the dynamic viewport and size their boards from the space left by the header
   and controls, so the board, inputs, tools, and result actions stay visible
@@ -68,7 +67,7 @@ an origin.
 - **Leaderboards record every completed sync.** A verified completion writes its
   result in the same transaction as its completion record. Boards group results
   by the game's settings: Sudoku Quick Play by difficulty, Nonograms random
-  boards by size and difficulty, and pack or fixed levels by level revision.
+  boards by size and difficulty, and pack levels by level revision.
   The exact starting grid or clue set is hashed for a 30-day per-puzzle
   cooldown; a repeat inside that window is stored as `cooldown` and hidden,
   while a different puzzle posts immediately. Standings show the best active
@@ -81,7 +80,7 @@ an origin.
   leaderboard registration point; Sudoku and Nonograms implement it. New tables
   only: no historical completions are backfilled, and suppressed results never
   remove the completion.
-  The web leaderboard keeps the player in view: the catalog and game hub lead
+  The web leaderboard keeps the player in view: the leaderboard catalog and game hub lead
   with the signed-in player's latest active posting (`recorded_at`, not their
   best) and best current rank (lowest rank, then more players, then recency),
   scoped globally and per game. Board pages show a `Your best` strip, the top
@@ -146,7 +145,7 @@ The shared types, rules for progression, revision assignment, and attempt metada
 
 ## Levels and checks
 
-Givens are 81 row-major digits. Zero means empty. A pack draft can be edited without affecting published revisions. The generation job records a seed and generator version. Validation jobs capture the draft revision and return one of invalid, unsolvable, unique, multiple, or inconclusive. The app processes the PostgreSQL job queue after startup. A bounded worker thread runs the solver off the HTTP event loop. The job lease survives browser close and app restart. An expired search budget is inconclusive. Publishing requires verification of the current pack draft. Published data is immutable and the newest revision of each ID forms the shared catalog. Previous revisions remain available for saved attempts. Admins can hide an editor’s publication from the catalog while retaining its saved attempts. Users can play every published game and manage their profile, preferences, and device settings. Editors additionally have Studio access for every game, with ownership checks on pack drafts. Admins also have administration access. Existing game-specific grants are promoted to the Editor role during upgrade.
+Givens are 81 row-major digits. Zero means empty. A pack draft can be edited without affecting published revisions. The generation job records a seed and generator version. Validation jobs capture the draft revision and return one of invalid, unsolvable, unique, multiple, or inconclusive. The app processes the PostgreSQL job queue after startup. A bounded worker thread runs the solver off the HTTP event loop. The job lease survives browser close and app restart. An expired search budget is inconclusive. Publishing requires verification of the current pack draft. Published data is immutable and pack revisions form the shared library. Previous revisions remain available for saved attempts. Owners can unpublish a pack while retaining its saved attempts. Users can play every published game and manage their profile, preferences, and device settings. Editors additionally have Studio access for every game, with ownership checks on pack drafts. Admins also have administration access. Existing game-specific grants are promoted to the Editor role during upgrade.
 
 New Sudoku publications use a deterministic, easiest-first logical solver. Easy uses singles, Medium adds pairs and locked candidates, and Hard adds techniques such as triples and X-Wing. Extreme requires an advanced technique and Genius uses at least three distinct Extreme families in the logical solve. Search is used to verify uniqueness, while grading, hints, and playback use named deductions. An incomplete logical solve needs review. Older puzzle revisions retain their published grades. Quick Play v2 uses verified puzzle pools and seeded grid transformations, and checks that the transformed board keeps its requested grade. Once Sudoku is downloaded, a bundled browser worker creates random or seeded Quick Play puzzles online or offline. The browser keeps the existing seed-derived puzzle ID. On the first sync for an unknown puzzle, the server regenerates its grid from the seed, difficulty and generator version before accepting the save. A shared seed code carries its difficulty and generator version. The installed web app can receive the code through the share sheet on browsers that support share targets.
 
@@ -154,7 +153,7 @@ New Sudoku publications use a deterministic, easiest-first logical solver. Easy 
 
 Open Studio from the library heading (editors and admins only) or from a game menu, choose a game, then work in **My packs**. Authored levels belong to a pack. The shared workspace provides pack navigation, level ordering, appearance, rule controls, and trail preview. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
 
-Owners manage their packs. Admins use **Administration → Packs → Edit as admin** to enter another creator’s workspace. Server permissions and draft version checks apply to both modes. The package records the last editor and logs admin publications. Publish verifies the exact draft in a server worker and atomically replaces the visible pack revision. Legacy standalone publications appear in recovered packs without changing their existing level or save keys.
+Owners manage their packs. Admins use **Administration → Packs → Edit as admin** to enter another creator’s workspace. Server permissions and draft version checks apply to both modes. The package records the last editor and logs admin publications. Publish verifies the exact draft in a server worker and atomically replaces the visible pack revision. Every shipped or authored level belongs to a pack; the pre-pack built-in Sudoku starters are retired, while legacy standalone publications appear in recovered packs without changing their existing level or save keys.
 
 A pack revision determines order, rules and presentation. Stable level IDs survive changes in order, and each level has an independent revision. Changes to givens or play rules create a new level revision. Level access lives on the pack. Levels inherit gameplay defaults and may override the controls supplied by the game. Ordered packs preserve access earned on earlier snapshots, count inserted levels toward completion, and allow players to continue from the next new stop. The shared pack trail opens at that next stop and begins above the information card.
 
@@ -166,7 +165,7 @@ Nonograms stores row and column clues as level content with a versioned mark gri
 
 The shared attempt identifies game, level ID and revision, ruleset, and save format. It tracks elapsed time and completion. Sudoku supplies the entries, note masks, and bounded undo/redo. Dexie saves the latest local state and pending upload. Server mutations are idempotent by UUID. A stale base revision creates a separate attempt rather than overwriting the server snapshot. Verified completion is stored independently of individual attempts.
 
-Foreground sync runs when an authenticated player visits the library, returns to the foreground, or reconnects. Active play checkpoints locally until returning to the library or puzzle list. Account identity is checked on authorization-sensitive sync requests. Synced preferences merge field updates. Theme and e-reader mode are device-local. Games use the device's light or dark mode with their own palettes. Sudoku's timer, hints, and conflict highlighting are controlled from the Sudoku menu. The library and catalog endpoint require an account. Saves and the synchronization queue are keyed by account ID.
+Foreground sync runs when an authenticated player visits the library, returns to the foreground, or reconnects. Active play checkpoints locally until returning to the library or puzzle list. Account identity is checked on authorization-sensitive sync requests. Synced preferences merge field updates. Theme and e-reader mode are device-local. Games use the device's light or dark mode with their own palettes. Sudoku's timer, hints, and conflict highlighting are controlled from the Sudoku menu. The library and pack endpoints require an account. Saves and the synchronization queue are keyed by account ID.
 
 The production service worker caches the library shell and installs game assets when a game opens. Enable **Manage installs** in **Device settings** to reveal download removal on library cards. Removing a download preserves saves and their versioned puzzle references. Downloads are specific to the browser and are removed after 30 days of inactivity once the server is reachable. While offline, the browser can reopen downloaded games until its last verified session expires. Signing out clears the cached session. API and authentication traffic stay network-only.
 

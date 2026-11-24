@@ -45,8 +45,7 @@ export interface WebGame extends GameMetadata {
   Studio: ComponentType<PackStudioProps>
   Player: ComponentType<GamePlayerProps>
   menu?(context: GameMenuContext): ReactNode
-  sample?(levels: readonly GameLevel[]): GameLevel | undefined
-  catalog?: string
+  sample?(packs: readonly PackRevision[]): GameLevel | undefined
   preview(level?: GameLevel, attempt?: GameAttempt): ReactNode
   levelTitle(t: Translate, level: GameLevel): string
   resultDetail(t: Translate, level: GameLevel | undefined, attempt: GameAttempt): string | undefined
