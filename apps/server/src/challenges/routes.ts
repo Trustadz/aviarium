@@ -12,7 +12,7 @@ import { requestNow } from './now.js'
 import {
   addCivilDays, localBoundary, nextOccurrenceStart, occurrenceFor, parsePeriodKey,
 } from './time.js'
-import { challengeGames } from './registry.js'
+import type { ChallengeGameRuntime } from './types.js'
 import {
   ensureOccurrence, minimumWindowMinutes, occurrenceView, prepareOccurrence, readSeries, seriesView, syncSeriesTimezone,
   type OccurrenceRow, type SeriesRow, type SlotRow,
@@ -171,7 +171,8 @@ async function enabledSeries(): Promise<{ enabled: boolean; series?: SeriesRow }
   return { enabled: series.enabled, series }
 }
 
-export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>) {
+export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>,
+  challengeGames: readonly ChallengeGameRuntime[]) {
   app.get('/api/challenges/summary', async request => {
     const user = await requireUser(request)
     const now = requestNow(request)

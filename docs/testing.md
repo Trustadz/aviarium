@@ -69,6 +69,11 @@ challenge derivation, and `apps/server/src/game-source-scan.test.ts`, which fail
 a platform module branches on a `'sudoku'`/`'nonograms'` string literal outside
 the explicit registration/game/legacy allowlist.
 
+The browser suite also runs `tests/platform-fixture-smoke.mjs`, which starts
+`makeApp(createGameRegistry([sudokuGame, fixtureGame]))` on a disposable
+database and exercises the package-backed third game through real HTTP Quick
+Play, progress, leaderboard and challenge endpoints.
+
 The browser suite runs `tests/challenges-smoke.mjs` on a disposable database. It
 starts its own `TEST_ENVIRONMENT=true` server, enables a two-game series,
 claims and completes one Sudoku with a second start rejected, verifies the

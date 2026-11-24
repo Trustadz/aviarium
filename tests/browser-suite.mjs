@@ -83,6 +83,9 @@ try {
     AVIARIUM_CHALLENGE_TEST_DATABASE_URL: await isolatedDatabase(),
     AVIARIUM_CHROMIUM: process.env.AVIARIUM_CHROMIUM,
   })
+  await run('tests/platform-fixture-smoke.mjs', {
+    AVIARIUM_PLATFORM_TEST_DATABASE_URL: await isolatedDatabase(),
+  })
 } finally {
   await stopApp()
   try {

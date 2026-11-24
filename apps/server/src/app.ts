@@ -12,15 +12,19 @@ import { enabledLocales, listenHost, origin, pool } from './config.js'
 import { registerNews } from './news.js'
 import { runNewsTranslations } from './news-translation.js'
 import { createServerGames } from './games.js'
+import { gameRegistry } from './game-registry.js'
+import { challengeGamesFromRegistry } from './challenges/registry.js'
 import { registerGameRoutes } from './game-routes.js'
 import { registerLeaderboards } from './leaderboards.js'
 import { registerPacks } from './packs.js'
 import { registerProgress } from './progress.js'
 import { migrate } from './migrate.js'
 import { runPuzzleJobs } from './worker.js'
+import type { GameRegistry } from '../../../packages/game-sdk/src/game.js'
 
-export async function makeApp() {
-  const serverGames = createServerGames()
+export async function makeApp(registry: GameRegistry = gameRegistry) {
+  const serverGames = createServerGames(registry)
+  const challengeGames = challengeGamesFromRegistry(registry)
   const app = Fastify({
     logger: {
       serializers: {
@@ -60,14 +64,14 @@ export async function makeApp() {
   })
   registerAuth(app)
   registerNews(app)
-  registerGameRoutes(app)
+  registerGameRoutes(app, registry)
   for (const game of serverGames.values()) {
     game.routes?.(app)
     registerPacks(app, game, '/api/games/' + game.id)
   }
-  registerProgress(app, serverGames)
+  registerProgress(app, serverGames, challengeGames)
   registerLeaderboards(app, serverGames)
-  registerChallenges(app, serverGames)
+  registerChallenges(app, serverGames, challengeGames)
   registerBackups(app)
   await app.register(staticFiles, {
     root: fileURLToPath(new URL('../../../../dist/web/', import.meta.url)),

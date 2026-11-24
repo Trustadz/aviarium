@@ -89,10 +89,11 @@ match. `challengeCapable()` returns games with a `generation` declaration.
 
 A package-backed third game in `packages/game-fixture` is the proof: it is
 discovered, becomes challenge-capable, and reaches the server compatibility map
-and challenge derivation without a platform edit. `createServerGames(registry)`
-and `challengeGamesFromRegistry(registry)` are injectable; the next step is to
-thread the same registry through the HTTP route/challenge registration so the
-fixture can exercise the real API paths.
+and challenge derivation without a platform edit. `createServerGames(registry)`,
+`challengeGamesFromRegistry(registry)` and `makeApp(registry)` are injectable.
+`tests/platform-fixture-smoke.mjs` runs the fixture through real HTTP paths:
+generic Quick Play, progress/save, leaderboard board, challenge slot and
+challenge board.
 
 ## Adding a game
 

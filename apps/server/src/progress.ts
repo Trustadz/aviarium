@@ -10,8 +10,8 @@ import { pool, transaction } from './config.js'
 import { recordChallengeResult, recordLeaderboardResult } from './leaderboards.js'
 import type { ChallengeResultContext } from './leaderboards.js'
 import { requestNow } from './challenges/now.js'
-import { challengeGames } from './challenges/registry.js'
 import type { OccurrenceRow, SlotRow } from './challenges/store.js'
+import type { ChallengeGameRuntime } from './challenges/types.js'
 import { packHistory } from './pack-progress.js'
 
 const fields = 'id,revision,data,parent_id AS "parentId",archived,floor(extract(epoch FROM updated_at) * 1000)::double precision AS "updatedAt"'
@@ -57,7 +57,7 @@ async function closeChallengeAttempt(db: PoolClient, attempt: ChallengeAttemptRo
 }
 
 async function handleChallengeMutation(db: PoolClient, user: User, game: ServerGame, level: LevelRecord,
-  mutation: AttemptMutation, now: number): Promise<ChallengeMutationResult> {
+  mutation: AttemptMutation, now: number, challengeGames: readonly ChallengeGameRuntime[]): Promise<ChallengeMutationResult> {
   const claim = mutation.challenge!
   const { rows: [attempt] } = await db.query<ChallengeAttemptRow>(`SELECT * FROM challenge_attempts
     WHERE id=$1 AND owner_id=$2 FOR UPDATE`, [claim.attemptId, user.id])
@@ -143,7 +143,8 @@ async function handleChallengeMutation(db: PoolClient, user: User, game: ServerG
 }
 
 
-export function registerProgress(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>) {
+export function registerProgress(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>,
+  challengeGames: readonly ChallengeGameRuntime[]) {
   const preferencesPatch = z.object({ ...preferenceFields(serverGames), locale: z.enum(locales) }).partial()
   app.get('/api/progress', async request => {
     const user = await requireUser(request)
@@ -204,7 +205,7 @@ export function registerProgress(app: FastifyInstance, serverGames: ReadonlyMap<
         throw new HttpError(422, 'level_version_unavailable')
       }
       if (mutation.challenge)
-        return handleChallengeMutation(db, user, game, level, mutation, requestNow(request))
+        return handleChallengeMutation(db, user, game, level, mutation, requestNow(request), challengeGames)
       if (level.source === 'Challenge') throw new HttpError(422, 'challenge_required')
       game.validateAttempt(mutation.data, level, packRules)
       const lives = mutation.data.lives

@@ -43,12 +43,14 @@ export const fixtureGame: GameDefinition<GameLevel, FixtureSave, Record<string, 
   },
   generation: {
     version: 1,
+    quickPlay: z.object({ seed: z.string(), difficulty: z.string(), version: z.literal(1) }),
     options: { schema: z.object({ difficulty: z.string() }), defaults: { difficulty: 'normal' },
       fields: [{ key: 'difficulty', label: 'Difficulty', choices: [{ value: 'normal', label: 'Normal' }] }] },
     generate: async (_seed, options) => ({ ruleset: 1, title: 'Fixture', difficulty: options.difficulty,
       content: { answer: 1 }, rules: {}, generatorVersion: 1 }),
     materialize: (seed, _options, _content) => ({
       id: 'fixture-' + seed, revision: 1, ruleset: 1, title: 'Fixture', source: 'Generated',
+      content: { answer: 1 },
     }),
   },
   packs: {
