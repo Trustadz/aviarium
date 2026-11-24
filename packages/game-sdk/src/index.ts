@@ -50,7 +50,7 @@ export {
   leaderboardTopLimit, withinLeaderboardCooldown,
 } from './leaderboards.js'
 export type {
-  LeaderboardBoardInfo, LeaderboardBoardKey, LeaderboardBoardKind, LeaderboardCooldown, LeaderboardPlayerResult,
-  LeaderboardPlayerSummary, LeaderboardRecord, LeaderboardRemovalNotice, LeaderboardResultStatus, LeaderboardStanding,
+  LeaderboardBoardInfo, LeaderboardBoardKey, LeaderboardBoardKind, LeaderboardCooldown, LeaderboardPackStanding,
+  LeaderboardPackSummary, LeaderboardPlayerResult, LeaderboardPlayerSummary, LeaderboardRecord, LeaderboardRemovalNotice, LeaderboardResultStatus, LeaderboardStanding,
   LeaderboardSummary, LeaderboardValueUnit,
 } from './leaderboards.js'

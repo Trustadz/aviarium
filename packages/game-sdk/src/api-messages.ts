@@ -37,6 +37,7 @@ export const apiMessages = {
   leaderboard_game_not_found: "Leaderboards are not available for that game.",
   leaderboard_board_not_found: "That leaderboard was not found.",
   leaderboard_level_not_found: "The puzzle for that leaderboard was not found.",
+  leaderboard_pack_not_found: "That pack leaderboard was not found.",
   leaderboard_notice_not_found: "That removal notice was not found.",
   leaderboard_result_not_found: "That leaderboard result was not found.",
   leaderboard_reason_required: "Enter a reason for removing this result.",

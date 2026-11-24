@@ -76,6 +76,13 @@ an origin.
   and the admin table reveals results twenty at a time. Long removal reasons
   scroll inside the dialog, and 200% text must not introduce horizontal page
   overflow.
+  Standings also expose an **All records** view that pages through every
+  active result, including multiple results from one player, without the
+  best-per-player cap. Pack cards aggregate entire packs: a player's total is
+  the sum of their best active time on every level, ranked only when every
+  level is present, with avatars in the pack table, mini top-three lists, and
+  each level's best row. On phones the profile sits in the upper-right header
+  so the bottom destinations, including Studio for editors, keep their labels.
 - **The server owns permissions.** Pocket ID supplies identity in the normal
   login flow. PostgreSQL stores Aviarium sessions and roles. Use
   `requireUser` or `requireEditor` as appropriate and enforce resource

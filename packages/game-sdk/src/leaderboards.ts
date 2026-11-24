@@ -80,6 +80,36 @@ export interface LeaderboardPlayerResult {
   recordedAt: string
 }
 
+export interface LeaderboardRecords {
+  rows: LeaderboardStanding[]
+  /** Total active records on the board. */
+  total: number
+}
+
+export interface LeaderboardPackStanding {
+  rank: number | null
+  name: string
+  /** Sum of this player's best active time on every pack level. */
+  total: number
+  /** How many pack levels this player has a result on. */
+  levels: number
+  you: boolean
+  avatarUrl?: string | null
+}
+
+export interface LeaderboardPackSummary {
+  id: string
+  revision: number
+  title: string
+  builtIn: boolean
+  /** Total visible levels in the pack. */
+  levels: number
+  /** Players who have a result on every level. */
+  players: number
+  top: LeaderboardPackStanding[]
+  you: LeaderboardPackStanding | null
+}
+
 export interface LeaderboardPlayerSummary {
   lastPosted: LeaderboardPlayerResult | null
   bestRank: LeaderboardPlayerResult | null

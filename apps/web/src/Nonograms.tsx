@@ -93,7 +93,7 @@ GamePlayerProps & { trial?: boolean }) {
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
     ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
-    ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View board'), onClick: leaderboard.open }] : []),
+    ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
 
@@ -302,7 +302,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
             <span>{t(problem ? 'Save failed' : 'Saved')}</span>
           </div>}
           <button className="primary" onClick={leave}>{t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
-          {!trial && leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View board')}</button>}
+          {!trial && leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
         </section>}
         <div className="tools nonogram-tools" role="group" aria-label={t('Mark squares')}>
           {([['Fill', '■', 1], ['Mark blank', '×', 2], ['Erase', '□', 0]] as const).map(([label, symbol, mark]) =>

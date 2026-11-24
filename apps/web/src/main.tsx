@@ -17,7 +17,7 @@ import { ContinueGames } from './ContinueGames.js'
 import { LibraryHero } from './LibraryHero.js'
 import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
-import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice } from './Leaderboards.js'
+import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
@@ -480,8 +480,12 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const leaderboardTail = openGame && path.startsWith(openGame.url + '/leaderboards')
     ? path.slice((openGame.url + '/leaderboards').length) : undefined
   let leaderboardBoardKey: string | undefined
+  let leaderboardPack: { id: string; revision: number } | undefined
   if (leaderboardTail?.startsWith('/board/')) {
     try { leaderboardBoardKey = decodeURIComponent(leaderboardTail.slice('/board/'.length)) } catch { leaderboardBoardKey = undefined }
+  } else if (leaderboardTail?.startsWith('/pack/')) {
+    const [id, revision] = leaderboardTail.slice('/pack/'.length).split('/')
+    if (id && Number.isInteger(Number(revision))) leaderboardPack = { id: decodeURIComponent(id), revision: Number(revision) }
   }
   const activeRemoval = removalNotices[0]
   const inShell = !inGame
@@ -555,6 +559,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         boardKey={leaderboardBoardKey} accountId={account?.id} online={online}
         back={() => go(openGame.url + '/leaderboards')} play={level => perform(() => open(openGame, level))}
         openGame={() => go(openGame.url)}/>
+      : openGame?.leaderboards && leaderboardPack ? <LeaderboardPackView game={openGame} packId={leaderboardPack.id}
+        revision={leaderboardPack.revision} accountId={account?.id} online={online}
+        back={() => go(openGame.url + '/leaderboards')} link={link}/>
       : openGame?.guide && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
         sections={openGame.guide} leave={event => link(event, openGame.url)}/>
       : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}

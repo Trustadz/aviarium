@@ -243,7 +243,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
     ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
-    ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View board'), onClick: leaderboard.open }] : []),
+    ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
   return <div className={pack ? `play-page pack-play pack-${pack.data.theme}` : 'play-page'}>
@@ -280,7 +280,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
             </div>}
           <button className="primary" onClick={gameOver ? reset : leave}>{gameOver ? t("Retry puzzle") : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
           {!gameOver && <div className="button-bar">
-            {leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View board')}</button>}
+            {leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
             <PuzzleShare level={level}/>
           </div>}
         </section>

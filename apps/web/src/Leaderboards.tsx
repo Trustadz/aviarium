@@ -3,8 +3,9 @@ import { ArrowLeft, ChevronRight, Search, Trophy } from 'lucide-react'
 import { useIntl, type IntlShape } from 'react-intl'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type {
-  LeaderboardBoardInfo, LeaderboardCooldown, LeaderboardPlayerResult, LeaderboardPlayerSummary,
-  LeaderboardRemovalNotice, LeaderboardStanding, LeaderboardSummary,
+  LeaderboardBoardInfo, LeaderboardCooldown, LeaderboardPackStanding, LeaderboardPackSummary,
+  LeaderboardPlayerResult, LeaderboardPlayerSummary, LeaderboardRecords, LeaderboardRemovalNotice,
+  LeaderboardStanding, LeaderboardSummary,
 } from '../../../packages/game-sdk/src/leaderboards.js'
 import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { api, errorMessage } from './api.js'
@@ -17,16 +18,18 @@ import type { LocalSession } from './storage.js'
 interface CatalogEntry extends LeaderboardSummary { game: string; player: LeaderboardPlayerSummary }
 interface CatalogData { games: CatalogEntry[]; player: LeaderboardPlayerSummary }
 interface HubLevel extends LeaderboardSummary { level: GameLevel }
-interface HubPack { id: string; revision: number; title: string; builtIn: boolean; levels: HubLevel[] }
 interface HubData {
-  game: string; quick: LeaderboardSummary[]; packs: HubPack[]; standalone: HubLevel[]
+  game: string; quick: LeaderboardSummary[]; packs: LeaderboardPackSummary[]; standalone: HubLevel[]
   player: LeaderboardPlayerSummary
 }
 interface BoardDetail extends LeaderboardSummary { level?: GameLevel; cooldown?: LeaderboardCooldown | null }
+interface PackDetail extends Omit<LeaderboardPackSummary, 'levels'> { levels: HubLevel[] }
 
 type Link = (event: MouseEvent<HTMLAnchorElement>, href: string) => void
 const boardPath = (game: string, key: string) =>
   '/games/' + game + '/leaderboards/board/' + encodeURIComponent(key)
+const packPath = (game: string, id: string, revision: number) =>
+  '/games/' + game + '/leaderboards/pack/' + encodeURIComponent(id) + '/' + revision
 
 async function copyText(text: string) {
   if (navigator.clipboard) {
@@ -126,7 +129,8 @@ function MiniTop({ rows }: { rows: readonly LeaderboardStanding[] }) {
   if (!rows.length) return <p className="leaderboard-empty-line">{t('No posted times')}</p>
   return <ol className="leaderboard-mini">{rows.slice(0, 3).map((row, index) => <li key={row.rank + ':' + index}
     data-you={row.you || undefined}>
-    <span>{row.rank}</span><span>{row.name}</span><span>{formatLeaderboardValue(row.value, row.unit)}</span>
+    <span>{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/><span>{row.name}</span>
+    <span>{formatLeaderboardValue(row.value, row.unit)}</span>
   </li>)}</ol>
 }
 
@@ -223,11 +227,67 @@ function BoardRow({ entry, game, link }: { entry: HubLevel; game: WebGame; link:
     </span>
     <span className="leaderboard-board-meta">
       <span>{t('{count, plural, one {# player} other {# players}}', { count: entry.total })}</span>
-      {entry.top[0] && <span>{t('Best {time}', { time: formatLeaderboardValue(entry.top[0].value, entry.top[0].unit) })}</span>}
+      {entry.top[0] && <span className="leaderboard-best"><span className="eyebrow">{t('Best')}</span>
+        <Avatar name={entry.top[0].name} url={entry.top[0].avatarUrl}/>
+        <span>{entry.top[0].name}</span>
+        <strong>{formatLeaderboardValue(entry.top[0].value, entry.top[0].unit)}</strong></span>}
       {entry.you && <span className="badge you-badge">{t('You')} #{entry.you.rank}</span>}
     </span>
     <span className="leaderboard-row-chevron" aria-hidden="true"><ChevronRight size={17}/></span>
   </a>
+}
+
+function PackMiniTop({ rows }: { rows: readonly LeaderboardPackStanding[] }) {
+  const t = useT()
+  if (!rows.length) return <p className="leaderboard-empty-line">{t('No pack results yet')}</p>
+  return <ol className="leaderboard-mini leaderboard-pack-mini">{rows.slice(0, 3).map(row => <li key={row.rank + ':' + row.name}
+    data-you={row.you || undefined}>
+    <span>{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/><span>{row.name}</span>
+    <span>{formatLeaderboardValue(row.total, 'ms')}</span>
+  </li>)}</ol>
+}
+
+function PackCard({ pack, game, link }: { pack: LeaderboardPackSummary; game: WebGame; link: Link }) {
+  const t = useT()
+  const href = packPath(game.id, pack.id, pack.revision)
+  const you = pack.you
+  return <a className="leaderboard-card panel leaderboard-pack-card" href={href} onClick={event => link(event, href)}>
+    <div className="leaderboard-card-head"><h3>{knownMessage(t, pack.title)}</h3><ChevronRight size={18}/></div>
+    <p className="leaderboard-card-meta">{t('{count} levels', { count: pack.levels })} · {t('{count, plural, one {# player} other {# players}}', { count: pack.players })}</p>
+    <PackMiniTop rows={pack.top}/>
+    <div className="leaderboard-card-foot">
+      {you ? <span className="leaderboard-personal">{t('Your total')} {formatLeaderboardValue(you.total, 'ms')}
+        {you.rank ? ' · #' + you.rank : ' · ' + t('{solved} of {total} levels', { solved: you.levels, total: pack.levels })}</span>
+        : <span className="muted">{t('No pack results yet')}</span>}
+      <span className="text-button">{t('View pack')} <ChevronRight size={16}/></span>
+    </div>
+  </a>
+}
+
+function PackStandings({ rows, players, levels, title }: {
+  rows: readonly LeaderboardPackStanding[]; players: number; levels: number; title: string
+}) {
+  const t = useT()
+  if (!rows.length) return null
+  return <section className="leaderboard-standings">
+    <div className="leaderboard-table-wrap"><table className="leaderboard-table">
+      <caption className="visually-hidden">{t('Pack standings for {pack}', { pack: title })}</caption>
+      <thead><tr><th scope="col">{t('Rank')}</th><th scope="col">{t('Player')}</th>
+        <th scope="col">{t('Total')}</th><th scope="col">{t('Levels')}</th></tr></thead>
+      <tbody>{rows.map(row => <tr key={row.name + ':' + row.rank} data-you={row.you || undefined}>
+        <td className="leaderboard-rank"><span className={'leaderboard-rank-value' +
+          (row.rank && row.rank <= 3 ? ' leaderboard-rank-medal medal-' + row.rank : '')}>{row.rank ?? '—'}</span></td>
+        <td className="leaderboard-player-cell"><div className="leaderboard-player-inner">
+          <Avatar name={row.name} url={row.avatarUrl}/>
+          <span className="leaderboard-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
+        </div></td>
+        <td className="leaderboard-time">{formatLeaderboardValue(row.total, 'ms')}</td>
+        <td>{row.levels} / {levels}</td>
+      </tr>)}</tbody>
+    </table></div>
+    <div className="leaderboard-table-foot"><span className="muted">{t('Top {shown} of {total}', {
+      shown: rows.length, total: players })}</span></div>
+  </section>
 }
 
 export function GameLeaderboards({ game, accountId, online, link, back }: {
@@ -260,12 +320,12 @@ export function GameLeaderboards({ game, accountId, online, link, back }: {
         <div className="leaderboard-quick-grid">{hub.quick.map(entry =>
           <QuickCard key={entry.board.key} entry={entry} game={game} link={link}/>)}</div>
       </section>
-      {hub.packs.map(pack => <section className="leaderboard-section" key={pack.id + ':' + pack.revision}>
-        <div className="section-heading"><h2>{knownMessage(t, pack.title)}</h2>
-          <span className="badge">{t('{count, plural, one {# board} other {# boards}}', { count: pack.levels.length })}</span></div>
-        <div className="panel leaderboard-board-list">{pack.levels.map(entry =>
-          <BoardRow key={entry.board.key} entry={entry} game={game} link={link}/>)}</div>
-      </section>)}
+      {hub.packs.length > 0 && <section className="leaderboard-section">
+        <div className="section-heading"><h2>{t('Packs')}</h2>
+          <span className="badge">{t('{count, plural, one {# pack} other {# packs}}', { count: hub.packs.length })}</span></div>
+        <div className="leaderboard-games leaderboard-packs">{hub.packs.map(pack =>
+          <PackCard key={pack.id + ':' + pack.revision} pack={pack} game={game} link={link}/>)}</div>
+      </section>}
       {hub.standalone.length > 0 && <section className="leaderboard-section">
         <div className="section-heading"><h2>{t('Puzzles')}</h2>
           <span className="badge">{t('{count, plural, one {# board} other {# boards}}', { count: hub.standalone.length })}</span></div>
@@ -290,9 +350,9 @@ function SeedChip({ code }: { code: string }) {
   </button>
 }
 
-function StandingsTable({ rows, total, board, game, play, title }: {
+function StandingsTable({ rows, total, board, game, play, title, label = 'top' }: {
   rows: readonly LeaderboardStanding[]; total: number; board: LeaderboardBoardInfo; game: WebGame
-  play: (level: GameLevel) => void; title: string
+  play: (level: GameLevel) => void; title: string; label?: 'top' | 'all'
 }) {
   const t = useT()
   const intl = useIntl()
@@ -332,7 +392,8 @@ function StandingsTable({ rows, total, board, game, play, title }: {
       </table>
     </div>
     <div className="leaderboard-table-foot">
-      <span className="muted">{t('Top {shown} of {total}', { shown: visible.length, total })}</span>
+      <span className="muted">{t(label === 'all' ? 'Showing {shown} of {total}' : 'Top {shown} of {total}', {
+        shown: visible.length, total })}</span>
       {rows.length > initial.length && <button className="text-button" onClick={() => setExpanded(!expanded)}>
         {expanded ? t('Show less') : t('Show 20')}</button>}
     </div>
@@ -373,6 +434,10 @@ export function LeaderboardBoardView({ game, boardKey, accountId, online, back, 
   const [detail, setDetail] = useState<BoardDetail>()
   const [problem, setProblem] = useState('')
   const [copied, setCopied] = useState(false)
+  const [mode, setMode] = useState<'best' | 'all'>('best')
+  const [records, setRecords] = useState<LeaderboardRecords>()
+  const [recordsProblem, setRecordsProblem] = useState('')
+  const [loadingRecords, setLoadingRecords] = useState(false)
   useEffect(() => {
     if (!online) { setDetail(undefined); return }
     let current = true
@@ -383,6 +448,26 @@ export function LeaderboardBoardView({ game, boardKey, accountId, online, back, 
       error => { if (current) setProblem(errorMessage(error)) })
     return () => { current = false }
   }, [accountId, boardKey, game.id, online])
+  useEffect(() => {
+    if (mode !== 'all' || !detail || !online) return
+    let current = true
+    setRecordsProblem(''); setLoadingRecords(true)
+    void api<LeaderboardRecords>(`/leaderboards/games/${game.id}/boards/${encodeURIComponent(boardKey)}/records?offset=0&limit=50`,
+      undefined, accountId).then(
+      value => { if (current) { setRecords(value); setLoadingRecords(false) } },
+      error => { if (current) { setRecordsProblem(errorMessage(error)); setLoadingRecords(false) } })
+    return () => { current = false }
+  }, [accountId, boardKey, detail, game.id, mode, online])
+  async function loadMoreRecords() {
+    const offset = records?.rows.length ?? 0
+    setLoadingRecords(true); setRecordsProblem('')
+    try {
+      const value = await api<LeaderboardRecords>(`/leaderboards/games/${game.id}/boards/${encodeURIComponent(boardKey)}/records?offset=${offset}&limit=50`,
+        undefined, accountId)
+      setRecords(previous => previous ? { rows: [...previous.rows, ...value.rows], total: value.total } : value)
+    } catch (error) { setRecordsProblem(errorMessage(error)) }
+    finally { setLoadingRecords(false) }
+  }
   async function copyLink() {
     if (await copyText(location.href)) {
       setCopied(true)
@@ -413,16 +498,96 @@ export function LeaderboardBoardView({ game, boardKey, accountId, online, back, 
       <PlayerBestStrip you={detail.you} cooldown={detail.cooldown} total={detail.total}
         play={detail.level ? () => play(detail.level!) : openGame}
         playLabel={detail.level ? t('Play this board') : t('Play a puzzle')}/>
-      {detail.top.length ? <StandingsTable rows={detail.top} total={detail.total} board={detail.board}
+      {detail.top.length > 0 && <div className="tabs" role="group" aria-label={t('Records')}>
+        <button type="button" aria-pressed={mode === 'best'} onClick={() => setMode('best')}>{t('Standings')}</button>
+        <button type="button" aria-pressed={mode === 'all'} onClick={() => setMode('all')}>{t('All records')}</button>
+      </div>}
+      {mode === 'best' ? (detail.top.length ? <StandingsTable rows={detail.top} total={detail.total} board={detail.board}
         game={game} play={play} title={title}/> : <div className="empty leaderboard-empty">
         <Trophy size={28} aria-hidden="true"/>
         <h2>{t('No posted times')}</h2>
         {detail.level
           ? <button className="primary" onClick={() => play(detail.level!)}>{t('Play this board')}</button>
           : <button className="primary" onClick={openGame}>{t('Play a puzzle')}</button>}
-      </div>}
+      </div>) : <>
+        {recordsProblem && <p className="error" role="alert">{knownMessage(t, recordsProblem)}</p>}
+        {records && records.rows.length > 0 && <StandingsTable rows={records.rows} total={records.total}
+          board={detail.board} game={game} play={play} title={title} label="all"/>}
+        {records && records.rows.length === 0 && !loadingRecords &&
+          <p className="empty">{t('No records yet')}</p>}
+        {loadingRecords && <p role="status">{t('Loading…')}</p>}
+        {records && records.rows.length < records.total &&
+          <button className="secondary" disabled={loadingRecords} onClick={loadMoreRecords}>{t('Load more')}</button>}
+      </>}
     </> : problem ? <p className="error" role="alert">{knownMessage(t, problem)}</p>
       : online ? <p role="status">{t('Loading…')}</p> : <p className="notice">{t('Connect to view leaderboards.')}</p>}
+  </section>
+}
+
+export function LeaderboardPackView({ game, packId, revision, accountId, online, back, link }: {
+  game: WebGame; packId: string; revision: number; accountId?: string; online: boolean; back: () => void; link: Link
+}) {
+  const t = useT()
+  const [detail, setDetail] = useState<PackDetail>()
+  const [problem, setProblem] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [visible, setVisible] = useState(20)
+  useEffect(() => {
+    if (!online) { setDetail(undefined); return }
+    let current = true
+    setDetail(undefined); setProblem(''); setVisible(20)
+    void api<PackDetail>(`/leaderboards/games/${game.id}/packs/${encodeURIComponent(packId)}/${revision}`,
+      undefined, accountId).then(
+      value => { if (current) setDetail(value) },
+      error => { if (current) setProblem(errorMessage(error)) })
+    return () => { current = false }
+  }, [accountId, game.id, packId, revision, online])
+  async function copyLink() {
+    if (await copyText(location.href)) {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    }
+  }
+  const title = detail ? knownMessage(t, detail.title) : ''
+  return <section className="catalog leaderboard-board leaderboard-pack-view">
+    <div className="game-navigation"><button className="text-button back" onClick={back}>
+      <ArrowLeft size={17}/> {t('{game} leaderboards', { game: knownMessage(t, game.title) })}</button>
+      <button className="text-button" onClick={copyLink} aria-live="polite">{copied ? t('Copied') : t('Copy link')}</button></div>
+    {detail ? <>
+      <div className="leaderboard-board-heading"><div>
+        <p className="eyebrow">{t('Pack')}</p>
+        <h1>{title}</h1>
+        <div className="leaderboard-board-meta">
+          <span className="badge">{t('{count} levels', { count: detail.levels.length })}</span>
+          <span className="badge">{t('{count, plural, one {# player} other {# players}}', { count: detail.players })}</span>
+        </div>
+      </div></div>
+      <div className="leaderboard-you panel">
+        <span className="eyebrow">{t('Your total')}</span>
+        {detail.you ? <>
+          <strong>{formatLeaderboardValue(detail.you.total, 'ms')}</strong>
+          <span className="muted">{t('{solved} of {total} levels', {
+            solved: detail.you.levels, total: detail.levels.length })}</span>
+          {detail.you.rank && <span className="badge">#{detail.you.rank}</span>}
+        </> : <span className="muted">{t('No pack results yet')}</span>}
+        {detail.top[0] && <span className="leaderboard-best"><span className="eyebrow">{t('Best overall')}</span>
+          <Avatar name={detail.top[0].name} url={detail.top[0].avatarUrl}/>
+          <span>{detail.top[0].name}</span>
+          <strong>{formatLeaderboardValue(detail.top[0].total, 'ms')}</strong></span>}
+      </div>
+      {detail.top.length > 0 && <PackStandings rows={detail.top} players={detail.players}
+        levels={detail.levels.length} title={title}/>}
+      <section className="leaderboard-section">
+        <div className="section-heading"><h2>{t('Levels')}</h2>
+          <span className="badge">{detail.levels.length}</span></div>
+        <div className="panel leaderboard-board-list">{detail.levels.slice(0, visible).map(entry =>
+          <BoardRow key={entry.board.key} entry={entry} game={game} link={link}/>)}</div>
+        {visible < detail.levels.length && <button className="secondary"
+          onClick={() => setVisible(visible + 20)}>{t('Load more levels')}</button>}
+      </section>
+    </> : problem ? <p className="error" role="alert">{knownMessage(t, problem)}</p>
+      : online ? <p role="status">{t('Loading…')}</p>
+      : <p className="notice">{t('Connect to view leaderboards.')}</p>}
   </section>
 }
 

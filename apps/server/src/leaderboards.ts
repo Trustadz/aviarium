@@ -4,9 +4,9 @@ import { z } from 'zod'
 import {
   emptyLeaderboardPlayerSummary, emptyLeaderboardSummary, leaderboardCooldownDays, leaderboardResultStatuses,
   leaderboardTopLimit,
-  type LeaderboardBoardInfo, type LeaderboardBoardKey, type LeaderboardCooldown, type LeaderboardPlayerResult,
-  type LeaderboardPlayerSummary, type LeaderboardRemovalNotice, type LeaderboardStanding, type LeaderboardSummary,
-  type LeaderboardValueUnit,
+  type LeaderboardBoardInfo, type LeaderboardBoardKey, type LeaderboardCooldown, type LeaderboardPackStanding,
+  type LeaderboardPackSummary, type LeaderboardPlayerResult, type LeaderboardPlayerSummary, type LeaderboardRecords,
+  type LeaderboardRemovalNotice, type LeaderboardStanding, type LeaderboardSummary, type LeaderboardValueUnit,
 } from '../../../packages/game-sdk/src/leaderboards.js'
 import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { AttemptMutation, SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
@@ -64,8 +64,7 @@ function standing(row: SummaryRow, viewer: string, level?: LevelRecord): Leaderb
     unit: row.value_unit as LeaderboardValueUnit,
     completedAt: iso(row.completed_at), recordedAt: iso(row.recorded_at),
     you: row.owner_id === viewer,
-    avatarUrl: row.avatar && (row.rank <= 3 || row.owner_id === viewer)
-      ? '/api/users/' + row.owner_id + '/avatar' : undefined,
+    avatarUrl: row.avatar ? '/api/users/' + row.owner_id + '/avatar' : undefined,
     level, seedCode: row.seed_code, aids: row.aids,
   }
 }
@@ -180,6 +179,52 @@ async function playerSummary(db: Pool | PoolClient, viewer: string, gameId?: str
   }
 }
 
+interface PackRow {
+  owner_id: string
+  total: string | number
+  levels: number
+  recorded_at: Date | string
+  name: string
+  avatar: string | null
+  pack_rank: number | null
+}
+
+async function packSummary(db: Pool | PoolClient, game: ServerGame, pack: PackRevision,
+  viewer: string): Promise<LeaderboardPackSummary> {
+  const levels = game.packs!.levels(pack)
+  const keys = levels.map(level => game.leaderboards!.boardKey(level).key)
+  const { rows } = await db.query<PackRow>(`WITH best AS (
+      SELECT DISTINCT ON (board_key, owner_id) board_key, owner_id, score_value, completed_at, recorded_at, id, rank_value
+      FROM leaderboard_results
+      WHERE status='active' AND game_id=$1 AND board_key = ANY($2::text[])
+      ORDER BY board_key, owner_id, rank_value, completed_at, id
+    ), totals AS (
+      SELECT owner_id, sum(score_value)::bigint AS total, count(DISTINCT board_key)::int AS levels,
+        max(recorded_at) AS recorded_at
+      FROM best GROUP BY owner_id
+    ), ranked AS (
+      SELECT totals.*, COALESCE(u.display_name,u.name) AS name,
+        COALESCE(u.custom_avatar,u.pocket_avatar) AS avatar,
+        CASE WHEN totals.levels = $3
+          THEN rank() OVER (PARTITION BY (totals.levels = $3) ORDER BY total)::int END AS pack_rank,
+        count(*) FILTER (WHERE totals.levels = $3) OVER ()::int AS players
+      FROM totals JOIN users u ON u.id=totals.owner_id
+    ) SELECT * FROM ranked
+    ORDER BY (levels = $3) DESC, pack_rank NULLS LAST, total, recorded_at, owner_id`,
+  [game.id, keys, keys.length])
+  const complete = rows.filter(row => row.levels === keys.length)
+  const me = rows.find(row => row.owner_id === viewer)
+  const standing = (row: PackRow): LeaderboardPackStanding => ({
+    rank: row.pack_rank, name: row.name, total: Number(row.total), levels: row.levels, you: row.owner_id === viewer,
+    avatarUrl: row.avatar ? '/api/users/' + row.owner_id + '/avatar' : undefined,
+  })
+  return {
+    id: pack.id, revision: pack.revision, title: pack.data.title, builtIn: pack.builtIn,
+    levels: keys.length, players: complete.length,
+    top: complete.slice(0, 10).map(standing), you: me ? standing(me) : null,
+  }
+}
+
 async function levelForBoard(db: Pool | PoolClient, game: ServerGame, board: LeaderboardBoardKey) {
   if (board.kind !== 'level' || !board.levelId || !board.levelRevision) return
   const { rows: [level] } = await db.query<LevelRecord>(`SELECT ${levelFields} FROM published_levels l
@@ -273,10 +318,8 @@ export function registerLeaderboards(app: FastifyInstance) {
     const packs = await visiblePacks(pool, game)
     const standalone = await standaloneLevels(pool, game)
     const quick = game.leaderboards!.quickBoards
-    const packLevels = packs.map(pack => ({ pack, levels: game.packs.levels(pack) }))
     const keys = [
       ...quick.map(board => board.key),
-      ...packLevels.flatMap(item => item.levels.map(level => game.leaderboards!.boardKey(level).key)),
       ...standalone.map(level => game.leaderboards!.boardKey(level).key),
     ]
     const summaries = await boardSummaries(pool, game, keys, user.id, summaryLimit)
@@ -284,13 +327,7 @@ export function registerLeaderboards(app: FastifyInstance) {
     return {
       game: game.id,
       quick: quick.map(board => ({ board: boardInfo(game, board), ...summaryFor(board.key) })),
-      packs: packLevels.map(({ pack, levels }) => ({
-        id: pack.id, revision: pack.revision, title: pack.data.title, builtIn: pack.builtIn,
-        levels: levels.map(level => {
-          const board = game.leaderboards!.boardKey(level)
-          return { level, board: boardInfo(game, board, level, pack.data.title), ...summaryFor(board.key) }
-        }),
-      })),
+      packs: await Promise.all(packs.map(pack => packSummary(pool, game, pack, user.id))),
       standalone: standalone.map(level => {
         const board = game.leaderboards!.boardKey(level)
         return { level, board: boardInfo(game, board, level), ...summaryFor(board.key) }
@@ -338,6 +375,47 @@ export function registerLeaderboards(app: FastifyInstance) {
     if (avatar.startsWith('/') || /^https?:\/\//i.test(avatar))
       return reply.header('Cache-Control', 'private, max-age=86400').redirect(avatar)
     throw new HttpError(404, 'not_found')
+  })
+
+  app.get('/api/leaderboards/games/:game/boards/:key/records', async request => {
+    const game = gameFor((request.params as { game: string }).game)
+    const user = await requireUser(request)
+    const key = (request.params as { key: string }).key
+    if (!game.leaderboards!.parseBoard(key)) throw new HttpError(404, 'leaderboard_board_not_found')
+    const query = z.object({
+      offset: z.coerce.number().int().min(0).default(0),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    }).parse(request.query)
+    const { rows } = await pool.query<SummaryRow & { total: number }>(`WITH ranked AS (
+        SELECT r.*, (rank() OVER (ORDER BY rank_value))::int AS rank, (count(*) OVER ())::int AS total
+        FROM leaderboard_results r
+        WHERE r.game_id=$1 AND r.board_key=$2 AND r.status='active'
+      )
+      SELECT ranked.*, COALESCE(u.display_name,u.name) AS name, COALESCE(u.custom_avatar,u.pocket_avatar) AS avatar
+      FROM ranked JOIN users u ON u.id=ranked.owner_id
+      ORDER BY ranked.rank_value, ranked.completed_at, ranked.id
+      OFFSET $3 LIMIT $4`, [game.id, key, query.offset, query.limit])
+    const levels = await levelsForPairs(pool, game, rows.map(row => [row.level_id, row.level_revision] as const))
+    return { rows: rows.map(row => standing(row, user.id, levels.get(row.level_id + ':' + row.level_revision))),
+      total: rows[0]?.total ?? 0 } satisfies LeaderboardRecords
+  })
+
+  app.get('/api/leaderboards/games/:game/packs/:id/:revision', async request => {
+    const game = gameFor((request.params as { game: string }).game)
+    const user = await requireUser(request)
+    const { id, revision } = request.params as { id: string; revision: string }
+    const packs = await visiblePacks(pool, game)
+    const pack = packs.find(item => item.id === id && item.revision === Number(revision))
+    if (!pack) throw new HttpError(404, 'leaderboard_pack_not_found')
+    const levels = game.packs!.levels(pack)
+    const keys = levels.map(level => game.leaderboards!.boardKey(level).key)
+    const summaries = await boardSummaries(pool, game, keys, user.id, 1)
+    const levelItems = levels.map(level => {
+      const board = game.leaderboards!.boardKey(level)
+      const info = boardInfo(game, board, level, pack.data.title)
+      return { level, board: info, ...(summaries.get(board.key) ?? emptyLeaderboardSummary(info)) }
+    })
+    return { ...(await packSummary(pool, game, pack, user.id)), levels: levelItems }
   })
 
   app.get('/api/leaderboards/notices', async request => {
