@@ -6,6 +6,7 @@ import { assignPackLevels, authoringPack, packImageBytes, packLevelId, packLevel
   type PackDraftRecord as PackDraft, type PackDocument as PackDraftData, type PackEntry as Puzzle, type PackRevision as PublishedPack } from '../../../packages/game-sdk/src/packs.js'
 import { api, ApiError, errorMessage, json, type SessionAccount } from './api.js'
 import { packApi, packExportUrl, PackRoadmap } from './GamePacks.js'
+import { packLevels } from './game-definitions.js'
 import type { LevelReview, StudioGame } from './game-studio.js'
 import { knownMessage, useT } from './i18n.js'
 import { navigationLayer, pushLayer } from './navigation.js'
@@ -514,7 +515,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
   const puzzle = data.puzzles.find(item => item.levelId === levelId)
   const previous = livePack?.id === draft.id && livePack.revision === draft.published ? livePack : undefined
   const before = previous?.data.puzzles ?? []
-  const beforeLevel = previous ? game.presentation.levels(previous) : []
+  const beforeLevel = previous ? packLevels(game.id, previous) : []
   const checkAt = (item: Puzzle) => {
     const key = game.checkKey(item, data.rules)
     const known = previous && before.find(old => old.levelId === item.levelId && game.checkKey(old, previous.data.rules) === key)
@@ -648,7 +649,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
       {tab === 'levels' && (puzzle ? <game.Editor key={puzzle.levelId} level={puzzle} rules={data.rules} onCheck={onCheck}
         update={patch => edit(current => ({ ...current, puzzles: current.puzzles.map(item => item.levelId === puzzle.levelId ? { ...item, ...patch } : item) }))}
         trial={() => {
-          const level = game.presentation.levels(preview).find(item => item.id === puzzle.levelId)
+          const level = packLevels(game.id, preview).find(item => item.id === puzzle.levelId)
           if (level) startTrial(level)
         }}/> : <p className="empty">{t('Add a level to open the level editor.')}</p>)}
       {tab === 'appearance' && <div className="panel padded pack-form studio-appearance-fields">
@@ -741,7 +742,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
         </div>}
         <div ref={trailPreview} className={'app studio-preview studio-trail-preview' + (mode === 'reader' ? ' reader' : '')}
           data-theme={mode === 'dark' ? 'dark' : 'light'} role="region" aria-label={t('Pack trail preview')} tabIndex={0}>
-          <div className={`game-theme ${game.theme} pack-${data.theme} studio-pack-preview`}><PackRoadmap presentation={game.presentation} pack={preview} completed={new Set()} previewCompletions={returning ? returningCompletions : undefined} sessions={[]} canExport={false}
+          <div className={`game-theme ${game.theme} pack-${data.theme} studio-pack-preview`}><PackRoadmap game={game.id} presentation={game.presentation} pack={preview} completed={new Set()} previewCompletions={returning ? returningCompletions : undefined} sessions={[]} canExport={false}
             canPlay preview previewDetails={details} leave={() => setTab('levels')} play={startTrial}/></div>
         </div>
       </>}

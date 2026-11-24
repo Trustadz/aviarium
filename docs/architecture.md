@@ -206,9 +206,9 @@ with `generation` and `leaderboard` is eligible without a challenge adapter. Gam
 modules no longer own routes: generic `/api/games/:game/quick-play` and
 `/api/games/:game/levels/:id/:revision` live in `game-routes.ts`; the old
 Sudoku quick-play, level and `/api` pack aliases are removed, and only the old
-Sudoku Studio/catalog routes remain quarantined. The legacy `ServerGame` adapter remains. On the web, board identity and initial
-save creation now come from the shared definitions; the remaining `WebGame`
-surface is player/studio/presentation, pack presentation and Quick Play extras.
+Sudoku Studio/catalog routes remain quarantined. The legacy `ServerGame` adapter remains. On the web, board identity, initial save creation and pack level materialization
+now come from the shared definitions; the remaining `WebGame` surface is
+player/studio/presentation, pack presentation labels and Quick Play extras.
 
 ## Current scope
 

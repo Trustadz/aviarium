@@ -40,3 +40,9 @@ export function createGameAttempt(gameId: string, level: GameLevel, pack?: PackR
     rules: definition.play.rules.defaults as never,
   }) as GameAttempt
 }
+
+export function packLevels(gameId: string, pack: PackRevision): GameLevel[] {
+  const definition = gameDefinition(gameId)
+  if (!definition) return []
+  return definition.packs.materialize(pack as never) as GameLevel[]
+}

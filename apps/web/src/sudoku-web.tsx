@@ -97,5 +97,4 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
     { key: 'autoNoteDeletion', label: 'Automatically remove conflicting notes', default: defaults.autoNoteDeletion },
   ] },
   connectMessage: 'Connect to install Sudoku on this device.',
-  history: true,
 }

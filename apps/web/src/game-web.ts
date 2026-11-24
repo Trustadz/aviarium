@@ -58,5 +58,4 @@ export interface WebGame extends GameMetadata {
   favorite?: string
   settings?: { title: Message; toggles: readonly { key: string; label: Message; default: boolean }[] }
   connectMessage: Message
-  history: boolean
 }

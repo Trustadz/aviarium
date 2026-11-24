@@ -19,7 +19,7 @@ import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import { ResultStandingsPanel } from './ResultStandingsPanel.js'
-import { createGameAttempt, gameBoardHref, hasLeaderboard } from './game-definitions.js'
+import { createGameAttempt, gameBoardHref, hasLeaderboard, packLevels } from './game-definitions.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
@@ -550,7 +550,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     }
     if (stored.level.pack && (!stored.level.pack.legacyStandalone || session.data.packRevision !== undefined)) {
       const pack = await findPack(game, stored.level.pack.id, session.data.packRevision ?? stored.level.pack.revision)
-      const level = game.packs?.levels(pack).find(item => item.id === session.data.level && item.revision === session.data.levelRevision)
+      const level = packLevels(game.id, pack).find(item => item.id === session.data.level && item.revision === session.data.levelRevision)
       if (level) { await open(game, level, session, pack); return }
     }
     await open(game, stored.level, session)
@@ -762,10 +762,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         back={() => go(openGame.url + '/leaderboards')} link={link}/>
       : openGame?.guide && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
         sections={openGame.guide} leave={event => backLink(event, openGame.url)}/>
-      : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions.filter(item => !item.challenge)} levels={savedLevels} packs={packs}
+      : openGame && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions.filter(item => !item.challenge)} levels={savedLevels} packs={packs}
         leave={() => back(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
       : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && packPath(viewedPack) === path
-        ? <PackRoadmap presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
+        ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
           canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))}
           leave={() => back(openGame.url)} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
@@ -778,14 +778,14 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         leaderboard={hasLeaderboard(openGame.id) ? { href: openGame.url + '/leaderboards',
           open: event => link(event, openGame.url + '/leaderboards') } : undefined}
         editor={canEdit ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
-        history={openGame.history ? () => go(openGame.url + '/history') : undefined}
+        history={() => go(openGame.url + '/history')}
         settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
         guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
         {continueRow(openGame.id)}
         {!canPlay(openGame) && <p className="notice">{t(openGame.connectMessage)}</p>}
         {openGame.menu?.({ canPlay: canPlay(openGame), online, profile, params: new URLSearchParams(location.search),
           launch: level => open(openGame, level), perform })}
-        {openGame.packs && <PackCards presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
+        {openGame.packs && <PackCards game={openGame.id} presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
           completed={completed} status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>}
       </GameMenu>
       : inNews ? <News account={account} online={online}/>
