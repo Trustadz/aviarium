@@ -251,7 +251,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
     ...(data.lives !== undefined && lifeLimit ? [{ label: t('Lives left'), value: data.lives + ' / ' + lifeLimit }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
-    { kind: 'primary', label: t(trial ? 'Back to editor' : challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
+    { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
     ...(trial || challengeMode ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: restart }]),
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t(challengeMode ? 'View the challenge board' : 'View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },

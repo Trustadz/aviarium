@@ -45,6 +45,7 @@ export function LeaderboardChallenges({ accountId, online, link }: {
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [moreProblem, setMoreProblem] = useState('')
+  const [reload, setReload] = useState(0)
   useEffect(() => {
     if (!online) { setDay(undefined); setHistory(undefined); return }
     let current = true
@@ -59,7 +60,16 @@ export function LeaderboardChallenges({ accountId, online, link }: {
       if (current) { setProblem(errorMessage(error)); setLoading(false) }
     })
     return () => { current = false }
-  }, [accountId, online])
+  }, [accountId, online, reload])
+  useEffect(() => {
+    if (!day?.occurrence) return
+    const ends = Date.parse(day.occurrence.endsAt)
+    const timer = setTimeout(() => setReload(value => value + 1),
+      Math.max(0, Math.min(ends - Date.now() + 1000, 2_147_000_000)))
+    const visible = () => { if (document.visibilityState === 'visible') setReload(value => value + 1) }
+    document.addEventListener('visibilitychange', visible)
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', visible) }
+  }, [day?.occurrence?.id, day?.occurrence?.endsAt])
   const gameTitle = (game: string) => {
     const meta = findGame(game)
     return meta ? knownMessage(t, meta.title) : game
@@ -108,14 +118,17 @@ export function LeaderboardChallenges({ accountId, online, link }: {
     <div className="section-heading"><h2>{t('Past challenges')}</h2></div>
     {history?.occurrences.length ? <div className="leaderboard-challenge-days">
       {history.occurrences.map(({ occurrence, slots }) => {
-        const winner = slots.flatMap(slot => slot.standings.top).find(row => row.rank === 1)
+        const winners = slots.flatMap(slot => {
+          const row = slot.standings.top.find(item => item.rank === 1)
+          return row ? [{ game: gameTitle(slot.game), row }] : []
+        })
         return <a className="leaderboard-challenge-day panel"
           href={'/challenges/' + occurrence.id} key={occurrence.id}
           onClick={event => link(event, '/challenges/' + occurrence.id)}>
           <span className="leaderboard-challenge-date">{date(occurrence.startsAt, occurrence.timezone)}</span>
           <span className="leaderboard-challenge-games-list">{slots.map(slot => gameTitle(slot.game)).join(' · ')}</span>
-          <span className="muted leaderboard-challenge-winner">{winner
-            ? `${winner.name} · ${formatLeaderboardValue(winner.value, winner.unit)}`
+          <span className="muted leaderboard-challenge-winner">{winners.length
+            ? winners.map(({ game, row }) => `${game}: ${row.name} · ${formatLeaderboardValue(row.value, row.unit)}`).join(' · ')
             : t('No posted times yet.')}</span>
           <ChevronRight size={17} aria-hidden="true"/>
         </a>

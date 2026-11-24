@@ -148,7 +148,9 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
             onChange={event => toggleEligible(game.id, event.target.checked)}/></label>)}
       </fieldset>
       <p className="muted challenge-settings-help">{t('The daily puzzle picks from the enabled values. Disable a value to keep it out of the rotation.')}</p>
-      {!valid && <p className="muted" role="status">{t('Enable at least one option for every challenge game.')}</p>}
+      {!eligibleRegistered.length
+        ? <p className="muted" role="status">{t('Enable at least one challenge-capable game.')}</p>
+        : !valid && <p className="muted" role="status">{t('Enable at least one option for every challenge game.')}</p>}
       {eligibleRegistered.map(game => <section className="challenge-settings-game" key={game.id} aria-label={game.label}>
         <h3>{game.label}</h3>
         {game.optionGroups.map(group => <fieldset className="challenge-settings-options" key={group.key}>
@@ -163,9 +165,12 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
         {data.current ? <p><strong>{t('Today')}</strong> · {formatChallengeDate(intl, data.current.startsAt, data.current.timezone)} · {t('Resets at {time} ({zone})', {
           time: formatResetMinute(data.resetMinute), zone: data.timezone })} · {data.current.prepared ? t('Ready') : data.current.preparing ? t('Preparing challenge') : t('Not prepared')}</p>
           : <p><strong>{t('Today')}</strong> · {t('No current challenge')}</p>}
-        <p className="muted">{t('Next: {time} ({zone})', { time: formatChallengeTime(t, intl, data.next.startsAt, data.timezone), zone: data.timezone })}</p>
+        <p className="muted">{t('Next: {date} at {time} ({zone})', {
+          date: formatChallengeDate(intl, data.next.startsAt, data.timezone),
+          time: formatChallengeTime(t, intl, data.next.startsAt, data.timezone), zone: data.timezone })}</p>
       </div>
-      <p className="muted challenge-admin-note">{t('Changes apply from {time} ({zone}).', {
+      <p className="muted challenge-admin-note">{t('Changes apply from {date} at {time} ({zone}).', {
+        date: formatChallengeDate(intl, data.appliesFrom, data.timezone),
         time: formatChallengeTime(t, intl, data.appliesFrom, data.timezone), zone: data.timezone })}</p>
       <div className="button-bar">
         <button className="primary" onClick={save} disabled={busy || !valid}><Save size={16}/> {t('Save challenge settings')}</button>

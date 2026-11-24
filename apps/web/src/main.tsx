@@ -4,6 +4,7 @@ import type { Locale } from '../../../packages/game-sdk/src/locales.js'
 import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
+import { useIntl } from 'react-intl'
 import { ArrowLeft, BookOpen, CalendarDays, LogIn, LogOut, Newspaper,
   Pencil, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
@@ -20,7 +21,7 @@ import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import { ResultStandingsPanel } from './ResultStandingsPanel.js'
 import { createGameAttempt, gameBoardHref, gameDefinition, hasLeaderboard, packLevels } from './game-definitions.js'
-import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
+import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, formatChallengeDate, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
@@ -61,6 +62,7 @@ function subscribeToSystemTheme(change: () => void) {
 
 function AppleInstallHelp() {
   const t = useT()
+  const intl = useIntl()
   const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   const standalone = (navigator as Navigator & { standalone?: boolean }).standalone ||
@@ -119,6 +121,7 @@ function Application() {
 
 function App({ session, languageError }: { session: ReturnType<typeof useSession>; languageError: string }) {
   const t = useT()
+  const intl = useIntl()
   const { account, localPlay, checking, online, signIn, refresh, forget } = session
   const [preference, setPreference] = useState(() => themePreference(localStorage.getItem(themeKey)))
   const system = useSyncExternalStore(subscribeToSystemTheme, readSystemTheme)
@@ -167,6 +170,7 @@ interface LibraryProps {
 
 function Library({ account, online, activate, refreshSession, signOut, languageError, theme, preference, onThemeChange }: LibraryProps) {
   const t = useT()
+  const intl = useIntl()
   const accountId = account?.id
   const profile = accountId ?? localProfile
   const catalogKey = 'aviarium:catalog:' + profile
@@ -522,7 +526,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       json('POST', { ...replay.options, seed: replay.seed, version: replay.generatorVersion }), accountId)
     await open(game, level, undefined, undefined, {
       ...(replay.occurrenceId ? { parent: '/challenges/' + replay.occurrenceId } : {}),
-      replay: { label: t('Replay · {date} · daily board closed', { date: replay.periodKey ?? '' }),
+      replay: { label: t('Replay · {date} · daily board closed', {
+        date: replay.periodKey ? formatChallengeDate(intl, replay.periodKey + 'T12:00:00Z', replay.timeZone ?? 'UTC') : '' }),
         backLabel: t('Back to challenge') },
     })
   }

@@ -99,7 +99,7 @@ GamePlayerProps & { trial?: boolean }) {
       ' · ' + t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
-    { kind: 'primary', label: t(trial ? 'Back to editor' : challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
+    { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
     ...(trial || challengeMode ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: restart }]),
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t(challengeMode ? 'View the challenge board' : 'View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },

@@ -6,6 +6,7 @@ import type { LeaderboardStanding } from '../../../packages/game-sdk/src/leaderb
 import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { api, errorMessage } from './api.js'
 import { Avatar } from './Avatar.js'
+import { resultRows } from './standings.js'
 import { findGame } from './registry.js'
 import { knownMessage, useT } from './i18n.js'
 import type { Message } from './messages.js'
@@ -84,9 +85,8 @@ export function formatResetMinute(resetMinute: number) {
   return String(Math.floor(resetMinute / 60)).padStart(2, '0') + ':' + String(resetMinute % 60).padStart(2, '0')
 }
 
-function remainingText(endsAt: string, serverNow: string, tick: number, t: ReturnType<typeof useT>) {
-  const offset = Date.parse(serverNow) - Date.now()
-  const remaining = Math.max(0, Date.parse(endsAt) - (Date.now() + offset) + tick * 0)
+function remainingText(endsAt: string, now: number, t: ReturnType<typeof useT>) {
+  const remaining = Math.max(0, Date.parse(endsAt) - now)
   const minutes = Math.ceil(remaining / 60_000)
   if (minutes <= 0) return t('Closed')
   const hours = Math.floor(minutes / 60)
@@ -187,6 +187,8 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
   const [problem, setProblem] = useState('')
   const [loading, setLoading] = useState(false)
   const [previous, setPrevious] = useState<{ id: string; periodKey: string; startsAt: string; timezone: string }>()
+  const [fetchedAt, setFetchedAt] = useState(() => Date.now())
+  const [reload, setReload] = useState(0)
   const [, setTick] = useState(0)
   useEffect(() => { setDay(undefined); setProblem('') }, [occurrenceId, accountId])
   useEffect(() => {
@@ -199,12 +201,21 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
     setLoading(true); setProblem('')
     const path = occurrenceId ? '/challenges/' + encodeURIComponent(occurrenceId) : '/challenges'
     void api<ChallengeDayView>(path, undefined, accountId).then(value => {
-      if (current) { setDay(value); setLoading(false) }
+      if (current) { setDay(value); setFetchedAt(Date.now()); setLoading(false) }
     }, error => {
       if (current) { setProblem(errorMessage(error)); setLoading(false) }
     })
     return () => { current = false }
-  }, [accountId, occurrenceId, online])
+  }, [accountId, occurrenceId, online, reload])
+  useEffect(() => {
+    if (!day?.occurrence) return
+    const ends = Date.parse(day.occurrence.endsAt)
+    const timer = setTimeout(() => setReload(value => value + 1),
+      Math.max(0, Math.min(ends - Date.now() + 1000, 2_147_000_000)))
+    const visible = () => { if (document.visibilityState === 'visible') setReload(value => value + 1) }
+    document.addEventListener('visibilitychange', visible)
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', visible) }
+  }, [day?.occurrence?.id, day?.occurrence?.endsAt])
   useEffect(() => {
     if (occurrenceId || !online) { setPrevious(undefined); return }
     let current = true
@@ -214,8 +225,8 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
     }, () => { if (current) setPrevious(undefined) })
     return () => { current = false }
   }, [accountId, occurrenceId, online])
-  const past = Boolean(day?.occurrence && day.serverNow &&
-    Date.parse(day.serverNow) >= Date.parse(day.occurrence.endsAt))
+  const liveNow = day?.serverNow ? Date.parse(day.serverNow) + (Date.now() - fetchedAt) : Date.now()
+  const past = Boolean(day?.occurrence && liveNow >= Date.parse(day.occurrence.endsAt))
   const date = day?.occurrence ? formatChallengeDate(intl, day.occurrence.startsAt, day.occurrence.timezone) : ''
   const reset = day?.occurrence ? formatResetMinute(day.series?.resetMinute ?? 0) : ''
   const canPlay = day?.enabled && day.occurrence && !past
@@ -228,7 +239,7 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
         <p className="eyebrow">{past ? t('Closed challenge') : t('A new puzzle every day')}</p>
         <h1>{occurrenceId ? t('Daily challenge · {date}', { date }) : t('Daily Challenges')}</h1>
       </div>
-      {day?.occurrence && <span className="challenge-clock"><Clock3 size={18}/> {past ? t('Closed') : remainingText(day.occurrence.endsAt, day.serverNow, 0, t)}</span>}
+      {day?.occurrence && <span className="challenge-clock"><Clock3 size={18}/> {past ? t('Closed') : remainingText(day.occurrence.endsAt, liveNow, t)}</span>}
     </div>
     {!online && <p className="notice">{t('Connect to view daily challenges.')}</p>}
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
@@ -241,7 +252,7 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
     {day?.occurrence && <>
       <div className="challenge-meta panel">
         <span><strong>{date}</strong></span>
-        {Boolean(day.slots.length) && <span>{t('{done} of {total} completed', { done: completedSlots, total: day.slots.length })}</span>}
+        {!past && Boolean(day.slots.length) && <span>{t('{done} of {total} completed', { done: completedSlots, total: day.slots.length })}</span>}
         <span>{past
           ? t('Closed at {time} ({zone})', { time: formatChallengeTime(t, intl, day.occurrence.endsAt, day.occurrence.timezone), zone: day.occurrence.timezone })
           : t('Resets at {time} ({zone})', { time: reset, zone: day.occurrence.timezone })}</span>
@@ -348,8 +359,7 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
   if (!online) return <p className="challenge-panel-note">{t('Standings will appear when you’re online.')}</p>
   if (problem) return <p className="challenge-panel-note" role="alert">{t('Standings unavailable.')}</p>
   if (!data) return <p className="challenge-panel-note" role="status">{t('Posting your result…')}</p>
-  const rows = data.top.slice(0, 3)
-  if (data.you && !rows.some(row => row.you)) rows.push(data.you)
+  const rows = resultRows(data.top, data.you, data.total)
   return <section className="challenge-panel" aria-label={t('Challenge standings')}>
     <div className="challenge-panel-head"><span className="eyebrow">{t('Challenge standings')}</span><span className="muted">{t('{count, plural, one {# player} other {# players}}', { count: data.total })}</span></div>
     <ol className="challenge-mini">{rows.slice(0, 4).map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
@@ -361,8 +371,15 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
         : attempts < 4 ? t('Syncing your result…') : t('No posted times yet.')}</p>}
     {!data.you && attempts < 4 && <p className="challenge-panel-note" role="status">{t('Syncing your result…')}</p>}
     {!data.you && attempts >= 4 && <p className="challenge-panel-note">{t('This run did not post to the challenge board.')}</p>}
-    {other && onPlayOther && <button className="secondary challenge-other" onClick={() => onPlayOther(other.game)}>
-      <Play size={16}/> {other.player.status === 'started' ? t('Resume the other challenge') : t('Play the other challenge')}</button>}
+    {other && onPlayOther && <>
+      <button className="secondary challenge-other" onClick={() => {
+        if (other.player.status === 'available' &&
+          !window.confirm(t('Start the one timed run? The clock begins immediately.'))) return
+        onPlayOther(other.game)
+      }}><Play size={16}/> {other.player.status === 'started' ? t('Resume the other challenge') : t('Play the other challenge')}</button>
+      {other.player.status === 'available' && <p className="muted challenge-start-note">
+        {t('One timed run. The clock starts when you begin.')}</p>}
+    </>}
   </section>
 }
 

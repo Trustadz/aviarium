@@ -808,6 +808,8 @@ export const dutch = {
   "Enter a valid reset time.": "Voer een geldige resettijd in.",
   "The challenge could not be prepared. Try again.": "De uitdaging kon niet worden voorbereid. Probeer het opnieuw.",
   "Enable at least one option for every challenge game.": "Schakel voor elk uitdagingsspel minstens één optie in.",
+  "Next: {date} at {time} ({zone})": "Volgende: {date} om {time} ({zone})",
+  "Changes apply from {date} at {time} ({zone}).": "Wijzigingen gelden vanaf {date} om {time} ({zone}).",
   "Daily": "Dagelijks",
   "Daily Challenges": "Dagelijkse uitdagingen",
   "Daily challenge": "Dagelijkse uitdaging",

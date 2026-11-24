@@ -4,6 +4,7 @@ import { formatLeaderboardValue, type LeaderboardStanding } from '../../../packa
 import { api, errorMessage } from './api.js'
 import { Avatar } from './Avatar.js'
 import { gameBoardHref } from './game-definitions.js'
+import { resultRows } from './standings.js'
 import type { WebGame } from './game-web.js'
 import { useT } from './i18n.js'
 
@@ -47,8 +48,7 @@ export function ResultStandingsPanel({ game, level, accountId, online }: {
   if (!online) return <p className="challenge-panel-note">{t('Standings will appear when you’re online.')}</p>
   if (problem) return <p className="challenge-panel-note" role="alert">{t('Standings unavailable.')}</p>
   if (!data) return <p className="challenge-panel-note" role="status">{t('Posting your result…')}</p>
-  const rows = data.top.slice(0, 3)
-  if (data.you && !rows.some(row => row.you)) rows.push(data.you)
+  const rows = resultRows(data.top, data.you, data.total)
   return <section className="challenge-panel" aria-label={t('Leaderboard standings')}>
     <div className="challenge-panel-head"><span className="eyebrow">{t(level.pack ? 'This puzzle’s standings' : 'Standings')}</span>
       <span className="muted">{t('{count, plural, one {# player} other {# players}}', { count: data.total })}</span></div>
