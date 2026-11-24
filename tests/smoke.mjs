@@ -37,6 +37,27 @@ async function until(check, label) {
   }
   throw new Error('Timed out waiting for ' + label)
 }
+async function gameFits(page, label, boardSelector) {
+  const bounds = await page.evaluate(selector => {
+    const controls = document.querySelector('.play-controls')?.getBoundingClientRect()
+    const board = document.querySelector(selector)?.getBoundingClientRect()
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      controlsBottom: controls?.bottom ?? Infinity,
+      boardBottom: board?.bottom ?? Infinity,
+      boardWidth: board?.width ?? 0,
+      boardHeight: board?.height ?? 0,
+    }
+  }, boardSelector)
+  assert.ok(bounds.scrollWidth <= bounds.viewportWidth, label + ': the game should fit without horizontal scrolling.')
+  assert.ok(bounds.scrollHeight <= bounds.viewportHeight, label + ': the game should fit without vertical scrolling.')
+  assert.ok(bounds.controlsBottom <= bounds.viewportHeight, label + ': every control should stay inside the viewport.')
+  assert.ok(bounds.boardBottom <= bounds.viewportHeight, label + ': the board should stay inside the viewport.')
+  assert.ok(bounds.boardWidth > 60 && bounds.boardHeight > 60, label + ': the board should remain usable.')
+}
 const playbackToken = playerToken || adminToken
 if (!playbackToken) throw new Error('Set AVIARIUM_TEST_PLAYER or AVIARIUM_TEST_ADMIN to a test session cookie.')
 await request('/api/catalog', { expected: 401 })
@@ -461,7 +482,20 @@ try {
   assert.equal(await track.evaluate(element => getComputedStyle(element).paddingBottom), '16px')
   await page.getByRole('button', { name: 'Resume', exact: true }).first().tap()
   await cell(String(solution[firstBlank])).waitFor()
+  const sudokuBoard = '.play-page .board'
+  await page.setViewportSize({ width: 674, height: 896 })
+  await gameFits(page, 'Sudoku e-reader portrait 674x896', sudokuBoard)
   if (process.env.AVIARIUM_SCREENSHOTS) await page.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/player-reader-mobile.png', fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await gameFits(page, 'Sudoku phone portrait 390x844', sudokuBoard)
+  await page.setViewportSize({ width: 812, height: 375 })
+  await gameFits(page, 'Sudoku phone landscape 812x375', sudokuBoard)
+  await page.getByRole('button', { name: 'Hint', exact: true }).click()
+  await gameFits(page, 'Sudoku phone landscape hint 812x375', sudokuBoard)
+  await page.setViewportSize({ width: 1440, height: 945 })
+  await gameFits(page, 'Sudoku desktop 1440x945', sudokuBoard)
+  await page.setViewportSize({ width: 3840, height: 1600 })
+  await gameFits(page, 'Sudoku ultrawide 3840x1600', sudokuBoard)
   await page.setViewportSize({ width: 844, height: 390 })
   const keypadBounds = await page.getByRole('button', { name: '1', exact: true }).boundingBox()
   assert.ok(keypadBounds && keypadBounds.y + keypadBounds.height <= 390)
@@ -883,6 +917,17 @@ try {
   await nonogramPage.getByRole('button', { name: 'Undo', exact: true }).click()
   assert.equal(await columnClue.getAttribute('data-conflict'), 'false')
   await nonogramPage.getByRole('button', { name: 'Undo', exact: true }).click()
+  const nonogramBoard = '.nonogram-board'
+  await gameFits(nonogramPage, 'Nonogram phone portrait 390x844', nonogramBoard)
+  await nonogramPage.setViewportSize({ width: 375, height: 812 })
+  await gameFits(nonogramPage, 'Nonogram phone portrait 375x812', nonogramBoard)
+  await nonogramPage.setViewportSize({ width: 812, height: 375 })
+  await gameFits(nonogramPage, 'Nonogram phone landscape 812x375', nonogramBoard)
+  await nonogramPage.setViewportSize({ width: 1440, height: 945 })
+  await gameFits(nonogramPage, 'Nonogram desktop 1440x945', nonogramBoard)
+  await nonogramPage.setViewportSize({ width: 3840, height: 1600 })
+  await gameFits(nonogramPage, 'Nonogram ultrawide 3840x1600', nonogramBoard)
+  await nonogramPage.setViewportSize({ width: 390, height: 844 })
   const target = solveByDeduction(egg.content).cells
   for (const [index, mark] of target.entries()) if (mark === 1) await squares.nth(index).tap()
   await nonogramPage.locator('.celebration-overlay').waitFor()

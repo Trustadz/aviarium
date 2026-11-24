@@ -449,6 +449,108 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   .play-layout { grid-template-columns: minmax(0,var(--board-size)) minmax(210px,1fr); margin-top: 8px; }
 }
 
+/* Game play fills the viewport: the board takes the space left by the
+   header and controls instead of growing past the viewport and pushing the
+   controls below the fold. Games whose board cannot resize keep the previous
+   scrolling layout in browsers without size containers and :has. */
+@supports selector(:has(*)) and (container-type: size) {
+  .app:has(> .game-frame > .play-page) { min-height: 100dvh; }
+  .game-frame:has(> .play-page) {
+    display: flex; flex-direction: column; height: 100dvh; min-height: 0;
+  }
+  .game-frame > .play-page {
+    flex: 1; min-height: 0; width: 100%; max-width: 1120px; margin-inline: auto;
+    display: flex; flex-direction: column;
+  }
+
+  /* Wide screens place the board beside the controls. The board column is a
+     size container, so the board can size itself from the height it has. */
+  .game-frame > .play-page .play-layout {
+    flex: 1; min-height: 0; display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+    align-items: stretch; gap: 22px; margin-top: 16px;
+  }
+  .game-frame > .play-page .board-wrap {
+    min-width: 0; min-height: 0; container-type: size;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .game-frame > .play-page .board-wrap > .board,
+  .game-frame > .play-page .board-wrap > .pause-panel {
+    width: min(700px, 100%, 100cqh);
+  }
+  .game-frame > .play-page .play-controls {
+    min-width: 0; align-content: center;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+    container-type: inline-size;
+  }
+  .game-frame > .play-page .play-controls > .number-pad,
+  .game-frame > .play-page .play-controls > .tools,
+  .game-frame > .play-page .play-controls > .feedback,
+  .game-frame > .play-page .play-controls > .error,
+  .game-frame > .play-page .play-controls > .success,
+  .game-frame > .play-page .play-controls > .secondary,
+  .game-frame > .play-page .play-controls > .puzzle-share { grid-column: 1 / -1; }
+  .game-frame > .play-page .play-controls > .text-button:only-of-type,
+  .game-frame > .play-page .play-controls:has(> .puzzle-share) > .text-button { grid-column: 1 / -1; }
+  .game-frame > .play-page .play-controls:has(> .puzzle-share) > .feedback,
+  .game-frame > .play-page .play-controls:has(> .puzzle-share) > .secondary { display: none; }
+
+  /* A wide controls column fits the digits in one row and the tools in two. */
+  @container (min-width: 440px) {
+    .game-frame > .play-page .number-pad { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; }
+    .game-frame > .play-page .number-pad button { grid-column: auto; min-height: 46px; font-size: 1.3rem; }
+    .game-frame > .play-page .number-pad button:nth-child(6) { grid-column: auto; }
+    .game-frame > .play-page .tools { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+
+  /* Portrait stacks the board above the controls and sizes it by width too. */
+  @media (orientation: portrait) {
+    .game-frame > .play-page { max-width: 640px; }
+    .game-frame > .play-page .play-layout {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; gap: 12px; margin-top: 12px;
+    }
+    .game-frame > .play-page .board-wrap { width: 100%; }
+    .game-frame > .play-page .board-wrap > .board,
+    .game-frame > .play-page .board-wrap > .pause-panel { width: min(100%, 100cqh); }
+  }
+
+  /* Nonograms keep their clue dimensions. A cell size that fits both the
+     available width and height keeps the grid and its clues proportional. */
+  .game-frame > .play-page .board-wrap > .nonogram-board {
+    --nonogram-cell: min(calc(100cqw * var(--cell-width-share)),
+      calc(100cqh * var(--cell-height-share)), var(--cell-cap));
+    width: calc(var(--nonogram-cell) * var(--cell-width-factor));
+    font-size: calc(var(--nonogram-cell) * .5);
+  }
+
+  /* Short viewports give more width to the controls and cannot afford the
+     two-row digit pad, three-row tools or the full heading. */
+  @media (max-height: 520px) {
+    .game-frame > .play-page .play-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); margin-top: 8px;
+    }
+    .game-frame > .play-page .play-heading .eyebrow { display: none; }
+    .game-frame > .play-page .play-heading h1 { font-size: 1.5rem; }
+    .game-frame > .play-page .play-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .game-frame > .play-page .play-controls > .secondary { grid-column: auto; }
+    .game-frame > .play-page .play-controls > .text-button:last-of-type:not(:only-of-type) {
+      grid-column: -2 / -1;
+    }
+    .game-frame > .play-page .feedback { padding: 6px 9px; font-size: .85rem; }
+    .game-frame > .play-page .number-pad { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; }
+    .game-frame > .play-page .number-pad button { grid-column: auto; min-height: 46px; font-size: 1.3rem; }
+    .game-frame > .play-page .number-pad button:nth-child(6) { grid-column: auto; }
+    .game-frame > .play-page .tools { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .game-frame > .play-page .tools button { font-size: .78rem; }
+  }
+  @media (max-height: 420px) and (max-width: 700px) {
+    .game-frame > .play-page .play-controls { gap: 4px; }
+    .game-frame > .play-page .feedback { padding: 4px 7px; font-size: .8rem; }
+    .game-frame > .play-page .tools button { min-height: 38px; padding-block: 3px; }
+  }
+}
+
 .extreme { background: #f0dfef; color: #692b66; }
 .genius { background: #e1e1fc; color: #3f3988; }
 .app[data-theme=dark] .extreme:not(.studio-preview .extreme), .studio-preview[data-theme=dark] .extreme { background: #56334e; color: #f8ccf1; }

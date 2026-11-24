@@ -30,14 +30,14 @@ export function PuzzleShare({ level }: { level: PublishedLevel }) {
     }
     setShow(true)
   }
-  return <><button className="text-button" onClick={() => { void share() }}><Share2 size={16}/>{" "}{t("Share seed")}</button>
-    {show && <div className="puzzle-share">
-      <input readOnly aria-label={t("Seed code")} value={seed} onFocus={event => event.target.select()}/>
-      {navigator.clipboard && <button className="secondary" onClick={() => {
-        void navigator.clipboard.writeText(seed).then(() => setCopied(true)).catch(() => undefined)
-      }}>{copied ? t("Copied") : t("Copy seed")}</button>}
-    </div>}
-  </>
+  return show ? <div className="puzzle-share">
+    <input readOnly aria-label={t("Seed code")} value={seed} onFocus={event => event.target.select()}/>
+    {navigator.clipboard && <button className="secondary" onClick={() => {
+      void navigator.clipboard.writeText(seed).then(() => setCopied(true)).catch(() => undefined)
+    }}>{copied ? t("Copied") : t("Copy seed")}</button>}
+    <button className="secondary" onClick={() => { setShow(false); setCopied(false) }}>{t("Close")}</button>
+  </div>
+    : <button className="text-button" onClick={() => { void share() }}><Share2 size={16}/>{" "}{t("Share seed")}</button>
 }
 
 export function QuickPlay({ canPlay, profile, generate }: {
