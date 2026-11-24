@@ -8,7 +8,9 @@ leaderboards, packs, auth, app and migration. No platform module imports a globa
 game map. The definitions drive packs, saves, leaderboards and generated levels
 at runtime. Daily challenges derive `challengeGames` from
 `GameRegistry.challengeCapable()`; the separate Sudoku/Nonograms challenge
-adapters are gone. The compatibility adapter still wraps the legacy `ServerGame` shape. On the web, board identity, initial save creation and pack level materialization
+adapters are gone. Effective pack rules now reach `leaderboard.result`; the dead game-specific
+server modules are deleted and the pack-content test uses the definition adapter.
+The compatibility adapter still wraps the legacy `ServerGame` shape. On the web, board identity, initial save creation and pack level materialization
 are now derived from the shared `GameDefinition` (`game-definitions.ts`), so
 `WebGame` no longer carries `leaderboards`, `createAttempt`, `history` or a
 pack-level materializer. The remaining `WebGame` surface is the player/studio/presentation plus pack
@@ -113,7 +115,9 @@ branch. If one does, the contract is missing a hook.
 ## Current gaps
 
 - The server compatibility map is injected and definition-backed; the legacy
-  `ServerGame` adapter and the web `WebGame` remain for J4/J5.
+  `ServerGame` compatibility adapter remains; the web `WebGame` is now
+  player/studio/presentation and pack labels. The legacy Sudoku Studio/catalog
+  quarantine is the remaining routing surface.
 - Daily challenge inclusion is derived from `GameDefinition.generation` and
   `leaderboard`; there is no per-game challenge adapter.
 - The generic Quick Play/level endpoints are used by the web, tests and old-client

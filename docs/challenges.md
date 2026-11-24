@@ -80,7 +80,8 @@ extension.
   a normal Quick Play/generated game, not a new challenge attempt. Its result
   posts to the normal general board under the existing rules (including the
   30-day exact-puzzle cooldown), not to the closed daily board.
-- The daily board closes when the next one starts. There is no ranked replay of
+- The daily board closes when the next one starts. Replaying a seed opens a normal
+game with a replay banner and a Back to challenge path. There is no ranked replay of
   a past daily board.
 
 ## API
@@ -152,8 +153,8 @@ resuming cannot reduce the recorded time.
 
 Deferred: the secondary pack aggregate panel; eligible-games/next-slate admin
 controls; pack-rule variants (hints/Auto notes/lives/timer/diagonal); admin
-recovery UI; per-game custom challenge profiles; first-class replay context;
-rank-gap separators and tab keyboard/roving-focus polish.
+recovery UI; per-game custom challenge profiles; rank-gap separators and tab
+keyboard/roving-focus polish.
 
 ## Verification
 
