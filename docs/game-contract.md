@@ -87,10 +87,12 @@ const registry = createGameRegistry([sudokuGame, nonogramsGame])
 mismatch, a missing save contract, or a built-in pack whose game id does not
 match. `challengeCapable()` returns games with a `generation` declaration.
 
-A fake third-game fixture in `apps/server/src/game-registry.test.ts` is the
-proof: it is discovered, becomes challenge-capable, and needs no platform edit.
-The next step is to inject the registry into the pack, progress and leaderboard
-modules so the fixture can exercise the real API paths.
+A package-backed third game in `packages/game-fixture` is the proof: it is
+discovered, becomes challenge-capable, and reaches the server compatibility map
+and challenge derivation without a platform edit. `createServerGames(registry)`
+and `challengeGamesFromRegistry(registry)` are injectable; the next step is to
+thread the same registry through the HTTP route/challenge registration so the
+fixture can exercise the real API paths.
 
 ## Adding a game
 
