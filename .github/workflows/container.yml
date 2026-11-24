@@ -36,6 +36,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Validate changelog fragments
+        run: |
+          npm run changelog:check
+          npm run changelog:pending > /dev/null
       - name: Choose release version
         id: release
         env:
@@ -97,8 +101,18 @@ jobs:
             exit 0
           fi
 
-          notes=(--generate-notes)
-          if [[ -n "$PREVIOUS_TAG" ]]; then
-            notes+=(--notes-start-tag "$PREVIOUS_TAG")
+          notes_file=$(mktemp)
+          pending=$(node scripts/changelog.mjs pending)
+          if [[ -n "$pending" ]]; then
+            printf '%s\n\n' "$pending" > "$notes_file"
           fi
-          gh release create "$tag" --verify-tag --latest --title "Aviarium $tag" "${notes[@]}"
+
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            gh api -X POST "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$tag" -f previous_tag_name="$PREVIOUS_TAG" --jq .body >> "$notes_file"
+          else
+            gh api -X POST "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$tag" --jq .body >> "$notes_file"
+          fi
+
+          gh release create "$tag" --verify-tag --latest --title "Aviarium $tag" --notes-file "$notes_file"

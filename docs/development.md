@@ -41,6 +41,22 @@ Check `git log -- <path>` for the history behind a choice. Capture any necessary
 product clarification in the task or PR so it travels with the work. Compare
 `git diff origin/main...HEAD` and the PR discussion before taking over a branch.
 
+## Record a changelog fragment
+
+Every pull request that changes user-visible behavior adds one new file under
+`changelog.d/`. Do not edit `CHANGELOG.md`; the separate **Changelog** workflow
+rejects shared changelog edits. A fragment is named
+`<slug>.<category>.md`, preferably with the PR or issue number as the slug and
+one of the categories `added`, `changed`, `fixed`, `improved`, `security`, or
+`upgrade`. Use a unique filename so parallel pull requests never edit the same
+file. Follow the body rules in [changelog.d/README.md](../changelog.d/README.md)
+and validate with `npm run changelog:check`.
+
+Pull requests with no user-visible change (chores, tests, refactors, and the
+post-release fold PR) apply the `changelog-not-required` label instead. The
+release flow renders fragments into the release notes and folds them into
+`CHANGELOG.md` with `npm run changelog:release -- X.Y.Z`.
+
 ## Run an isolated preview
 
 Start with a database dedicated to this change. For example, the following
@@ -95,7 +111,9 @@ When done with this disposable environment, stop its app process and run
 ## Verify and request local approval
 
 Run `npm run typecheck`, `npm test`, and `npm run build` before requesting
-local approval. For application, migration, or release workflow changes,
+local approval. `npm test` includes the changelog compiler and CI diff-rule
+tests; also run `npm run changelog:check` when the change adds or edits
+fragments. For application, migration, or release workflow changes,
 also run the combined browser suite. Install Chromium with `npx playwright install chromium`
 or set `AVIARIUM_CHROMIUM` to a compatible installed executable. See
 [verification](testing.md) for narrower runs and manual device checks.
@@ -138,11 +156,13 @@ commands and outcomes, and remaining manual scenarios with expected results. If 
 give its URL, branch or commit, and setup steps. A loopback URL is usable only
 on its host, so include reproduction steps for a reviewer with a different
 checkout. Link the issue if there is one. Use `enhancement` or `feature` for
-features and `bug` or `fix` for fixes.
+features and `bug` or `fix` for fixes. State the fragment filename, or why the
+pull request has the `changelog-not-required` label.
 
 Read the PR thread and check results with `gh pr view NUMBER --comments` and
-`gh pr checks NUMBER`. GitHub runs **Verify** on drafts and ready PRs. Address
-feedback on the same branch, rerun affected checks, and obtain local approval
-before pushing the revised commit and updating the PR. Report environment or
-authentication blockers with what was verified locally. Merge and production publishing require owner authorization.
-For an authorized release, use the [release workflow](../README.md#publish-a-release).
+`gh pr checks NUMBER`. GitHub runs **Verify** and **Changelog** on drafts and
+ready PRs. Address feedback on the same branch, rerun affected checks, and
+obtain local approval before pushing the revised commit and updating the PR.
+Report environment or authentication blockers with what was verified locally.
+Merge and production publishing require owner authorization. For an authorized
+release, use the [release workflow](../README.md#publish-a-release).
