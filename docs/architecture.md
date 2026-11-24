@@ -64,6 +64,10 @@ an origin.
   accepting a save. Retried mutations return the stored result for the same
   ID and payload. Concurrent edits can create a separate attempt. Keep those
   guarantees when changing either side of synchronization.
+- **App updates while online.** The visible app checks its service worker for
+  updates at startup, every two minutes, and when it returns to the foreground
+  or reconnects. Unreachable servers are handled silently. The Library offers
+  Reload once an update is ready, so a check does not interrupt play.
 - **Leaderboards record every completed sync.** A verified completion writes its
   result in the same transaction as its completion record. Boards group results
   by the game's settings: Sudoku Quick Play by difficulty, Nonograms random

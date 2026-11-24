@@ -128,7 +128,11 @@ function App({ session, languageError }: { session: ReturnType<typeof useSession
   useLayoutEffect(() => setBrowserTheme(signInPage.current, '--surface'), [account, localPlay, theme])
   useGameDownloads(undefined, online, !checking && !account && !localPlay)
   const [activate, setActivate] = useState<() => void>()
-  useEffect(() => { void registerOffline(handler => setActivate(() => handler)).catch(() => undefined) }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    void registerOffline(handler => setActivate(() => handler), controller.signal).catch(() => undefined)
+    return () => controller.abort()
+  }, [])
   useEffect(() => {
     if (activate && online && !checking && !account && !localPlay) activate()
   }, [account, activate, checking, localPlay, online])
