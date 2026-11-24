@@ -305,13 +305,24 @@ export function ChallengeBoard({ occurrenceId, gameId, accountId, online, back }
   </section>
 }
 
-export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, online }: {
-  occurrenceId: string; gameId: string; accountId?: string; online: boolean
+export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, online, onPlayOther }: {
+  occurrenceId: string; gameId: string; accountId?: string; online: boolean; onPlayOther?: (game: string) => void
 }) {
   const t = useT()
   const [data, setData] = useState<ChallengeBoardViewData>()
   const [problem, setProblem] = useState('')
   const [attempts, setAttempts] = useState(0)
+  const [other, setOther] = useState<ChallengeSlotView>()
+  useEffect(() => {
+    if (!online) return
+    let current = true
+    void api<ChallengeDayView>('/challenges', undefined, accountId).then(value => {
+      if (!current) return
+      setOther(value.slots.find(slot => slot.game !== gameId &&
+        (slot.player.status === 'available' || slot.player.status === 'started')))
+    }, () => undefined)
+    return () => { current = false }
+  }, [accountId, gameId, online])
   useEffect(() => {
     if (!online) return
     let current = true
@@ -344,6 +355,8 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
         : attempts < 4 ? t('Syncing your result…') : t('No posted times yet.')}</p>}
     {!data.you && attempts < 4 && <p className="challenge-panel-note" role="status">{t('Syncing your result…')}</p>}
     {!data.you && attempts >= 4 && <p className="challenge-panel-note">{t('This run did not post to the challenge board.')}</p>}
+    {other && onPlayOther && <button className="secondary challenge-other" onClick={() => onPlayOther(other.game)}>
+      <Play size={16}/> {other.player.status === 'started' ? t('Resume the other challenge') : t('Play the other challenge')}</button>}
   </section>
 }
 

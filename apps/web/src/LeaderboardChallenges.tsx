@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
+import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { useIntl } from 'react-intl'
 import type { ChallengeOccurrenceView } from '../../../packages/game-sdk/src/challenges.js'
 import { api, errorMessage } from './api.js'
 import { findGame } from './registry.js'
 import { knownMessage, useT } from './i18n.js'
+import type { Message } from './messages.js'
 import type { ChallengeDayView, ChallengeSlotView } from './Challenges.js'
 
 type Link = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => void
@@ -25,10 +27,10 @@ function playerStatus(t: ReturnType<typeof useT>, slot: ChallengeSlotView) {
   }
 }
 
-function optionText(slot: ChallengeSlotView) {
+function optionText(t: ReturnType<typeof useT>, slot: ChallengeSlotView) {
   const size = slot.options.size
   const difficulty = slot.options.difficulty
-  return [size ? `${size} × ${size}` : '', typeof difficulty === 'string' ? difficulty : '']
+  return [size ? `${size} × ${size}` : '', typeof difficulty === 'string' ? t(difficulty as Message) : '']
     .filter(Boolean).join(' · ')
 }
 
@@ -42,6 +44,7 @@ export function LeaderboardChallenges({ accountId, online, link }: {
   const [problem, setProblem] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [moreProblem, setMoreProblem] = useState('')
   useEffect(() => {
     if (!online) { setDay(undefined); setHistory(undefined); return }
     let current = true
@@ -67,11 +70,12 @@ export function LeaderboardChallenges({ accountId, online, link }: {
     if (!history?.nextBefore || loadingMore) return
     setLoadingMore(true)
     try {
+      setMoreProblem('')
       const next = await api<HistoryData>('/challenges/history?limit=20&before=' +
         encodeURIComponent(history.nextBefore), undefined, accountId)
       setHistory({ ...next, occurrences: [...history.occurrences, ...next.occurrences] })
     } catch (error) {
-      setProblem(errorMessage(error))
+      setMoreProblem(errorMessage(error))
     } finally {
       setLoadingMore(false)
     }
@@ -92,28 +96,35 @@ export function LeaderboardChallenges({ accountId, online, link }: {
           return <a className="leaderboard-challenge-game" href={href} key={slot.id}
             onClick={event => link(event, href)}>
             <span className="leaderboard-challenge-game-title">{gameTitle(slot.game)}</span>
-            {optionText(slot) && <span className="muted">{optionText(slot)}</span>}
+            {optionText(t, slot) && <span className="muted">{optionText(t, slot)}</span>}
             <span className={'badge challenge-status status-' + slot.player.status}>{playerStatus(t, slot)}</span>
             {slot.player.result?.rank ? <span className="leaderboard-challenge-rank">
               #{slot.player.result.rank} / {slot.player.result.total}</span> : null}
+            <ChevronRight size={17} aria-hidden="true"/>
           </a>
         })}
       </div>
     </section> : !loading && <p className="empty">{t('No daily challenge today.')}</p>}
     <div className="section-heading"><h2>{t('Past challenges')}</h2></div>
     {history?.occurrences.length ? <div className="leaderboard-challenge-days">
-      {history.occurrences.map(({ occurrence, slots }) => <a className="leaderboard-challenge-day panel"
-        href={'/challenges/' + occurrence.id} key={occurrence.id}
-        onClick={event => link(event, '/challenges/' + occurrence.id)}>
-        <span className="leaderboard-challenge-date">{date(occurrence.startsAt, occurrence.timezone)}</span>
-        <span className="leaderboard-challenge-games-list">{slots.map(slot => gameTitle(slot.game)).join(' · ')}</span>
-        <span className="muted">{slots.filter(slot => slot.player.status === 'completed').length} / {slots.length}</span>
-        <ChevronRight size={17} aria-hidden="true"/>
-      </a>)}
+      {history.occurrences.map(({ occurrence, slots }) => {
+        const winner = slots.flatMap(slot => slot.standings.top).find(row => row.rank === 1)
+        return <a className="leaderboard-challenge-day panel"
+          href={'/challenges/' + occurrence.id} key={occurrence.id}
+          onClick={event => link(event, '/challenges/' + occurrence.id)}>
+          <span className="leaderboard-challenge-date">{date(occurrence.startsAt, occurrence.timezone)}</span>
+          <span className="leaderboard-challenge-games-list">{slots.map(slot => gameTitle(slot.game)).join(' · ')}</span>
+          <span className="muted leaderboard-challenge-winner">{winner
+            ? `${winner.name} · ${formatLeaderboardValue(winner.value, winner.unit)}`
+            : t('No posted times yet.')}</span>
+          <ChevronRight size={17} aria-hidden="true"/>
+        </a>
+      })}
     </div> : !loading && <p className="empty">{t('No challenge history yet.')}</p>}
     {history?.nextBefore && <div className="button-bar">
       <button className="secondary" onClick={loadOlder} disabled={loadingMore}>
         {loadingMore ? t('Loading…') : t('Load older')}</button>
+      {moreProblem && <p className="error" role="alert">{knownMessage(t, moreProblem)}</p>}
     </div>}
   </section>
 }

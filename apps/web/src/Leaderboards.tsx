@@ -157,7 +157,18 @@ export function LeaderboardCatalog({ games, sessions, accountId, online, link }:
   const [data, setData] = useState<CatalogData>()
   const [problem, setProblem] = useState('')
   const [loading, setLoading] = useState(false)
-  const [tab, setTab] = useState<'general' | 'challenges'>('general')
+  const [tab, setTab] = useState<'general' | 'challenges'>(() =>
+    window.location.hash === '#challenges' ? 'challenges' : 'general')
+  useEffect(() => {
+    const sync = () => setTab(window.location.hash === '#challenges' ? 'challenges' : 'general')
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
+  const chooseTab = (next: 'general' | 'challenges') => {
+    setTab(next)
+    const base = window.location.pathname + window.location.search
+    window.history.replaceState(null, '', next === 'challenges' ? base + '#challenges' : base)
+  }
   useEffect(() => {
     if (!online) { setData(undefined); return }
     let current = true
@@ -177,16 +188,16 @@ export function LeaderboardCatalog({ games, sessions, accountId, online, link }:
   return <section className="catalog leaderboard-catalog">
     <div className="section-heading">
       <h1>{t('Leaderboards')}</h1>
-      <label className="search"><Search size={18}/><input value={query} onChange={event => setQuery(event.target.value)}
-        placeholder={t('Search games')} aria-label={t('Search games')}/></label>
+      {tab === 'general' && <label className="search"><Search size={18}/><input value={query} onChange={event => setQuery(event.target.value)}
+        placeholder={t('Search games')} aria-label={t('Search games')}/></label>}
     </div>
     <div className="leaderboard-tabs" role="tablist" aria-label={t('Leaderboard views')}>
       <button id="leaderboard-tab-general" role="tab" aria-controls="leaderboard-panel-general"
         aria-selected={tab === 'general'} className={tab === 'general' ? 'active' : ''}
-        onClick={() => setTab('general')}>{t('General')}</button>
+        onClick={() => chooseTab('general')}>{t('General')}</button>
       <button id="leaderboard-tab-challenges" role="tab" aria-controls="leaderboard-panel-challenges"
         aria-selected={tab === 'challenges'} className={tab === 'challenges' ? 'active' : ''}
-        onClick={() => setTab('challenges')}>{t('Challenges')}</button>
+        onClick={() => chooseTab('challenges')}>{t('Challenges')}</button>
     </div>
     {tab === 'challenges' ? <div id="leaderboard-panel-challenges" role="tabpanel"
       aria-labelledby="leaderboard-tab-challenges"><LeaderboardChallenges accountId={accountId} online={online} link={link}/></div> : <div

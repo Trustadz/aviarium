@@ -26,6 +26,7 @@ interface ChallengeAttemptRow {
   owner_id: string
   session_id: string
   status: 'started' | 'completed' | 'closed'
+  started_at: Date | string
   completed_at: Date | string | null
 }
 
@@ -122,6 +123,13 @@ async function handleChallengeMutation(db: PoolClient, user: User, game: ServerG
   const adapter = challengeGames.find(item => item.id === slot.game_id)
   if (!adapter) throw new HttpError(409, 'challenge_game_unsupported')
   const record = adapter.record(level, mutation.data, slot.rules)
+  // The server start time is authoritative for time-based challenges. Leaving
+  // and resuming cannot reduce the recorded time, and a client cannot report a
+  // faster run than the wall clock allows.
+  if (record.unit === 'ms') {
+    const elapsed = Math.max(0, now - new Date(attempt.started_at).getTime())
+    if (Number.isFinite(elapsed) && elapsed > record.value) record.value = elapsed
+  }
   const context: ChallengeResultContext = {
     slotId: slot.id, attemptId: attempt.id, occurrenceId: occurrence.id, periodKey: occurrence.period_key,
     timeZone: occurrence.timezone, game: slot.game_id, options: slot.options, rules: slot.rules,

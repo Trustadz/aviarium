@@ -49,7 +49,7 @@ export function ResultStandingsPanel({ game, level, accountId, online }: {
   const rows = data.top.slice(0, 3)
   if (data.you && !rows.some(row => row.you)) rows.push(data.you)
   return <section className="challenge-panel" aria-label={t('Leaderboard standings')}>
-    <div className="challenge-panel-head"><span className="eyebrow">{t('Standings')}</span>
+    <div className="challenge-panel-head"><span className="eyebrow">{t(level.pack ? 'This puzzle’s standings' : 'Standings')}</span>
       <span className="muted">{t('{count, plural, one {# player} other {# players}}', { count: data.total })}</span></div>
     <ol className="challenge-mini">{rows.map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
       <span className="challenge-rank">{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/>

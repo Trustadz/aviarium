@@ -506,6 +506,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     await openChallengeSession(session, level, game)
   }
 
+  async function playOtherChallenge(gameId: string) {
+    const day = await api<ChallengeDayView>('/challenges', undefined, accountId)
+    const slot = day.slots.find(item => item.game === gameId &&
+      (item.player.status === 'available' || item.player.status === 'started'))
+    if (slot) await startChallenge(day, slot)
+  }
+
   async function playReplay(replay: ChallengeReplayView) {
     const game = findGame(replay.game)
     if (!game) throw new Error('This game is not available in this version.')
@@ -718,7 +725,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         challenge={playing.challenge ? { occurrenceId: playing.challenge.occurrenceId, slotId: playing.challenge.slotId,
           game: playing.challenge.game, attemptId: playing.challenge.attemptId, endsAt: playing.challenge.endsAt } : undefined}
         standingsPanel={playing.challenge ? <ChallengeStandingsPanel occurrenceId={playing.challenge.occurrenceId}
-          gameId={playing.challenge.game} accountId={account?.id} online={online}/>
+          gameId={playing.challenge.game} accountId={account?.id} online={online}
+          onPlayOther={game => perform(() => playOtherChallenge(game))}/>
           : playing.game.leaderboards ? <ResultStandingsPanel game={playing.game} level={playing.level}
             accountId={account?.id} online={online}/> : undefined}
         leaderboard={playing.challenge

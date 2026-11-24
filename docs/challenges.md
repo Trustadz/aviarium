@@ -140,12 +140,18 @@ slot per game, one attempt, input-only reset, closed-at-reset challenge boards,
 after-game challenge standings, nav/badge, minimal admin settings, replay seed
 to the general board, the Leaderboards **General | Challenges** tabs, a
 current-day and paginated past list, all-mode after-game standings on the played
-level's board (Quick Play and packs), English/Dutch, mobile and offline/error
-states.
+level's board (Quick Play and packs), server-authoritative challenge times (the
+server start time is a floor and time away counts), a `Play the other challenge`
+CTA after a slot, English/Dutch, mobile and offline/error states.
 
-Deferred: the secondary pack aggregate panel; pack-rule variants (hints/Auto
-notes/lives/timer/diagonal); admin recovery UI; per-game custom challenge
-profiles; first-class replay context; authoritative wall-clock timing.
+Challenge results for time-based games use the server start time as a floor: a
+completion cannot post a faster time than the wall clock allowed, so leaving and
+resuming cannot reduce the recorded time.
+
+Deferred: the secondary pack aggregate panel; eligible-games/next-slate admin
+controls; pack-rule variants (hints/Auto notes/lives/timer/diagonal); admin
+recovery UI; per-game custom challenge profiles; first-class replay context;
+rank-gap separators and tab keyboard/roving-focus polish.
 
 ## Verification
 
