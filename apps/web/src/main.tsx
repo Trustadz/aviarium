@@ -506,12 +506,24 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   async function playReplay(replay: ChallengeReplayView) {
     const game = findGame(replay.game)
     if (!game) throw new Error('This game is not available in this version.')
-    if (game.id !== 'sudoku') throw new Error('Replay is not available for this game yet.')
     const difficulty = replay.options.difficulty
     if (typeof difficulty !== 'string') throw new Error('This daily challenge is unavailable.')
-    const { createQuickPlayLevel } = await import('./Player.js')
-    const level = await createQuickPlayLevel(difficulty as never, replay.seed, replay.generatorVersion)
-    await open(game, level)
+    if (game.id === 'sudoku') {
+      const { createQuickPlayLevel } = await import('./Player.js')
+      const level = await createQuickPlayLevel(difficulty as never, replay.seed, replay.generatorVersion)
+      await open(game, level)
+      return
+    }
+    if (game.id === 'nonograms') {
+      const size = Number(replay.options.size)
+      if (size !== 5 && size !== 10) throw new Error('This daily challenge is unavailable.')
+      const { quickNonogram } = await import('../../../packages/nonograms/src/contracts.js')
+      const level = await quickNonogram({ seed: replay.seed, size, difficulty: difficulty as never, version: 1 })
+      if (!level) throw new Error('Could not prepare this challenge replay.')
+      await open(game, level)
+      return
+    }
+    throw new Error('Replay is not available for this game yet.')
   }
 
   async function resume(id: string) {
