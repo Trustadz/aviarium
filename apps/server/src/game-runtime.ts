@@ -25,7 +25,7 @@ export interface GameLeaderboards {
   quickBoards: readonly { key: string; kind: 'quick'; meta: Record<string, string | number> }[]
   boardKey(level: LevelRecord): LeaderboardBoardKey
   parseBoard(key: string): LeaderboardBoardKey | undefined
-  record(level: LevelRecord, save: GameAttempt, packTitle?: string): LeaderboardRecord
+  record(level: LevelRecord, save: GameAttempt, packTitle?: string, rules?: ProgressionRules): LeaderboardRecord
 }
 
 export interface ServerGame {

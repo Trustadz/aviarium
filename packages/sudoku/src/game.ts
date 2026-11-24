@@ -9,7 +9,7 @@ import { gradePuzzle } from './logic.js'
 import { sudoku } from './metadata.js'
 import {
   authoringPack, gradedPackSchema, packDraftSchema, packLevels, packManifestSchema, packRuleset, packRulesSchema,
-  sameSudokuLevel, type PackDraftData, type PackRules, type PublishedPack,
+  sameSudokuLevel, type GradedPack, type PackDraftData, type PackRules, type PublishedPack,
 } from './packs.js'
 import { rulesFor } from './rules.js'
 import { createSave } from './save.js'
@@ -34,7 +34,7 @@ const difficultyGroup = {
 type SudokuEntry = PackDraftData['puzzles'][number]
 type QuickPlayOptions = { difficulty: Difficulty }
 
-export function verifySudokuPack(input: unknown, prior: readonly StoredLevel[] = []): PackDraftData {
+export function verifySudokuPack(input: unknown, prior: readonly StoredLevel[] = []): GradedPack {
   const draft = authoringPack(packDraftSchema.parse(input))
   const known = new Map(prior.map(level => [level.id, level]))
   if (!draft.puzzles.length) throw new GameRuleError('pack_empty')

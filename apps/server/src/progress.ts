@@ -246,7 +246,7 @@ export function registerProgress(app: FastifyInstance, serverGames: ReadonlyMap<
       if (mutation.data.completed) {
         await db.query(`INSERT INTO completions(owner_id,level_id,level_revision)
           VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, [user.id, mutation.data.level, mutation.data.levelRevision])
-        await recordLeaderboardResult(db, user, game, level, mutation, saved, activePack)
+        await recordLeaderboardResult(db, user, game, level, mutation, saved, activePack, packRules)
       }
       await db.query('INSERT INTO sync_receipts(owner_id,id,fingerprint,result) VALUES($1,$2,$3,$4)',
         [user.id, mutation.mutationId, fingerprint, saved])

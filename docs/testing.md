@@ -63,6 +63,9 @@ For the API and browser flow, use a disposable instance with
 8. Check the nav badge, 360/393 px and 200% text, English/Dutch, offline and
    terminal-sync states.
 
+The pack-content unit test uses the definition-backed Sudoku `ServerGame`
+adapter, not the deleted legacy server-game module.
+
 The unit suite runs `apps/server/src/game-fixture.test.ts`, which sends a
 package-backed third definition through the server compatibility map and the
 challenge derivation, and `apps/server/src/game-source-scan.test.ts`, which fails when

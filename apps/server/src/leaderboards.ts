@@ -9,7 +9,7 @@ import {
   type LeaderboardRemovalNotice, type LeaderboardStanding, type LeaderboardSummary, type LeaderboardValueUnit,
 } from '../../../packages/game-sdk/src/leaderboards.js'
 import type { ChallengeResult } from '../../../packages/game-sdk/src/challenges.js'
-import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
+import type { PackRevision, ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
 import type { AttemptMutation, SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { digest, HttpError, requireUser, type User } from './auth.js'
 import { pool, testEnvironment, transaction } from './config.js'
@@ -263,10 +263,10 @@ async function standaloneLevels(db: Pool | PoolClient, game: ServerGame) {
  * puzzle inside the cooldown is stored as `cooldown` and hidden from standings.
  */
 export async function recordLeaderboardResult(db: PoolClient, user: User, game: ServerGame, level: LevelRecord,
-  mutation: AttemptMutation, saved: SavedAttempt, pack?: PackRevision) {
+  mutation: AttemptMutation, saved: SavedAttempt, pack?: PackRevision, rules?: ProgressionRules) {
   const leaderboards = game.leaderboards
   if (!leaderboards) return
-  const record = leaderboards.record(level, mutation.data, pack?.data.title)
+  const record = leaderboards.record(level, mutation.data, pack?.data.title, rules)
   const puzzleKey = digest(game.id + '|' + record.puzzleContent)
   const recent = await db.query(`SELECT 1 FROM leaderboard_results
     WHERE owner_id=$1 AND game_id=$2 AND puzzle_key=$3 AND board_kind <> 'challenge'

@@ -71,8 +71,9 @@ export function serverGameFromDefinition(
         .filter(board => board.kind === 'quick') as unknown as readonly { key: string; kind: 'quick'; meta: Record<string, string | number> }[],
       boardKey,
       parseBoard: key => definition.leaderboard?.parseBoard?.(key) ?? defaultParseBoard(key),
-      record: (level, save, packTitle) => {
-        const result = definition.leaderboard!.result(level as never, save as never, definition.play.rules.defaults as never)
+      record: (level, save, packTitle, rules) => {
+        const result = definition.leaderboard!.result(level as never, save as never,
+          (rules ?? definition.play.rules.defaults) as never)
         const board = boardKey(level)
         return {
           ...result,
