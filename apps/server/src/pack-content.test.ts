@@ -69,7 +69,7 @@ test('new drafts use pack-only level access while old published data remains rea
   assert.equal(old.puzzles[0].rules.inOrder, false)
 })
 
-test('shared pack formats accept another game’s own content and rules', () => {
+test('shared pack formats accept another game’s own content and rules', async () => {
   const puzzle = z.object({ ...packLevelFields, letters: z.array(z.string()), rules: z.object({ guesses: z.number() }).partial().optional() })
   const schemas = definePackSchemas('words-fixture', z.literal('default'), progressionRules.extend({ guesses: z.number() }),
     puzzle, puzzle)
@@ -83,6 +83,6 @@ test('shared pack formats accept another game’s own content and rules', () => 
     ] })
   const copy = importArchive(adapter, exportArchive(adapter, draft))
   assert.deepEqual(copy, draft)
-  assert.deepEqual(adapter.verify(copy, []).puzzles, draft.puzzles)
+  assert.deepEqual((await adapter.verify(copy, [])).puzzles, draft.puzzles)
   assert.throws(() => importPack(exportArchive(adapter, draft)))
 })

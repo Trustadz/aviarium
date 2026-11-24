@@ -4,7 +4,7 @@ import type { PackDocument, ProgressionRules } from '../../game-sdk/src/packs.js
 import { nonogramBuiltInPacks } from './built-in-packs.js'
 import {
   createNonogramAttempt, gridSizeSchema, nonogramLevels, nonogramPacks, nonogramsId, nonogramSaveSchema,
-  puzzleSchema, quickNonogram, sameNonogramLevel, type NonogramEntry, type NonogramLevel, type NonogramPack,
+  puzzleSchema, quickDescriptor, quickNonogram, sameNonogramLevel, type NonogramEntry, type NonogramLevel, type NonogramPack,
   type NonogramSave,
 } from './contracts.js'
 import { nonograms } from './metadata.js'
@@ -64,6 +64,7 @@ export const nonogramsGame: GameDefinition<NonogramLevel, NonogramSave, Progress
   },
   generation: {
     version: 1,
+    quickPlay: quickDescriptor,
     options: {
       schema: z.object({ size: gridSizeSchema, difficulty: z.enum(randomDifficulties) }),
       defaults: { size: 10, difficulty: 'Medium' },

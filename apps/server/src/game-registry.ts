@@ -1,6 +1,8 @@
 import {
   validateGameRegistry, type GameDefinition, type GameRegistry, type RegisteredGame,
 } from '../../../packages/game-sdk/src/game.js'
+import { nonogramsGame } from '../../../packages/nonograms/src/game.js'
+import { sudokuGame } from '../../../packages/sudoku/src/game.js'
 
 /**
  * Build the platform's game registry from definitions. The platform modules
@@ -19,3 +21,7 @@ export function createGameRegistry(definitions: readonly GameDefinition<any, any
     challengeCapable: () => games.filter(game => Boolean(game.definition.generation)),
   }
 }
+
+/** The installed game definitions. Adding a game starts here. */
+export const builtInGameDefinitions = [sudokuGame, nonogramsGame] as const
+export const gameRegistry = createGameRegistry(builtInGameDefinitions)

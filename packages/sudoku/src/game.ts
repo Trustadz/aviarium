@@ -3,7 +3,7 @@ import { GameRuleError, gameContractVersion, type GameDefinition, type StoredLev
 import type { Difficulty } from '../../game-sdk/src/index.js'
 import { difficulties } from '../../game-sdk/src/index.js'
 import { builtInPacks } from './built-in-packs.js'
-import { difficultySchema, preferenceSchema, saveSchema, quickPlayVersion, type PublishedLevel, type SudokuSave } from './contracts.js'
+import { difficultySchema, preferenceSchema, quickPlayDescriptorSchema, saveSchema, quickPlayVersion, type PublishedLevel, type SudokuSave } from './contracts.js'
 import type { PackDocument } from '../../game-sdk/src/packs.js'
 import { gradePuzzle } from './logic.js'
 import { sudoku } from './metadata.js'
@@ -89,6 +89,7 @@ export const sudokuGame: GameDefinition<PublishedLevel, SudokuSave, PackRules, Q
   },
   generation: {
     version: quickPlayVersion,
+    quickPlay: quickPlayDescriptorSchema,
     options: {
       schema: z.object({ difficulty: difficultySchema }),
       defaults: { difficulty: 'Medium' },

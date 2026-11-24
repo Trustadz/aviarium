@@ -62,6 +62,8 @@ export interface GameGeneration<Options, Level extends GameLevel> {
   }
   /** Pure and deterministic: same (seed, options) => same content. */
   generate(seed: string, options: Options): Promise<GeneratedContent | undefined>
+  /** Optional descriptor schema for legacy Quick Play payloads. */
+  quickPlay?: z.ZodType<unknown>
   /**
    * Optional for legacy id compatibility. Without it the platform builds a
    * default generated level from the content and a stable id.
