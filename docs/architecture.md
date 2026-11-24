@@ -202,8 +202,11 @@ daily challenges. The Sudoku and Nonograms `GameDefinition` adapters, the runtim
 registry and a fake-game fixture are in place. The server compatibility map is
 built from the definitions and injected into the platform registrations. Daily
 challenges now derive their registry from the same definitions, so a new game
-with `generation` and `leaderboard` is eligible without a challenge adapter. The
-legacy `ServerGame` adapter and the web contract remain for J4/J5.
+with `generation` and `leaderboard` is eligible without a challenge adapter. Game
+modules no longer own routes: generic `/api/games/:game/quick-play` and
+`/api/games/:game/levels/:id/:revision` live in `game-routes.ts`, and the old
+Sudoku routes are quarantined. The legacy `ServerGame` adapter and the web
+contract remain for J4b/J5.
 
 ## Current scope
 
