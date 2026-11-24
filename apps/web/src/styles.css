@@ -15,7 +15,8 @@ button, a { touch-action: manipulation; }
 button { cursor: pointer; }
 button:disabled { opacity: .53; cursor: default; }
 a { color: inherit; text-decoration: none; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, .file-label:focus-within {
+button:focus-visible, a:focus-visible, input[type=checkbox]:focus-visible, input[type=file]:focus-visible,
+input[type=radio]:focus-visible, select:focus-visible, .file-label:focus-within {
   outline: 2px solid var(--accent); outline-offset: 3px;
 }
 h1, h2, h3, p { margin: 0; }
@@ -234,6 +235,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .library { margin-top: 32px; }
 .search { display: flex; align-items: center; gap: 9px; padding: 0 11px; border: 1px solid var(--border); border-radius: 11px;
   background: var(--surface); color: var(--muted); }
+.search:focus-within { border-color: color-mix(in srgb, var(--border) 50%, var(--text)); }
 .search input:not([type]) { border: 0; padding-inline: 0; width: 165px; }
 .search input::placeholder { color: var(--muted); opacity: 1; }
 .tabs { display: flex; flex-wrap: wrap; gap: 7px; margin: 16px 0; }
@@ -1068,7 +1070,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 }
 
 
-.pack-workspace :is(button, select, input, textarea, summary):focus-visible {
+.pack-workspace :is(button, select, input[type=checkbox], input[type=file], input[type=radio], summary):focus-visible {
   outline: 2px solid var(--accent-strong); outline-offset: -3px;
 }
 .pack-workspace summary { border-radius: 6px; }
@@ -1470,3 +1472,8 @@ h1 { overflow-wrap: anywhere; }
 .leaderboard-player-inner .leaderboard-avatar { grid-column: 1; grid-row: 1; align-self: center; }
 .leaderboard-player-inner .leaderboard-name { grid-column: 2; grid-row: 1; }
 .leaderboard-player-inner .leaderboard-when { grid-column: 2; grid-row: 2; }
+
+/* Text fields show focus with a darker border instead of a second ring. */
+input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:focus-visible {
+  outline: none; border-color: color-mix(in srgb, var(--border) 50%, var(--text));
+}
