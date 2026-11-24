@@ -64,6 +64,8 @@ export interface GameGeneration<Options, Level extends GameLevel> {
   generate(seed: string, options: Options): Promise<GeneratedContent | undefined>
   /** Optional descriptor schema for legacy Quick Play payloads. */
   quickPlay?: z.ZodType<unknown>
+  /** Optional platform hook: derive legacy mutation extras from a level. */
+  describe?(level: Level): Record<string, unknown> | undefined
   /**
    * Optional for legacy id compatibility. Without it the platform builds a
    * default generated level from the content and a stable id.

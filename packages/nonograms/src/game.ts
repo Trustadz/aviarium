@@ -65,6 +65,11 @@ export const nonogramsGame: GameDefinition<NonogramLevel, NonogramSave, Progress
   generation: {
     version: 1,
     quickPlay: quickDescriptor,
+    describe(level) {
+      const parsed = quickDescriptor.safeParse({ seed: level.seed, size: level.content.rows.length,
+        difficulty: level.difficulty, version: level.generatorVersion })
+      return level.source === 'Generated' && parsed.success ? { quickPlay: parsed.data } : undefined
+    },
     options: {
       schema: z.object({ size: gridSizeSchema, difficulty: z.enum(randomDifficulties) }),
       defaults: { size: 10, difficulty: 'Medium' },

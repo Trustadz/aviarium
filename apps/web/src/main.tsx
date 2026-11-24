@@ -19,7 +19,7 @@ import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import { ResultStandingsPanel } from './ResultStandingsPanel.js'
-import { createGameAttempt, gameBoardHref, hasLeaderboard, packLevels } from './game-definitions.js'
+import { createGameAttempt, gameBoardHref, gameDefinition, hasLeaderboard, packLevels } from './game-definitions.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
@@ -35,7 +35,7 @@ import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, 
   sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession, type MutationExtras, type ProfilePreferences } from './storage.js'
 import './styles.css'
 
-const mutationExtras: MutationExtras = (game, level) => findGame(game)?.mutationExtras?.(level)
+const mutationExtras: MutationExtras = (game, level) => gameDefinition(game)?.generation?.describe?.(level as never)
 const Admin = lazy(() => import('./Admin.js'))
 
 type ColorScheme = 'light' | 'dark'
@@ -214,8 +214,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const canPlay = (game: WebGame) => online || installed.includes(game.id)
   const saves = useRef<Promise<void>>(Promise.resolve())
   const refreshCatalog = useCallback(async () => {
-    const requests = games.flatMap(game => game.catalog
-      ? [{ game: game.id, promise: api<GameLevel[]>(game.catalog, undefined, accountId) }] : [])
+    const requests = games.map(game => ({ game: game.id,
+      promise: api<GameLevel[]>('/games/' + game.id + '/catalog', undefined, accountId) }))
     const results = await Promise.allSettled(requests.map(request => request.promise))
     const updated = new Map<string, GameLevel[]>()
     for (const [index, result] of results.entries()) {

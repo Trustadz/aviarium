@@ -34,6 +34,20 @@ export function registerGameRoutes(app: FastifyInstance) {
     return level
   })
 
+
+  app.get('/api/games/:game/catalog', async request => {
+    const game = gameParam.parse((request.params as { game: string }).game)
+    if (!gameRegistry.get(game)) throw new HttpError(404, 'not_found')
+    if (loginEnabled || testEnvironment) await requireUser(request)
+    const { rows } = await pool.query(`SELECT id,revision,ruleset,title,grid,difficulty,source,seed,
+        generator_version AS "generatorVersion"
+      FROM (SELECT DISTINCT ON (id) * FROM published_levels WHERE game_id=$1 ORDER BY id,revision DESC) latest
+      WHERE catalog_visible AND pack IS NULL
+        AND NOT EXISTS (SELECT 1 FROM hidden_levels h WHERE h.level_id=latest.id)
+      ORDER BY published_at,id`, [game])
+    return rows
+  })
+
   app.get('/api/games/:game/levels/:id/:revision', async request => {
     const { game, id, revision } = z.object({ game: gameParam, id: levelId,
       revision: z.coerce.number().int().positive() }).parse(request.params)

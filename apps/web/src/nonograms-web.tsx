@@ -110,13 +110,7 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
     const { board } = attempt as NonogramSave
     return t('{filled} of {total} cells marked', { filled: board.filter(Boolean).length, total: board.length })
   },
-  mutationExtras: input => {
-    const level = input as NonogramLevel | undefined
-    if (level?.source !== 'Generated') return
-    const parsed = quickDescriptor.safeParse({ seed: level.seed, size: level.content.rows.length,
-      difficulty: level.difficulty, version: level.generatorVersion })
-    return parsed.success ? { quickPlay: parsed.data } : undefined
-  },
+
   favorite: 'favoriteNonograms',
   settings: { title: 'Nonogram settings', toggles: [
     { key: 'nonogramTimer', label: 'Show timer', default: true },

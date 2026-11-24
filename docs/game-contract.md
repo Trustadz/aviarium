@@ -11,9 +11,10 @@ at runtime. Daily challenges derive `challengeGames` from
 adapters are gone. The compatibility adapter still wraps the legacy `ServerGame` shape. On the web, board identity, initial save creation and pack level materialization
 are now derived from the shared `GameDefinition` (`game-definitions.ts`), so
 `WebGame` no longer carries `leaderboards`, `createAttempt`, `history` or a
-pack-level materializer. The remaining `WebGame` surface is the
-player/studio/presentation plus pack presentation labels and Quick Play mutation
-extras; J5 continues to shrink it. The game modules no longer own routes: the old
+pack-level materializer. The remaining `WebGame` surface is the player/studio/presentation plus pack
+presentation labels. Quick Play mutation extras now come from
+`GameDefinition.generation.describe`, and the level catalog uses the generic
+`/api/games/:game/catalog`; J5 continues to shrink the presentation surface. The game modules no longer own routes: the old
 Sudoku routes are quarantined in `legacy-sudoku-routes.ts`, and generic
 `/api/games/:game/quick-play` and `/api/games/:game/levels/:id/:revision`
 endpoints use the definition.

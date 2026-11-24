@@ -90,6 +90,11 @@ export const sudokuGame: GameDefinition<PublishedLevel, SudokuSave, PackRules, Q
   generation: {
     version: quickPlayVersion,
     quickPlay: quickPlayDescriptorSchema,
+    describe(level) {
+      const parsed = quickPlayDescriptorSchema.safeParse({ seed: level.seed, difficulty: level.difficulty,
+        version: level.generatorVersion })
+      return level.source === 'Generated' && parsed.success ? { quickPlay: parsed.data } : undefined
+    },
     options: {
       schema: z.object({ difficulty: difficultySchema }),
       defaults: { difficulty: 'Medium' },

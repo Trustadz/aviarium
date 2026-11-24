@@ -1,7 +1,7 @@
 import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
 import { lazy } from 'react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
-import { defaults, quickPlayVersion, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
+import { defaults, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { api } from './api.js'
@@ -70,7 +70,7 @@ function SudokuMenuOptions({ canPlay, online, profile, params, launch, perform }
 
 export const sudokuWeb: Omit<WebGame, 'url'> = {
   ...sudoku, studioDescription: 'Design Sudoku puzzles, arrange them in packs, and test how they play.',
-  theme: 'sudoku-theme', guide: sudokuGuide, catalog: '/catalog',
+  theme: 'sudoku-theme', guide: sudokuGuide,
   Studio: lazy(() => import('./SudokuStudio.js')), Player: SudokuPlayer, packs: sudokuPackPresentation,
   menu: context => <SudokuMenuOptions {...context}/>,
   sample: levels => levels.find(level => level.id === 'first-light') ?? levels.find(level => !level.game || level.game === sudoku.id),
@@ -83,11 +83,7 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
     return t('{filled} of {total} cells filled', { filled: entries.filter(Boolean).length, total: entries.length })
   },
   share: level => <PuzzleShare level={level as PublishedLevel}/>,
-  mutationExtras: input => {
-    const level = input as PublishedLevel | undefined
-    return level?.id.startsWith('quick-') && level.seed && level.generatorVersion === quickPlayVersion
-      ? { quickPlay: { seed: level.seed, difficulty: level.difficulty, version: quickPlayVersion } } : undefined
-  },
+
   favorite: 'favorite',
   settings: { title: 'Sudoku settings', toggles: [
     { key: 'mistakes', label: 'Highlight conflicts', default: defaults.mistakes },

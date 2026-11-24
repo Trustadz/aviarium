@@ -48,13 +48,11 @@ export interface WebGame extends GameMetadata {
   Player: ComponentType<GamePlayerProps>
   menu?(context: GameMenuContext): ReactNode
   sample?(levels: readonly GameLevel[]): GameLevel | undefined
-  catalog?: string
   preview(level?: GameLevel, attempt?: GameAttempt): ReactNode
   levelTitle(t: Translate, level: GameLevel): string
   resultDetail(t: Translate, level: GameLevel | undefined, attempt: GameAttempt): string | undefined
   progress(t: Translate, attempt: GameAttempt): string | undefined
   share?(level: GameLevel): ReactNode
-  mutationExtras?(level: GameLevel | undefined): Record<string, unknown> | undefined
   favorite?: string
   settings?: { title: Message; toggles: readonly { key: string; label: Message; default: boolean }[] }
   connectMessage: Message
