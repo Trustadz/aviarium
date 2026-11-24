@@ -124,6 +124,8 @@ limit are admin settings in the database.
 
 - enable/disable;
 - games per day (1–2 with the current eligible games);
+- games in rotation (enable/disable each eligible game; the limit follows the
+  selected count);
 - reset time as 24-hour hour/minute selects;
 - read-only timezone from the environment;
 - per-game enabled generation options (Sudoku difficulties; Nonograms grid size
@@ -140,7 +142,7 @@ slot per game, one attempt, input-only reset, closed-at-reset challenge boards,
 after-game challenge standings, nav/badge, minimal admin settings, replay seed
 to the general board, the Leaderboards **General | Challenges** tabs, a
 current-day and paginated past list, all-mode after-game standings on the played
-level's board (Quick Play and packs), server-authoritative challenge times (the
+level's board with a secondary pack-leaderboard link, server-authoritative challenge times (the
 server start time is a floor and time away counts), a `Play the other challenge`
 CTA after a slot, English/Dutch, mobile and offline/error states.
 

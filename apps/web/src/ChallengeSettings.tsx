@@ -16,6 +16,7 @@ interface OptionGroup {
 interface ChallengeSettingsData {
   enabled: boolean
   gameLimit: number
+  eligibleGames: string[] | null
   resetMinute: number
   timezone: string
   timezoneSource: 'env'
@@ -34,6 +35,7 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
   const [data, setData] = useState<ChallengeSettingsData>()
   const [enabled, setEnabled] = useState(false)
   const [gameLimit, setGameLimit] = useState(1)
+  const [eligibleGames, setEligibleGames] = useState<string[] | null>(null)
   const [hour, setHour] = useState(0)
   const [minute, setMinute] = useState(0)
   const [profile, setProfile] = useState<Record<string, Record<string, string[]>>>({})
@@ -48,6 +50,7 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
       setData(value)
       setEnabled(value.enabled)
       setGameLimit(value.gameLimit)
+      setEligibleGames(value.eligibleGames)
       setHour(Math.floor(value.resetMinute / 60))
       setMinute(value.resetMinute % 60)
       setProfile(Object.fromEntries(value.registeredGames.map(game => [game.id,
@@ -59,8 +62,11 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
   }, [accountId])
 
   const games = data?.registeredGames ?? []
-  const valid = games.length > 0 && games.every(game => game.optionGroups.every(group =>
-    (profile[game.id]?.[group.key]?.length ?? 0) > 0))
+  const eligible = eligibleGames ?? games.map(game => game.id)
+  const eligibleRegistered = games.filter(game => eligible.includes(game.id))
+  const valid = eligibleRegistered.length > 0 && gameLimit <= eligibleRegistered.length &&
+    eligibleRegistered.every(game => game.optionGroups.every(group =>
+      (profile[game.id]?.[group.key]?.length ?? 0) > 0))
 
   function run(task: () => Promise<void>) {
     setBusy(true); setProblem(''); setMessage('')
@@ -73,6 +79,7 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
       const value = await api<ChallengeSettingsData>('/admin/challenges/settings', json('PATCH', {
         enabled,
         gameLimit,
+        eligibleGames,
         resetMinute: hour * 60 + minute,
         gameOptions: profile,
         expectedUpdatedAt: data.updatedAt,
@@ -89,6 +96,12 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
       setData(refreshed)
       setMessage(value.prepared ? t('Challenge prepared.') : t('The challenge could not be prepared. Try again.'))
     })
+  }
+
+  function toggleEligible(gameId: string, checked: boolean) {
+    const next = checked ? [...new Set([...eligible, gameId])] : eligible.filter(id => id !== gameId)
+    setEligibleGames(next.length === games.length ? null : next)
+    if (gameLimit > next.length) setGameLimit(Math.max(1, next.length))
   }
 
   function toggle(gameId: string, groupKey: string, choiceId: string, checked: boolean) {
@@ -112,7 +125,7 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
       <div className="form-row">
         <label>{t('Games per day')}<select value={gameLimit} disabled={busy || games.length < 2}
           onChange={event => setGameLimit(Number(event.target.value))}>
-          {Array.from({ length: Math.max(1, games.length) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+          {Array.from({ length: Math.max(1, eligibleRegistered.length) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
         </select></label>
         <label>{t('Reset time')}
           <span className="challenge-time-selects">
@@ -128,9 +141,15 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
         <label>{t('Timezone')}<input value={data.timezone} readOnly aria-readonly="true"/>
           <small className="muted">{t('Set by the server environment.')}</small></label>
       </div>
+      <fieldset className="challenge-settings-options challenge-settings-games">
+        <legend>{t('Games in rotation')}</legend>
+        {games.map(game => <label key={game.id} className="setting-row">{game.label}
+          <input type="checkbox" checked={eligible.includes(game.id)} disabled={busy}
+            onChange={event => toggleEligible(game.id, event.target.checked)}/></label>)}
+      </fieldset>
       <p className="muted challenge-settings-help">{t('The daily puzzle picks from the enabled values. Disable a value to keep it out of the rotation.')}</p>
       {!valid && <p className="muted" role="status">{t('Enable at least one option for every challenge game.')}</p>}
-      {games.map(game => <section className="challenge-settings-game" key={game.id} aria-label={game.label}>
+      {eligibleRegistered.map(game => <section className="challenge-settings-game" key={game.id} aria-label={game.label}>
         <h3>{game.label}</h3>
         {game.optionGroups.map(group => <fieldset className="challenge-settings-options" key={group.key}>
           <legend>{t(group.label as never)}</legend>
