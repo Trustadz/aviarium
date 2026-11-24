@@ -15,7 +15,7 @@ export function GameHistory({ game, sessions, levels, packs, leave, replay, canP
   const date = (session: LocalSession) => session.data.completedAt ?? session.updated
   const history = sessions.filter(item => item.data.game === game.id && item.data.completed).sort((a, b) => date(b) - date(a))
   return <section className="catalog game-history">
-    <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {game.packs ? t(game.packs.menuLabel) : game.title}</button>
+    <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t('Back')}</button>
     <h1>{t('History')}</h1>
     {!history.length && <p>{t('No completed puzzles yet.')}</p>}
     <ul className="history-list">{history.map(item => {

@@ -31,17 +31,21 @@ an origin.
   independently when a level's puzzle or effective gameplay rules change.
   Draft edits and catalog visibility can change independently of saved
   attempts. Keep the referenced level revisions available.
-- **Back follows the visible screen hierarchy.** Gameplay, Studio pack
-  editing, and Studio test play are history layers. Browser, hardware, and
-  in-app back move a game to its level selector (or game menu), a selector to
-  the game menu, a game menu to the library, test play to the pack editor,
-  the pack editor to **My packs**, and My packs to Studio or to the game menu
-  it was opened from. In-app back actions pop the current layer
-  rather than pushing a duplicate. Opening a game from a shortcut such as
-  Continue, History, or a shared puzzle lays down the missing menu and
-  level-selector layers first. A directly opened deep link is seeded with its
-  parent layers so back stays inside the app. Keep this hierarchy when adding
-  screens that sit under a game or Studio.
+- **Back retraces the navigation path; progression is explicit.** Gameplay and
+  the pack roadmap are immersive screens with no app chrome. The game menu,
+  history, guide, leaderboards, library, Studio, and account screens use the
+  app shell. On desktop the shell is a full-height sidebar with the brand,
+  destinations, account, and offline status; there is no top header. On phones
+  a non-sticky header carries the brand, account, and offline status, and a
+  fixed bottom destination bar stays visible. Browser, hardware, and in-app
+  back pop the screen the player actually visited. Opening a game from
+  Continue, History, a leaderboard, or a shared puzzle returns to that screen;
+  only a directly opened URL is seeded with its canonical parents. Back never
+  starts or resumes a level, and the completion screen's roadmap or
+  choose-another action is a separate forward action. Every exit from an
+  immersive pack screen returns to a shelled screen. Studio pack editing and
+  test play keep their existing layers. Keep this rule when adding screens
+  under a game or Studio.
 - **Game play fits the viewport.** The Sudoku and Nonograms play screens fill
   the dynamic viewport and size their boards from the space left by the header
   and controls, so the board, inputs, tools, and result actions stay visible
@@ -100,8 +104,8 @@ an origin.
   best-per-player cap. Pack cards aggregate entire packs: a player's total is
   the sum of their best active time on every level, ranked only when every
   level is present, with avatars in the pack table, mini top-three lists, and
-  each level's best row. On phones the profile sits in the upper-right header
-  so the remaining bottom destinations keep their labels. Studio is not a
+  each level's best row. On phones the profile sits in the non-sticky header so the
+  bottom destination bar keeps its labels. Studio is not a
   destination: editors reach it from the library heading or a game menu.
 - **The server owns permissions.** Pocket ID supplies identity in the normal
   login flow. PostgreSQL stores Aviarium sessions and roles. Use

@@ -176,7 +176,9 @@ try {
   await quickRow.getByRole('button', { name: 'Play this board' }).click()
   await page.locator('.play-page').waitFor()
   assert.equal(await page.locator('.play-page .board button').count(), 81)
-  await page.goBack()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.waitForURL('**/leaderboards/board/**')
+  await page.locator('.leaderboard-table').waitFor()
 
   const adminContext = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   await adminContext.addCookies([{ name: 'aviarium', value: adminToken, url: origin }])

@@ -111,6 +111,7 @@ export const dutch = {
   "Paste grid": "Raster plakken",
   "Generate puzzle": "Puzzel genereren",
   "Level details": "Leveldetails",
+  "Back": "Terug",
   "Back to editor": "Terug naar de editor",
   "Test complete": "Test voltooid",
   "Sudoku Studio": "Sudoku Studio",

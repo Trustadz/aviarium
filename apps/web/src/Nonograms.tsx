@@ -9,7 +9,7 @@ import { displayTime } from './SudokuMenu.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard }:
+export default function Nonograms({ level, pack, session, preferences, leave, finish, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard }:
 GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
@@ -91,7 +91,7 @@ GamePlayerProps & { trial?: boolean }) {
       ' · ' + t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
-    { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
+    { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: finish ?? leave },
     ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
@@ -99,7 +99,7 @@ GamePlayerProps & { trial?: boolean }) {
 
   return <>
     <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} testMode={testMode}
-      leave={exit} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
+      leave={exit} finish={finish} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
       problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard}/>
     {celebration !== undefined && <CelebrationOverlay reader={reader}
       result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
@@ -115,11 +115,12 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committed, undo, problem, trial, testMode, elapsedMs, showTimer, onMove, leaderboard }: {
+function PuzzleBoard({ puzzle, title, pack, leave, finish, reset, openSettings, committed, undo, problem, trial, testMode, elapsedMs, showTimer, onMove, leaderboard }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
   leave: () => void
+  finish?: () => void
   reset: () => void
   openSettings?: () => void
   testMode: boolean
@@ -246,7 +247,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
     aria-labelledby="nonogram-puzzle-title">
     {art && <img className="pack-play-art" src={art} alt=""/>}
     <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Game menu')}</button>
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(trial ? 'Back to editor' : 'Back')}</button>
       <div className="game-nav-tools">
         {testMode && !solved && <button className="text-button" onClick={autoSolve} title={t('Test environment')}>
           <WandSparkles size={17}/> {t('Auto solve')}
@@ -314,7 +315,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
             <strong>{displayTime(elapsedMs)}</strong>
             <span>{t(problem ? 'Save failed' : 'Saved')}</span>
           </div>}
-          <button className="primary" onClick={leave}>{t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
+          <button className="primary" onClick={finish ?? leave}>{t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
           {!trial && leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
         </section>}
         <div className="tools nonogram-tools" role="group" aria-label={t('Mark squares')}>
