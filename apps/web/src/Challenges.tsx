@@ -209,7 +209,8 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
     }, () => { if (current) setPrevious(undefined) })
     return () => { current = false }
   }, [accountId, occurrenceId, online])
-  const past = Boolean(day?.occurrence && Date.now() >= Date.parse(day.occurrence.endsAt))
+  const past = Boolean(day?.occurrence && day.serverNow &&
+    Date.parse(day.serverNow) >= Date.parse(day.occurrence.endsAt))
   const date = day?.occurrence ? formatChallengeDate(intl, day.occurrence.startsAt, day.occurrence.timezone) : ''
   const reset = day?.occurrence ? formatResetMinute(day.series?.resetMinute ?? 0) : ''
   const canPlay = day?.enabled && day.occurrence && !past

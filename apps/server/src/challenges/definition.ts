@@ -37,6 +37,7 @@ export function challengeGameFromDefinition(
       const options = generation.options.schema.parse(recipe.selection.options)
       const generated = await generation.generate(recipe.seed, options)
       if (!generated) throw new Error('challenge_generation_failed')
+      if (generation.verify) await generation.verify(generated, options as never)
       const result: ChallengeGeneratedLevel = {
         ruleset: generated.ruleset, title: 'Daily challenge', difficulty: generated.difficulty,
         grid: generated.grid ?? undefined, content: generated.content, rules: recipe.selection.rules,

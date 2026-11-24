@@ -21,6 +21,7 @@ export async function createGeneratedLevel(
   if (!generation) return
   const content = await generation.generate(seed, options as never)
   if (!content) return
+  if (generation.verify) await generation.verify(content, options as never)
   const level: GameLevel = generation.materialize
     ? await generation.materialize(seed, options as never, content)
     : {

@@ -23,8 +23,8 @@ const token1 = randomUUID()
 const token2 = randomUUID()
 const headers1 = { Cookie: 'aviarium-test=' + token1 }
 const headers2 = { Cookie: 'aviarium-test=' + token2 }
-const clock = { day: '2026-11-24T12:00:00.000Z', late: '2026-11-24T23:59:00.000Z',
-  after: '2026-11-25T00:01:00.000Z' }
+const clock = { day: '2026-11-24T12:00:00.000Z', done: '2026-11-24T12:00:10.000Z',
+  late: '2026-11-24T23:59:00.000Z', after: '2026-11-25T00:01:00.000Z' }
 
 async function request(path, { method = 'GET', body, headers = {}, expected = 200, now } = {}) {
   const response = await fetch(origin + path, {
@@ -99,7 +99,7 @@ try {
     assert.equal(start.resumed, false)
     const solution = solve(start.slot.level)
     const done = await request('/api/progress', {
-      method: 'POST', headers: headers1, now: clock.day, body: completion(start, solution, 1500, clock.day),
+      method: 'POST', headers: headers1, now: clock.done, body: completion(start, solution, 1000, clock.done),
     })
     assert.equal(done.challenge.status, 'completed')
     assert.equal(done.challenge.ranked, true)
@@ -111,7 +111,7 @@ try {
     assert.equal(board.board.kind, 'challenge')
     assert.equal(board.total, 1)
     assert.equal(board.you.rank, 1)
-    assert.ok(board.you.value >= 1500, 'the server time is a floor')
+    assert.ok(board.you.value >= 10000, 'the server time is a floor')
 
     const lateStart = await request('/api/challenges/slots/' + sudoku.id + '/start',
       { method: 'POST', headers: headers2, body: {}, now: clock.late })
@@ -132,6 +132,24 @@ try {
     const closedSudoku = closed.slots.find(slot => slot.game === 'sudoku')
     assert.equal(closedSudoku.player.status, 'completed')
     assert.equal(closedSudoku.replay.game, 'sudoku')
+    const replay = await request('/api/games/sudoku/quick-play', { method: 'POST', headers: headers1, now: clock.after,
+      body: { ...closedSudoku.replay.options, seed: closedSudoku.replay.seed, version: closedSudoku.replay.generatorVersion } })
+    assert.equal(replay.source, 'Generated')
+    assert.ok(replay.grid)
+
+    const replayContext = await chromium.launch({ executablePath: process.env.AVIARIUM_CHROMIUM }).then(async launched => {
+      const context = await launched.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 844 },
+        extraHTTPHeaders: { 'X-Aviarium-Test-Now': clock.after } })
+      await context.addCookies([{ name: 'aviarium-test', value: token1, url: origin }])
+      return { launched, context }
+    })
+    const replayPage = await replayContext.context.newPage()
+    await replayPage.goto(origin + '/challenges/' + day.occurrence.id, { waitUntil: 'networkidle' })
+    const sudokuSlot = replayPage.locator('.challenge-slot').filter({ hasText: 'Sudoku' })
+    await sudokuSlot.getByRole('button', { name: /Play this seed/ }).click()
+    await replayPage.waitForURL(/\/games\/sudoku/, { timeout: 10000 })
+    await replayContext.context.close()
+    await replayContext.launched.close()
     const next = await request('/api/challenges', { headers: headers1, now: clock.after })
     assert.notEqual(next.occurrence?.id, day.occurrence.id)
     assert.equal(next.slots.length, 2)
@@ -146,7 +164,8 @@ try {
     assert.equal(await page.locator('.challenge-slot').count(), 2)
     await page.locator('.nav-badge').first().waitFor()
     assert.equal((await page.locator('.nav-badge').first().innerText()).trim(), '1')
-    await page.screenshot({ path: '/home/tristan/projects/Aviarium/.tmp-challenges/challenges-smoke.png', fullPage: true })
+    if (process.env.AVIARIUM_SCREENSHOTS)
+      await page.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/challenges-smoke.png', fullPage: true })
   } finally {
     await db.end()
   }

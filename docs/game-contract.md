@@ -13,8 +13,10 @@ are now derived from the shared `GameDefinition` (`game-definitions.ts`), so
 `WebGame` no longer carries `leaderboards`, `createAttempt`, `history` or a
 pack-level materializer. The remaining `WebGame` surface is the player/studio/presentation plus pack
 presentation labels. Quick Play mutation extras now come from
-`GameDefinition.generation.describe`, and the level catalog uses the generic
-`/api/games/:game/catalog`; J5 continues to shrink the presentation surface. The game modules no longer own routes: the old
+`GameDefinition.generation.describe`, the level catalog uses the generic
+`/api/games/:game/catalog`, and challenge replay uses the generic Quick Play
+endpoint instead of per-game code. J5 continues to shrink the presentation
+surface. The game modules no longer own routes: the old
 Sudoku routes are quarantined in `legacy-sudoku-routes.ts`, and generic
 `/api/games/:game/quick-play` and `/api/games/:game/levels/:id/:revision`
 endpoints use the definition.
@@ -40,7 +42,8 @@ platform supplies everything around it.
   - option schema, defaults and form fields;
   - pure `generate(seed, options)`;
   - optional `materialize` for legacy generated-level ids;
-  - optional `verify`.
+  - optional `verify`;
+  - optional `describe(level)` for legacy Quick Play mutation extras.
 - `leaderboard` (optional) — result interpretation:
   - optional Quick Play boards;
   - optional board key/parse overrides;
@@ -114,6 +117,8 @@ branch. If one does, the contract is missing a hook.
   replacements. The legacy `/api/sudoku/quick-play`, `/api/sudoku/level/*` and
   `/api` pack aliases are removed. The quarantined Sudoku Studio/catalog routes
   remain in `legacy-sudoku-routes.ts` for the old level editor until J5.
-- The web platform still consumes `WebGame`; J5 shrinks it to the contract.
+- The web still consumes `WebGame` for player/studio/presentation and pack
+  presentation labels; board identity, saves, pack levels, catalog and Quick Play
+  extras are platform/definition-owned.
 - J6 turns the fixture into a package-backed proof and adds a source-scan test
   that no platform module names a game id.

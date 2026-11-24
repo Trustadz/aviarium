@@ -66,9 +66,11 @@ For the API and browser flow, use a disposable instance with
 The browser suite runs `tests/challenges-smoke.mjs` on a disposable database. It
 starts its own `TEST_ENVIRONMENT=true` server, enables a two-game series,
 claims and completes one Sudoku with a second start rejected, verifies the
-server time floor, starts a late attempt before reset and completes it after
-reset, checks that the late result is saved but not posted, then checks history,
-the replay descriptor, the next day and the nav badge.
+server time floor (completion ten seconds after the claim with a client-reported
+one second), starts a late attempt before reset and completes it after reset,
+checks that the late result is saved but not posted, checks history and launches
+the replay through the generic Quick Play endpoint, then checks the next day and
+the nav badge.
 
 `TEST_ENVIRONMENT=true` also accepts the test-only
 `X-Aviarium-Test-Now: <ISO>` header on challenge and progress requests so
