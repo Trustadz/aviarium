@@ -209,13 +209,15 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
   }, [accountId, occurrenceId, online, reload])
   useEffect(() => {
     if (!day?.occurrence) return
-    const ends = Date.parse(day.occurrence.endsAt)
+    const anchor = Date.parse(day.serverNow) + (Date.now() - fetchedAt)
+    const end = Date.parse(day.occurrence.endsAt)
+    if (anchor >= end) return
     const timer = setTimeout(() => setReload(value => value + 1),
-      Math.max(0, Math.min(ends - Date.now() + 1000, 2_147_000_000)))
+      Math.max(0, Math.min(end - anchor + 1000, 2_147_000_000)))
     const visible = () => { if (document.visibilityState === 'visible') setReload(value => value + 1) }
     document.addEventListener('visibilitychange', visible)
     return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', visible) }
-  }, [day?.occurrence?.id, day?.occurrence?.endsAt])
+  }, [day?.occurrence?.id, day?.occurrence?.endsAt, fetchedAt])
   useEffect(() => {
     if (occurrenceId || !online) { setPrevious(undefined); return }
     let current = true

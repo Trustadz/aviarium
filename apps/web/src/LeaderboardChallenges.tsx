@@ -46,6 +46,7 @@ export function LeaderboardChallenges({ accountId, online, link }: {
   const [loadingMore, setLoadingMore] = useState(false)
   const [moreProblem, setMoreProblem] = useState('')
   const [reload, setReload] = useState(0)
+  const [fetchedAt, setFetchedAt] = useState(() => Date.now())
   useEffect(() => {
     if (!online) { setDay(undefined); setHistory(undefined); return }
     let current = true
@@ -55,7 +56,7 @@ export function LeaderboardChallenges({ accountId, online, link }: {
       api<HistoryData>('/challenges/history?limit=20', undefined, accountId),
     ]).then(([today, older]) => {
       if (!current) return
-      setDay(today); setHistory(older); setLoading(false)
+      setDay(today); setFetchedAt(Date.now()); setHistory(older); setLoading(false)
     }, error => {
       if (current) { setProblem(errorMessage(error)); setLoading(false) }
     })
@@ -63,13 +64,15 @@ export function LeaderboardChallenges({ accountId, online, link }: {
   }, [accountId, online, reload])
   useEffect(() => {
     if (!day?.occurrence) return
-    const ends = Date.parse(day.occurrence.endsAt)
+    const anchor = Date.parse(day.serverNow) + (Date.now() - fetchedAt)
+    const end = Date.parse(day.occurrence.endsAt)
+    if (anchor >= end) return
     const timer = setTimeout(() => setReload(value => value + 1),
-      Math.max(0, Math.min(ends - Date.now() + 1000, 2_147_000_000)))
+      Math.max(0, Math.min(end - anchor + 1000, 2_147_000_000)))
     const visible = () => { if (document.visibilityState === 'visible') setReload(value => value + 1) }
     document.addEventListener('visibilitychange', visible)
     return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', visible) }
-  }, [day?.occurrence?.id, day?.occurrence?.endsAt])
+  }, [day?.occurrence?.id, day?.occurrence?.endsAt, fetchedAt])
   const gameTitle = (game: string) => {
     const meta = findGame(game)
     return meta ? knownMessage(t, meta.title) : game
