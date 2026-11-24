@@ -19,6 +19,7 @@ import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import { ResultStandingsPanel } from './ResultStandingsPanel.js'
+import { createGameAttempt, gameBoardHref, hasLeaderboard } from './game-definitions.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
@@ -416,7 +417,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (!existing && pack && level.pack &&
         !packProgress(pack, packCompletionEvents(completed, sessions)).playable[level.pack.stop - 1])
       throw new Error('Solve the previous stop in this pack first.')
-    const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
+    const session = existing ?? { id: randomId(), revision: 0, data: createGameAttempt(game.id, level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     if (!existing) await saveLocal(session)
@@ -500,7 +501,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : response.save
         ? { id: response.sessionId, revision: response.save.revision, data: response.save.data as GameAttempt,
             archived: response.save.archived, profile, updated: response.save.updatedAt ?? Date.now(), dirty: false, challenge }
-        : { id: response.sessionId, revision: 0, data: await game.createAttempt(level), archived: false,
+        : { id: response.sessionId, revision: 0, data: createGameAttempt(game.id, level), archived: false,
             profile, updated: Date.now(), dirty: true, challenge }
     await saveLocal(session)
     await openChallengeSession(session, level, game)
@@ -727,11 +728,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         standingsPanel={playing.challenge ? <ChallengeStandingsPanel occurrenceId={playing.challenge.occurrenceId}
           gameId={playing.challenge.game} accountId={account?.id} online={online}
           onPlayOther={game => perform(() => playOtherChallenge(game))}/>
-          : playing.game.leaderboards ? <ResultStandingsPanel game={playing.game} level={playing.level}
+          : hasLeaderboard(playing.game.id) ? <ResultStandingsPanel game={playing.game} level={playing.level}
             accountId={account?.id} online={online}/> : undefined}
         leaderboard={playing.challenge
           ? { open: () => go('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
-          : playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
+          : hasLeaderboard(playing.game.id) ? { open: () => viewLeaderboard(gameBoardHref(playing.game.id, playing.level)!) } : undefined}
         openSettings={settings ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
@@ -750,13 +751,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         board={(occurrenceId, game) => go('/challenges/' + occurrenceId + '/' + game)}
         openDay={occurrenceId => go('/challenges/' + occurrenceId)}
         openToday={() => go('/challenges')}/>
-      : openGame?.leaderboards && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
+      : openGame && hasLeaderboard(openGame.id) && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
         accountId={account?.id} online={online} link={link} back={() => go(openGame.url)}/>
-      : openGame?.leaderboards && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
+      : openGame && hasLeaderboard(openGame.id) && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
         boardKey={leaderboardBoardKey} accountId={account?.id} online={online}
         back={() => go(openGame.url + '/leaderboards')} play={level => perform(() => open(openGame, level))}
         openGame={() => go(openGame.url)}/>
-      : openGame?.leaderboards && leaderboardPack ? <LeaderboardPackView game={openGame} packId={leaderboardPack.id}
+      : openGame && hasLeaderboard(openGame.id) && leaderboardPack ? <LeaderboardPackView game={openGame} packId={leaderboardPack.id}
         revision={leaderboardPack.revision} accountId={account?.id} online={online}
         back={() => go(openGame.url + '/leaderboards')} link={link}/>
       : openGame?.guide && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
@@ -774,7 +775,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
           <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
       : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
-        leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
+        leaderboard={hasLeaderboard(openGame.id) ? { href: openGame.url + '/leaderboards',
           open: event => link(event, openGame.url + '/leaderboards') } : undefined}
         editor={canEdit ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
         history={openGame.history ? () => go(openGame.url + '/history') : undefined}

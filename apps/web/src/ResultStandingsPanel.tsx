@@ -3,6 +3,7 @@ import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { formatLeaderboardValue, type LeaderboardStanding } from '../../../packages/game-sdk/src/leaderboards.js'
 import { api, errorMessage } from './api.js'
 import { Avatar } from './Avatar.js'
+import { gameBoardHref } from './game-definitions.js'
 import type { WebGame } from './game-web.js'
 import { useT } from './i18n.js'
 
@@ -23,7 +24,7 @@ export function ResultStandingsPanel({ game, level, accountId, online }: {
   const [data, setData] = useState<BoardDetail>()
   const [problem, setProblem] = useState('')
   const [attempts, setAttempts] = useState(0)
-  const href = game.leaderboards?.boardHref(level)
+  const href = gameBoardHref(game.id, level)
   const key = href?.split('/board/')[1]
   useEffect(() => {
     if (!online || !key) return

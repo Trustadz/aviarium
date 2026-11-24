@@ -54,11 +54,9 @@ export interface WebGame extends GameMetadata {
   resultDetail(t: Translate, level: GameLevel | undefined, attempt: GameAttempt): string | undefined
   progress(t: Translate, attempt: GameAttempt): string | undefined
   share?(level: GameLevel): ReactNode
-  createAttempt(level: GameLevel, pack?: PackRevision): Promise<GameAttempt>
   mutationExtras?(level: GameLevel | undefined): Record<string, unknown> | undefined
   favorite?: string
   settings?: { title: Message; toggles: readonly { key: string; label: Message; default: boolean }[] }
   connectMessage: Message
   history: boolean
-  leaderboards?: { boardHref(level: GameLevel): string }
 }

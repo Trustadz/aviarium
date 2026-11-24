@@ -11,6 +11,7 @@ import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboa
 import { api, errorMessage } from './api.js'
 import { Avatar } from './Avatar.js'
 import { LeaderboardChallenges } from './LeaderboardChallenges.js'
+import { hasLeaderboard } from './game-definitions.js'
 import type { WebGame } from './game-web.js'
 import { knownMessage, useT, type Translate } from './i18n.js'
 import type { Message } from './messages.js'
@@ -178,7 +179,7 @@ export function LeaderboardCatalog({ games, sessions, accountId, online, link }:
       error => { if (current) { setProblem(errorMessage(error)); setLoading(false) } })
     return () => { current = false }
   }, [accountId, online])
-  const participating = games.filter(game => game.leaderboards)
+  const participating = games.filter(game => hasLeaderboard(game.id))
   const recent = new Set(sessions.map(session => session.data.game))
   const term = query.trim().toLowerCase()
   const ordered = [...participating].sort((a, b) =>

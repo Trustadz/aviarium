@@ -4,7 +4,6 @@ import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, quickPlayVersion, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
-import { sudokuBoardKey } from '../../../packages/sudoku/src/leaderboards.js'
 import { api } from './api.js'
 import type { GuideSection } from './GameGuide.js'
 import type { GamePlayerProps, WebGame } from './game-web.js'
@@ -84,10 +83,6 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
     return t('{filled} of {total} cells filled', { filled: entries.filter(Boolean).length, total: entries.length })
   },
   share: level => <PuzzleShare level={level as PublishedLevel}/>,
-  async createAttempt(level, pack) {
-    const { createSave } = await import('./Player.js')
-    return createSave(level as PublishedLevel, pack as PublishedPack | undefined)
-  },
   mutationExtras: input => {
     const level = input as PublishedLevel | undefined
     return level?.id.startsWith('quick-') && level.seed && level.generatorVersion === quickPlayVersion
@@ -103,5 +98,4 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
   ] },
   connectMessage: 'Connect to install Sudoku on this device.',
   history: true,
-  leaderboards: { boardHref: level => '/games/sudoku/leaderboards/board/' + encodeURIComponent(sudokuBoardKey(level).key) },
 }
