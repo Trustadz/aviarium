@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { PoolClient } from 'pg'
 import { GameRuleError, type GameDefinition, type GameResult, type StoredLevel } from '../../../packages/game-sdk/src/game.js'
@@ -8,6 +7,7 @@ import type { PackDocument, PackRevision, ProgressionRules } from '../../../pack
 import { challengeMutationField, mutationIdentity, mutationStatus, type AttemptMutation, type GameAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { HttpError } from './auth.js'
 import type { LevelRecord, ServerGame } from './game-runtime.js'
+import { createGeneratedLevel } from './generated-level.js'
 
 function defaultBoard(level: LevelRecord): LeaderboardBoardKey {
   return { key: 'level:' + level.id + ':' + level.revision, kind: 'level', meta: {},
@@ -23,10 +23,6 @@ function defaultParseBoard(key: string): LeaderboardBoardKey | undefined {
   const levelRevision = Number(rest.slice(separator + 1))
   if (!/^[a-z0-9:-]{1,64}$/.test(levelId) || !Number.isInteger(levelRevision) || levelRevision < 1) return undefined
   return { key, kind: 'level', meta: {}, levelId, levelRevision }
-}
-
-function generatedId(definition: GameDefinition, seed: string) {
-  return ('generated-' + definition.id + '-' + createHash('sha256').update(seed).digest('hex').slice(0, 12)).slice(0, 64)
 }
 
 /**
@@ -98,27 +94,9 @@ export function serverGameFromDefinition(
       const { seed, version: _version, ...optionInput } = descriptor
       if (typeof seed !== 'string') return
       const options = generation.options.schema.parse(optionInput)
-      const content = await generation.generate(seed, options)
-      if (!content) return
-      const level: GameLevel = generation.materialize
-        ? await generation.materialize(seed, options, content)
-        : {
-            id: generatedId(definition, seed), revision: 1, ruleset: content.ruleset, title: content.title,
-            source: 'Generated', seed, generatorVersion: content.generatorVersion,
-            ...(content.grid ? { grid: content.grid } : {}),
-            ...(content.content !== undefined ? { content: content.content } : {}),
-            ...(content.difficulty ? { difficulty: content.difficulty } : {}),
-          } as GameLevel
-      if (level.id !== mutation.data.level) return
-      await db.query(`INSERT INTO published_levels(id,revision,ruleset,title,grid,difficulty,source,seed,
-          generator_version,validation,catalog_visible,game_id,content)
-        VALUES($1,$2,$3,$4,$5,$6,'Generated',$7,$8,'unique',false,$9,$10)
-        ON CONFLICT (id,revision) DO NOTHING`,
-      [level.id, level.revision, level.ruleset, level.title,
-        (level as StoredLevel).grid ?? null, (level as StoredLevel).difficulty ?? null,
-        (level as StoredLevel).seed ?? seed, (level as StoredLevel).generatorVersion ?? content.generatorVersion,
-        definition.id, (level as StoredLevel).content === undefined ? null : JSON.stringify((level as StoredLevel).content)])
-      return level as LevelRecord
+      const level = await createGeneratedLevel(db, definition, seed, options)
+      if (!level || level.id !== mutation.data.level) return
+      return level
     },
     validateAttempt(input, level, rules) {
       try {

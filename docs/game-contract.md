@@ -9,7 +9,10 @@ game map. The definitions drive packs, saves, leaderboards and generated levels
 at runtime. Daily challenges derive `challengeGames` from
 `GameRegistry.challengeCapable()`; the separate Sudoku/Nonograms challenge
 adapters are gone. The compatibility adapter still wraps the legacy `ServerGame`
-shape, and the web still consumes `WebGame`; J4/J5 remove those interfaces.
+shape, and the web still consumes `WebGame`; J4/J5 remove those interfaces. The
+game modules no longer own routes: the old Sudoku routes are quarantined in
+`legacy-sudoku-routes.ts`, and generic `/api/games/:game/quick-play` and
+`/api/games/:game/levels/:id/:revision` endpoints use the definition.
 
 The target is simple: a new game supplies **gameplay and level creation**. The
 platform supplies everything around it.

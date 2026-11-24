@@ -65,5 +65,4 @@ export const nonogramsServer: ServerGame = {
         save.completed !== matchesClues(puzzle, save.board))
       throw new HttpError(422, 'saved_solution_invalid')
   },
-  routes() {},
 }

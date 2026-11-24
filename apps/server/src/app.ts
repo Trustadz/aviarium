@@ -12,6 +12,7 @@ import { enabledLocales, listenHost, origin, pool } from './config.js'
 import { registerNews } from './news.js'
 import { runNewsTranslations } from './news-translation.js'
 import { createServerGames } from './games.js'
+import { registerGameRoutes } from './game-routes.js'
 import { registerLeaderboards } from './leaderboards.js'
 import { registerPacks } from './packs.js'
 import { registerProgress } from './progress.js'
@@ -59,8 +60,9 @@ export async function makeApp() {
   })
   registerAuth(app)
   registerNews(app)
+  registerGameRoutes(app)
   for (const game of serverGames.values()) {
-    game.routes(app)
+    game.routes?.(app)
     registerPacks(app, game, '/api/games/' + game.id)
     if (game.id === 'sudoku') registerPacks(app, game, '/api')
   }

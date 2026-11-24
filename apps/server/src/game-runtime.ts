@@ -33,7 +33,7 @@ export interface ServerGame {
   packs: GamePacks
   leaderboards?: GameLeaderboards
   preferences?: z.ZodObject
-  routes(app: FastifyInstance): void
+  routes?(app: FastifyInstance): void
   readMutation(input: unknown): AttemptMutation
   resolveGeneratedLevel?(db: PoolClient, mutation: AttemptMutation): Promise<LevelRecord | undefined>
   validateAttempt(attempt: GameAttempt, level: LevelRecord, rules?: ProgressionRules): void
