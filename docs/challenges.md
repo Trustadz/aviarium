@@ -95,7 +95,7 @@ Write requests still require the configured origin. API responses are
 | `GET /api/challenges` | Today's hub: occurrence, slots (exact level, options, player status, top 3/you), open count. |
 | `GET /api/challenges/:occurrenceId` | Day detail for the current or a past occurrence: slots, final standings, replay descriptors. Future occurrences 404. |
 | `GET /api/challenges/:occurrenceId/slots/:gameId/board?limit=20` | Dedicated challenge board. Returns `board`, `slot`, `top`, `you`, `total`, `serverNow`. No seed/All records/Play-this-board. |
-| `GET /api/challenges/history?before=&limit=20` | Past occurrences, newest first; final top 3, viewer status, replay descriptors. Used by the "Yesterday" link and future history UI. |
+| `GET /api/challenges/history?before=&limit=20` | Past occurrences, newest first; final top 3, viewer status, replay descriptors. Used by the "Yesterday" link, the Leaderboards **Challenges** tab and the past list. |
 | `POST /api/challenges/slots/:slotId/start` | Claim/resume while open. Returns `attemptId`, `sessionId`, `startedAt`, `resumed`, occurrence, slot level/options/rules and (on resume) the server save. Errors: `challenge_closed`, `challenge_disabled`, `challenge_already_completed`, `challenge_slot_unavailable`, `challenge_game_unsupported`. |
 | `POST /api/progress` | Existing save sync plus optional `challenge: { attemptId }`. Verifies the attempt, writes one challenge result, and returns `challenge: { attemptId, status, ranked, invalid? }`. A general mutation for a `source='Challenge'` level is rejected with `challenge_required`. |
 | `GET /api/challenges/games` | Registered challenge-capable games and their option groups. Used by admin/discovery; not required by the player UI. |
@@ -138,21 +138,25 @@ enabled options; an admin cannot pin or author a daily puzzle.
 Shipped in this slice: Sudoku and Nonograms daily challenges, X 1–2 with one
 slot per game, one attempt, input-only reset, closed-at-reset challenge boards,
 after-game challenge standings, nav/badge, minimal admin settings, replay seed
-to the general board, English/Dutch, mobile and offline/error states.
+to the general board, the Leaderboards **General | Challenges** tabs, a
+current-day and paginated past list, English/Dutch, mobile and offline/error
+states.
 
-Deferred: a full Past list/top-level Challenges tab; all-mode after-game
-standings (general/pack); pack-rule variants (hints/Auto notes/lives/timer/
-diagonal); admin recovery UI; per-game custom challenge profiles.
+Deferred: all-mode after-game standings (general/pack); pack-rule variants
+(hints/Auto notes/lives/timer/diagonal); admin recovery UI; per-game custom
+challenge profiles; first-class replay context; authoritative wall-clock
+timing.
 
 ## Verification
 
 - Unit: timezone/DST matrix; navigation trails; save reset helpers.
-- Server: two accounts see the same level; concurrent start returns one attempt;
-  a second start after completion is rejected; late completion is saved but not
-  posted; duplicate sync is idempotent; the challenge level is rejected by a
-  normal progress mutation; challenge rows do not affect general cooldowns,
-  player summaries or the busiest board.
-- Browser: nav/badge, today/day/closed/replay, start/resume, input-only reset,
+- Manual API checks: two accounts see the same level; concurrent start returns
+  one attempt; a second start after completion is rejected; late completion is
+  saved but not posted; duplicate sync is idempotent; the challenge level is
+  rejected by a normal progress mutation; challenge rows do not affect general
+  cooldowns, player summaries or the busiest board. A repeatable automated
+  lifecycle test is still on the J6 list.
+- Manual browser: nav/badge, today/day/closed/replay, start/resume, input-only reset,
   challenge board, after-game panel, admin settings, en/nl, 360/393/200%,
   offline/error states.
 - Existing suites: `npm run typecheck`, `npm test`, `npm run build`,

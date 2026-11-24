@@ -1654,3 +1654,31 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
   .admin-challenges .form-row { grid-template-columns: 1fr; }
   .challenge-time-selects { flex-wrap: wrap; }
 }
+
+
+.leaderboard-tabs { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 18px;
+  padding-bottom: 2px; scrollbar-width: thin; }
+.leaderboard-tabs button { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface);
+  color: var(--muted); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 650; cursor: pointer; }
+.leaderboard-tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.leaderboard-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.leaderboard-challenges { display: grid; gap: 18px; }
+.leaderboard-challenge-today { padding: 16px; }
+.leaderboard-challenge-games { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.leaderboard-challenge-game { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px; color: inherit; text-decoration: none;
+  background: var(--surface); }
+.leaderboard-challenge-game:hover { border-color: var(--accent); }
+.leaderboard-challenge-game-title { font-weight: 700; }
+.leaderboard-challenge-rank { margin-left: auto; color: var(--muted); font-size: .82rem; }
+.leaderboard-challenge-days { display: grid; gap: 8px; }
+.leaderboard-challenge-day { display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  color: inherit; text-decoration: none; }
+.leaderboard-challenge-day:hover { border-color: var(--accent); }
+.leaderboard-challenge-date { font-weight: 700; min-width: 7.5em; }
+.leaderboard-challenge-games-list { flex: 1; color: var(--muted); font-size: .88rem; }
+.leaderboard-challenge-day svg { color: var(--muted); flex: 0 0 auto; }
+@media (max-width: 600px) {
+  .leaderboard-challenge-date { min-width: 0; }
+  .leaderboard-challenge-day { flex-wrap: wrap; }
+}
