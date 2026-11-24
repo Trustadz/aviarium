@@ -18,7 +18,8 @@
     "test:smoke": "node tests/smoke.mjs",
     "test:oidc": "node tests/oidc-smoke.mjs",
     "test:localization": "node tests/localization-smoke.mjs",
-    "test:browser": "node tests/browser-suite.mjs"
+    "test:browser": "node tests/browser-suite.mjs",
+    "seed:leaderboards": "node scripts/seed-leaderboards.mjs"
   },
   "engines": {
     "node": ">=24"

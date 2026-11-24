@@ -21,6 +21,7 @@ export interface GamePlayerProps {
   leave: () => void
   reset: () => void
   openSettings?: () => void
+  leaderboard?: { open: () => void }
 }
 
 export interface GameMenuContext {
@@ -55,4 +56,5 @@ export interface WebGame extends GameMetadata {
   settings?: { title: Message; toggles: readonly { key: string; label: Message; default: boolean }[] }
   connectMessage: Message
   history: boolean
+  leaderboards?: { boardHref(level: GameLevel): string }
 }

@@ -170,15 +170,15 @@ export function LibraryHero({ catalog, packs, reader, open }: {
     settleTrack(snapBackTransition, 'ease-out')
   }
 
-  function renderSlide(position: number, leaving = false) {
+  function renderSlide(position: number, active: boolean, leaving = false) {
     const slide = slides[position]
     const game = findGame(slide.game)!
     const cover = slide.game === 'nonograms' && cockatooCover
 
-    return <div key={slide.game} className={'hero-slide hero-' + slide.game} inert={leaving}
-      aria-hidden={leaving || undefined} data-leaving={leaving || undefined}
+    return <div key={slide.game} className={'hero-slide hero-' + slide.game} inert={!active}
+      aria-hidden={!active || undefined} data-active={active || undefined} data-leaving={leaving || undefined}
       onAnimationEnd={event => {
-        if (!leaving && event.target === event.currentTarget) {
+        if (active && event.target === event.currentTarget) {
           setSlide(current => current.index === position ? { ...current, outgoing: null } : current)
         }
       }}>
@@ -212,8 +212,8 @@ export function LibraryHero({ catalog, packs, reader, open }: {
     }}>
     <div className="hero-track" id="featured-game" ref={track}
       data-direction={transitioning ? (direction > 0 ? 'forward' : 'backward') : undefined}>
-      {transitioning && renderSlide(outgoing, true)}
-      {renderSlide(index)}
+      {/* Keep every slide mounted so the track is sized by the tallest slide. */}
+      {slides.map((_, position) => renderSlide(position, position === index, position === outgoing))}
     </div>
     <div className="hero-dots">
       {slides.map((item, position) => <button key={item.game} type="button" className="hero-dot"

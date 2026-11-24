@@ -16,7 +16,7 @@ export const attemptOutcome = {
 export const packRevisionField = z.number().int().positive().optional()
 
 export const attemptHeader = z.object({ game: z.string().min(1).max(64), ...attemptIdentity, ...attemptOutcome, packRevision: packRevisionField })
-export type GameAttempt = z.infer<typeof attemptHeader> & { lives?: number }
+export type GameAttempt = z.infer<typeof attemptHeader> & { lives?: number; aids?: unknown }
 
 export interface SavedAttempt<Attempt extends GameAttempt = GameAttempt> {
   id: string
@@ -33,6 +33,8 @@ export const mutationIdentity = {
 export const mutationStatus = {
   archived: z.boolean(), updatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   archiveIfUnchanged: z.literal(true).optional(),
+  /** Test deployments only: backdate the leaderboard posting time for seeded data. */
+  seedRecordedAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 }
 export const mutationHeader = z.object({ ...mutationIdentity, data: attemptHeader, ...mutationStatus })
 export type AttemptMutation<Attempt extends GameAttempt = GameAttempt> =

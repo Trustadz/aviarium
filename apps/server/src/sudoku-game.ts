@@ -9,6 +9,9 @@ import type { PackDraftData, PackRules, PublishedPack } from '../../../packages/
 import { rulesFor } from '../../../packages/sudoku/src/rules.js'
 import { quickPlayId } from '../../../packages/sudoku/src/seed-code.js'
 import { validate } from '../../../packages/sudoku/src/solver.js'
+import {
+  parseSudokuBoard, sudokuBoardKey, sudokuLeaderboardRulesVersion, sudokuPuzzleContent, sudokuQuickBoards, sudokuSeedCode,
+} from '../../../packages/sudoku/src/leaderboards.js'
 import { HttpError, requireUser } from './auth.js'
 import { loginEnabled, pool, testEnvironment } from './config.js'
 import type { LevelRecord, ServerGame } from './game-runtime.js'
@@ -49,6 +52,22 @@ export const sudokuServer: ServerGame = {
     builtIn: builtInPacks,
   },
   readMutation: input => mutationSchema.parse(input),
+  leaderboards: {
+    quickBoards: sudokuQuickBoards,
+    boardKey: sudokuBoardKey,
+    parseBoard: parseSudokuBoard,
+    record(level, save, packTitle) {
+      const data = saveSchema.parse(save)
+      const board = sudokuBoardKey(level)
+      return {
+        boardKey: board.key, boardKind: board.kind, boardMeta: board.meta,
+        puzzleContent: sudokuPuzzleContent(level),
+        value: data.elapsedMs, unit: 'ms', lowerIsBetter: true,
+        levelTitle: level.title, packTitle, seedCode: sudokuSeedCode(level),
+        aids: data.aids, rulesVersion: sudokuLeaderboardRulesVersion,
+      }
+    },
+  },
   async resolveGeneratedLevel(db, input) {
     const mutation = mutationSchema.parse(input)
     if (mutation.quickPlay && mutation.data.levelRevision === 1 &&

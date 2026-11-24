@@ -17,7 +17,7 @@ it specifies a narrower scope or a different workflow.
 
 ## Branch, test, and review
 
-- Use a dedicated branch under `codex/` for each distinct change. Keep
+- Use a dedicated branch under `agent/` for each distinct change. Keep
   unrelated work on its own branch or in its own checkout. Preserve existing
   working files and stage only the intended paths.
 - For changes the user wants to test, run a local preview from the feature

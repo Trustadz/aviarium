@@ -27,6 +27,7 @@ export const saveSchema = z.object({
   redo: z.array(board).max(40),
   ...attemptOutcome,
   lives: z.number().int().min(0).max(9).optional(),
+  aids: z.object({ hints: z.boolean(), autoNotes: z.boolean(), mistakes: z.boolean() }).optional(),
   packRevision: packRevisionField,
 })
 export type SudokuSave = z.infer<typeof saveSchema>

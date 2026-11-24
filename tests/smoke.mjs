@@ -325,9 +325,20 @@ try {
   })
   const sudokuAtRest = await sudokuLayout()
   assert.notEqual(sudokuAtRest.boardRotation, 'none')
+  const heroGeometry = () => featured.evaluate(hero => {
+    const active = hero.querySelector('.hero-slide[data-active]')
+    const bounds = element => element.getBoundingClientRect()
+    return {
+      height: bounds(hero).height,
+      kickerTop: bounds(active.querySelector('.hero-kicker')).top,
+      actionBottom: bounds(active.querySelector('.hero-action')).bottom,
+    }
+  })
+  const geometryAtRest = await heroGeometry()
   await swipeHero(-120)
   assert.deepEqual(await sudokuLayout(), sudokuAtRest)
   await featured.getByRole('heading', { name: 'Nonograms' }).waitFor()
+  assert.deepEqual(await heroGeometry(), geometryAtRest)
   assert.equal(await featured.getByRole('button', { name: 'Show Nonograms' }).getAttribute('aria-pressed'), 'true')
   await featured.locator('.hero-cover img').evaluate(image => image.decode())
   await featured.press('ArrowLeft')
@@ -659,7 +670,7 @@ try {
       const users = await request('/api/admin/users', { headers: adminHeaders })
       const member = (await request('/api/me', { headers: playerHeaders })).user
       const person = users.find(item => item.id === member.id)
-      const role = adminPage.getByRole('combobox', { name: 'Role for ' + person.name })
+      const role = adminPage.getByRole('combobox', { name: 'Role for ' + person.name, exact: true })
       await role.selectOption('editor')
       await until(async () => {
         const result = await request('/api/me', { headers: playerHeaders })

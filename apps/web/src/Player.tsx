@@ -11,7 +11,7 @@ import { logicalHint, type LogicalStep } from '../../../packages/sudoku/src/logi
 import { effectivePackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { validate } from '../../../packages/sudoku/src/solver.js'
 import { Grid } from './Grid.js'
-import { PuzzleShare } from './SudokuMenu.js'
+import { displayTime, PuzzleShare } from './SudokuMenu.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import type { LocalSession } from './storage.js'
 
@@ -27,6 +27,7 @@ export function createSave(level: PublishedLevel, pack?: PublishedPack): SudokuS
 interface Props {
   session: LocalSession<SudokuSave>; level: PublishedLevel; preferences: Preferences; reader: boolean; pack?: PublishedPack
   persist: (data: SudokuSave) => Promise<void>; leave: () => void; reset: () => void; openSettings?: () => void; trial?: boolean
+  leaderboard?: { open: () => void }
   bestMs?: number; testMode?: boolean
 }
 type Hint = { cell?: number } & ({ stage: 1 | 2 | 3; step: LogicalStep } | { stage?: never; message: Message })
@@ -35,7 +36,7 @@ function digitUsedUp(entries: readonly number[], digit: number) {
   return entries.filter(value => value === digit).length >= 9
 }
 
-export default function Player({ session, level, preferences, reader, pack, persist, leave, reset, openSettings, trial = false, bestMs, testMode = false }: Props) {
+export default function Player({ session, level, preferences, reader, pack, persist, leave, reset, openSettings, trial = false, bestMs, testMode = false, leaderboard }: Props) {
   const t = useT()
   const givens = useMemo(() => Array.from(level.grid, Number), [level.grid])
   const packRules = pack && level.pack ? effectivePackRules(pack, level.pack.stop) : undefined
@@ -242,6 +243,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
     ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
+    ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
   return <div className={pack ? `play-page pack-play pack-${pack.data.theme}` : 'play-page'}>
@@ -270,9 +272,17 @@ export default function Player({ session, level, preferences, reader, pack, pers
       <div className="play-controls">
         {finished ? <section className="panel success">
           <h2>{gameOver ? t("Out of lives") : t("Puzzle solved")}</h2>
-          <p>{gameOver ? t("Start a fresh attempt to try this stop again.") : t(trial ? "Test complete" : "Your completion has been saved.")}</p>
+          {gameOver
+            ? <p>{t("Start a fresh attempt to try this stop again.")}</p>
+            : <div className="leaderboard-result">
+              <strong>{displayTime(data.elapsedMs)}</strong>
+              <span>{t(trial ? 'Test complete' : 'Saved')}</span>
+            </div>}
           <button className="primary" onClick={gameOver ? reset : leave}>{gameOver ? t("Retry puzzle") : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
-          {!gameOver && <PuzzleShare level={level}/>}
+          {!gameOver && <div className="button-bar">
+            {leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
+            <PuzzleShare level={level}/>
+          </div>}
         </section>
           : <><div className="number-pad" aria-label={t("Digits")}>{Array.from({ length: 9 }, (_, index) => {
             const digit = index + 1

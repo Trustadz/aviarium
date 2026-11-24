@@ -38,6 +38,29 @@ const testIssuer = 'aviarium:test'
 const cookieName = testEnvironment ? 'aviarium-test' : 'aviarium'
 const sessionCookie = secure ? '__Host-' + cookieName : cookieName
 const cookies = { path: '/', httpOnly: true, secure, sameSite: 'lax' as const }
+const testUserSeeds = [
+  { name: 'Mango', color: '#D9822B' }, { name: 'Kiwi', color: '#6E9B4A' },
+  { name: 'Pepper', color: '#B4534B' }, { name: 'Juniper', color: '#4F8A78' },
+  { name: 'Rio', color: '#3C7FB1' }, { name: 'Coco', color: '#8A5A3B' },
+  { name: 'Blue', color: '#3F6FBF' }, { name: 'Pip', color: '#C77B3A' },
+  { name: 'Ziggy', color: '#6B5AA6' }, { name: 'Olive', color: '#7E8C4A' },
+  { name: 'Sunny', color: '#D9A62E' }, { name: 'Tiki', color: '#B35A7A' },
+  { name: 'Kai', color: '#2F8F9D' }, { name: 'Nova', color: '#9A5BA6' },
+  { name: 'Remy', color: '#A65B3A' }, { name: 'Jasper', color: '#4A6B5A' },
+  { name: 'Willow', color: '#6F8A5E' }, { name: 'Indigo', color: '#4B5FA6' },
+  { name: 'Marley', color: '#8A6B3A' }, { name: 'Peaches', color: '#D98A6A' },
+  { name: 'Sage', color: '#6F9469' }, { name: 'Onyx', color: '#3A3F4A' },
+  { name: 'Coral', color: '#D96A5A' }, { name: 'Fern', color: '#4F8A5E' },
+  { name: 'Sky', color: '#5A9BD9' }, { name: 'Ruby', color: '#B83A4A' },
+  { name: 'Clover', color: '#5A9A6A' }, { name: 'Echo', color: '#7A7A8A' },
+  { name: 'Pico', color: '#C77A4A' }, { name: 'Zephyr', color: '#5A8AB8' },
+] as const
+
+function testUserAvatar(name: string, color: string) {
+  const initial = name.slice(0, 1).toUpperCase()
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="${color}"/><text x="32" y="43" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="30" font-weight="700" fill="#fff">${initial}</text></svg>`
+  return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64')
+}
 
 export async function currentUser(request: FastifyRequest, withProfile = false): Promise<SessionUser | undefined> {
   const cookie = request.cookies[sessionCookie]
@@ -50,7 +73,7 @@ export async function currentUser(request: FastifyRequest, withProfile = false):
   if (user && testEnvironment) {
     user.testRole = user.role
     if (withProfile) {
-      user.pocketAvatar = '/aviarium.svg'
+      user.pocketAvatar ??= '/aviarium.svg'
       user.avatar ??= user.pocketAvatar
     }
   }
@@ -111,8 +134,14 @@ export function registerAuth(app: FastifyInstance) {
         const expectedId = request.headers['x-aviarium-account']
         if (expectedId && current?.id !== expectedId)
           throw new HttpError(409, 'test_session_changed')
-        const user = current ?? (await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role)
-          VALUES($1,$2,'Test user',$3) RETURNING id`, [testIssuer, token(), role])).rows[0]
+        const { rows: [{ count }] } = await db.query<{ count: number }>(
+          'SELECT count(*)::int AS count FROM users WHERE issuer=$1', [testIssuer])
+        const seed = testUserSeeds[count % testUserSeeds.length]
+        const cycle = Math.floor(count / testUserSeeds.length)
+        const name = seed.name + (cycle ? ' ' + (cycle + 1) : '')
+        const avatar = testUserAvatar(seed.name, seed.color)
+        const user = current ?? (await db.query<{id: string}>(`INSERT INTO users(issuer,subject,name,role,pocket_avatar)
+          VALUES($1,$2,$3,$4,$5) RETURNING id`, [testIssuer, token(), name, role, avatar])).rows[0]
         if (current) await db.query('UPDATE users SET role=$1 WHERE id=$2', [role, user.id])
         if (current) return undefined
         const session = token()

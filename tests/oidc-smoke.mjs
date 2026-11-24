@@ -380,7 +380,7 @@ try {
   const testUser = await who()
   assert.notEqual(testUser.id, beta.id)
   assert.equal(testUser.testRole, 'user')
-  assert.equal(testUser.avatar, '/aviarium.svg')
+  assert.match(testUser.avatar, /^data:image\/svg\+xml;base64,/)
   await openSettings(page, 'Account settings')
   await page.getByLabel('Display name').fill('Preview Player')
   await page.getByRole('button', { name: 'Save profile' }).click()

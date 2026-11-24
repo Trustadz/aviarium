@@ -7,6 +7,7 @@ import type { LevelRecord } from './game-runtime.js'
 import { serverGames } from './games.js'
 import { accountRoleSchema, digest, HttpError, requireUser, userFields, withLegacyEditorGames, type User } from './auth.js'
 import { pool, transaction } from './config.js'
+import { recordLeaderboardResult } from './leaderboards.js'
 import { packHistory } from './pack-progress.js'
 
 const fields = 'id,revision,data,parent_id AS "parentId",archived,floor(extract(epoch FROM updated_at) * 1000)::double precision AS "updatedAt"'
@@ -43,17 +44,19 @@ export function registerProgress(app: FastifyInstance) {
         return receipt.result as SavedAttempt
       }
       const { rows: [published] } = await db.query<LevelRecord>(
-        `SELECT id,revision,ruleset,title,grid,content,difficulty,source,pack FROM published_levels
-          WHERE id=$1 AND revision=$2 AND game_id=$3`, [mutation.data.level, mutation.data.levelRevision, game.id])
+        `SELECT id,revision,ruleset,title,grid,content,difficulty,source,pack,seed,generator_version AS "generatorVersion"
+          FROM published_levels WHERE id=$1 AND revision=$2 AND game_id=$3`, [mutation.data.level, mutation.data.levelRevision, game.id])
       const level = published ?? await game.resolveGeneratedLevel?.(db, mutation)
       if (!level || level.ruleset !== mutation.data.ruleset) throw new HttpError(422, 'level_version_unavailable')
       let packRules: ProgressionRules | undefined
+      let activePack: PackRevision | undefined
       if (level.pack && (!level.pack.legacyStandalone || mutation.data.packRevision !== undefined)) {
         const packRevision = mutation.data.packRevision ?? level.pack.revision
         const { rows: [snapshot] } = await db.query<{ data: PackDocument }>(
           'SELECT data FROM pack_revisions WHERE pack_id=$1 AND revision=$2', [level.pack.id, packRevision])
         if (!snapshot) throw new HttpError(422, 'level_version_unavailable')
         const pack: PackRevision = { id: level.pack.id, revision: packRevision, builtIn: false, data: snapshot.data }
+        activePack = pack
         const index = packProgressPath(pack).stops.findIndex(item =>
           item.id === mutation.data.level && item.revision === mutation.data.levelRevision)
         if (index < 0) throw new HttpError(422, 'level_version_unavailable')
@@ -106,8 +109,11 @@ export function registerProgress(app: FastifyInstance) {
             ORDER BY ${continueOrder} OFFSET $2) RETURNING ${fields}`, [user.id, savedGameLimit])
         saved = expired.rows.find(item => item.id === saved.id) ?? saved
       }
-      if (mutation.data.completed) await db.query(`INSERT INTO completions(owner_id,level_id,level_revision)
-        VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, [user.id, mutation.data.level, mutation.data.levelRevision])
+      if (mutation.data.completed) {
+        await db.query(`INSERT INTO completions(owner_id,level_id,level_revision)
+          VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, [user.id, mutation.data.level, mutation.data.levelRevision])
+        await recordLeaderboardResult(db, user, game, level, mutation, saved, activePack)
+      }
       await db.query('INSERT INTO sync_receipts(owner_id,id,fingerprint,result) VALUES($1,$2,$3,$4)',
         [user.id, mutation.mutationId, fingerprint, saved])
       return saved

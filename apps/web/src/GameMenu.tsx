@@ -1,13 +1,15 @@
-import { ArrowLeft, BookOpen, History, Settings2 } from 'lucide-react'
+import { ArrowLeft, BookOpen, History, Pencil, Settings2, Trophy } from 'lucide-react'
 import type { MouseEvent, ReactNode } from 'react'
 import { useT } from './i18n.js'
 
-export function GameMenu({ title, leave, guide, history, settings, children }: {
+export function GameMenu({ title, leave, guide, history, settings, leaderboard, editor, children }: {
   title: string
   leave: () => void
   guide?: { href: string; open: (event: MouseEvent<HTMLAnchorElement>) => void }
   history?: () => void
   settings?: { label: string; open: () => void }
+  leaderboard?: { href: string; open: (event: MouseEvent<HTMLAnchorElement>) => void }
+  editor?: { href: string; open: (event: MouseEvent<HTMLAnchorElement>) => void }
   children: ReactNode
 }) {
   const t = useT()
@@ -18,7 +20,12 @@ export function GameMenu({ title, leave, guide, history, settings, children }: {
           <ArrowLeft size={17}/> {t('Library')}
         </button>
         <div className="game-nav-tools">
-          {history && <button className="text-button" onClick={history}><History size={17}/> {t('History')}</button>}
+          {leaderboard && <a className="icon-button" href={leaderboard.href} onClick={leaderboard.open}
+            aria-label={t('Leaderboard')} title={t('Leaderboard')}><Trophy size={18}/></a>}
+          {history && <button className="icon-button" aria-label={t('History')} title={t('History')}
+            onClick={history}><History size={18}/></button>}
+          {editor && <a className="icon-button" href={editor.href} onClick={editor.open}
+            aria-label={t('Editor')} title={t('Editor')}><Pencil size={18}/></a>}
           {settings && <button className="icon-button" aria-label={settings.label} title={settings.label}
             onClick={settings.open}><Settings2 size={18}/></button>}
         </div>
