@@ -66,7 +66,7 @@ export interface GameGeneration<Options, Level extends GameLevel> {
    * Optional for legacy id compatibility. Without it the platform builds a
    * default generated level from the content and a stable id.
    */
-  materialize?(seed: string, options: Options, content: GeneratedContent): Level
+  materialize?(seed: string, options: Options, content: GeneratedContent): Level | Promise<Level>
   /** Optional pre-persist check (unique solution, grade, solvability). */
   verify?(content: GeneratedContent, options: Options): Promise<void>
 }
@@ -169,7 +169,7 @@ export class GameRuleError extends Error {
 }
 
 export interface RegisteredGame {
-  definition: GameDefinition
+  definition: GameDefinition<any, any, any, any>
 }
 
 export interface GameRegistry {

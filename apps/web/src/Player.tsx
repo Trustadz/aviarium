@@ -6,9 +6,11 @@ import { knownMessage, useT } from './i18n.js'
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { ArrowLeft, Eraser, Heart, Lightbulb, Pause, Pencil, Play, Redo2, RotateCcw, Settings2, Timer, Undo2, WandSparkles } from 'lucide-react'
 import type { Preferences, SudokuSave } from '../../../packages/sudoku/src/contracts.js'
-import { bit, candidateMasks, column, conflicts, row, rules, rulesFor, type Board } from '../../../packages/sudoku/src/rules.js'
+import { bit, candidateMasks, column, conflicts, row, rulesFor, type Board } from '../../../packages/sudoku/src/rules.js'
 import { logicalHint, type LogicalStep } from '../../../packages/sudoku/src/logic.js'
 import { effectivePackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { createSave } from '../../../packages/sudoku/src/save.js'
+export { createSave } from '../../../packages/sudoku/src/save.js'
 import { validate } from '../../../packages/sudoku/src/solver.js'
 import { Grid } from './Grid.js'
 import { displayTime, PuzzleShare } from './SudokuMenu.js'
@@ -17,12 +19,6 @@ import type { LocalSession } from './storage.js'
 
 export { createQuickPlayLevel } from './quick-play.js'
 
-export function createSave(level: PublishedLevel, pack?: PublishedPack): SudokuSave {
-  return { game: 'sudoku', level: level.id, levelRevision: level.revision, ruleset: level.ruleset === 2 ? 2 : 1, format: 1,
-    board: rules.create(Array.from(level.grid, Number)), undo: [], redo: [], elapsedMs: 0, completed: false,
-    packRevision: pack?.revision,
-    lives: pack && level.pack ? effectivePackRules(pack, level.pack.stop).lives ?? undefined : undefined }
-}
 
 interface Props {
   session: LocalSession<SudokuSave>; level: PublishedLevel; preferences: Preferences; reader: boolean; pack?: PublishedPack
