@@ -5,9 +5,6 @@ import { type Translate } from './i18n.js'
 import type { Message } from './messages.js'
 
 const builtInTitles: Readonly<Record<string, Message>> = {
-  'first-light': 'First Light',
-  'quiet-current': 'Quiet Current',
-  afterglow: 'Afterglow',
   'pack:budgies:1': 'Garden Perch',
   'pack:budgies:2': 'Eucalyptus Grove',
   'pack:budgies:3': 'Flight at Dusk',

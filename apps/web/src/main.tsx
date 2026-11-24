@@ -166,19 +166,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const t = useT()
   const accountId = account?.id
   const profile = accountId ?? localProfile
-  const catalogKey = 'aviarium:catalog:' + profile
   const packIndexKey = 'aviarium:pack-index:' + profile
   const [path, setPath] = useState(location.pathname.replace(/\/$/, '') || '/')
-  const [catalog, setCatalog] = useState<GameLevel[]>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(catalogKey) ?? 'null')
-      return Array.isArray(saved) ? saved : []
-    } catch { return [] }
-  })
   const [sessions, setSessions] = useState<LocalSession[]>([])
   const [savedLevels, setSavedLevels] = useState<ReadonlyMap<string, GameLevel>>(new Map())
   const [packs, setPacks] = useState<PackRevision[]>([])
-  const latestCatalog = useRef(catalog)
   const latestPacks = useRef(packs)
   const [packStatuses, setPackStatuses] = useState<Record<string, PackLoadStatus>>({})
   const [packRetry, setPackRetry] = useState(0)
@@ -204,26 +196,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const { installed, remove, recordActivity } = useGameDownloads(studioGame?.id ?? openGame?.id, online)
   const canPlay = (game: WebGame) => online || installed.includes(game.id)
   const saves = useRef<Promise<void>>(Promise.resolve())
-  const refreshCatalog = useCallback(async () => {
-    const requests = games.flatMap(game => game.catalog
-      ? [{ game: game.id, promise: api<GameLevel[]>(game.catalog, undefined, accountId) }] : [])
-    const results = await Promise.allSettled(requests.map(request => request.promise))
-    const updated = new Map<string, GameLevel[]>()
-    for (const [index, result] of results.entries()) {
-      const game = requests[index].game
-      if (result.status === 'fulfilled') updated.set(game, result.value.map(level => ({ ...level, game })))
-      else if (result.reason instanceof ApiError && [401, 409].includes(result.reason.status)) void refreshSession()
-    }
-    if (!updated.size) return
-    const levels = [
-      ...latestCatalog.current.filter(level => !updated.has(level.game ?? 'sudoku')),
-      ...[...updated.values()].flat(),
-    ]
-    latestCatalog.current = levels
-    setCatalog(levels)
-    try { localStorage.setItem(catalogKey, JSON.stringify(levels)) } catch { /* The current catalog stays available. */ }
-    await cacheLevels(levels).catch(() => undefined)
-  }, [accountId, catalogKey, refreshSession])
   const refreshPacks = useCallback(async (signal?: AbortSignal) => {
     if (online) setPackStatuses(Object.fromEntries(packGames.map(game => [game.id, 'loading'])))
     const results = online ? await Promise.allSettled(packGames.map(game =>
@@ -306,7 +278,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       window.removeEventListener('keydown', closeOnEscape)
     }
   }, [])
-  useEffect(() => { if (online) void refreshCatalog() }, [refreshCatalog, online])
   useEffect(() => {
     const controller = new AbortController()
     void refreshPacks(controller.signal)
@@ -574,13 +545,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       <Suspense fallback={<p role="status">{t("Loading…")}</p>}>
       {inLibrary || inStudioCatalog ? <>
         {inLibrary && continueRow()}
-        {inLibrary && <LibraryHero catalog={catalog} packs={packs} reader={reader} open={game => go(game.url)}/>}
+        {inLibrary && <LibraryHero packs={packs} reader={reader} open={game => go(game.url)}/>}
         <GameCatalog studio={inStudioCatalog}
           action={inLibrary && canEdit && <a className="secondary studio-door" href="/studio"
             onClick={event => link(event, '/studio')}><Pencil size={16} aria-hidden="true"/> {t('Studio')}</a>}
           games={games.filter(game => !reader || game.eReader).map(game => ({
             ...game, description: t(inStudioCatalog ? game.studioDescription ?? game.description : game.description), href: catalogPage(game),
-            artClass: game.theme, art: game.preview(game.sample?.(catalog)),
+            artClass: game.theme, art: game.preview(game.sample?.(packs)),
             favorite: Boolean(game.favorite && prefs[game.favorite]),
             toggleFavorite: game.favorite ? () => changePrefs({ [game.favorite!]: !prefs[game.favorite!] }) : undefined,
             removeDownload: manageInstalls && installed.includes(game.id) ? () => perform(() => remove(game.id)) : undefined,
@@ -653,7 +624,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : studioGame && canEdit ? <section className="panel"><h1>{t('Access required')}</h1>
         <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio')}</a></section>
       : inAdmin && online && account?.role === 'admin' ? <>
-        <Admin key={account.id} account={account} openPackStudio={game => go('/studio/' + game + '/admin')} onCatalogChange={() => { void refreshCatalog() }}/>
+        <Admin key={account.id} account={account} openPackStudio={game => go('/studio/' + game + '/admin')}/>
       </>
       : <section className="panel"><h1>{t("Access required")}</h1><p>{t("Sign in with an authorized account.")}</p><button className="secondary" onClick={() => go('/')}>{t("Return to library")}</button></section>}
       </Suspense>

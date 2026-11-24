@@ -173,10 +173,8 @@ for (let index = 0; index < userCount; index++) {
 
 const first = users[0]
 if (!first) throw new Error('No mock players were created.')
-const catalog = await api('/api/catalog', { cookie: first.cookie })
 const sudokuPacks = await api('/api/games/sudoku/packs', { cookie: first.cookie })
 const nonogramPacks = await api('/api/games/nonograms/packs', { cookie: first.cookie })
-const standaloneSudoku = catalog.filter(level => !level.pack)
 const sudokuPackLevels = sudokuPacks.flatMap(pack => packLevels(pack).map(level => ({ level, pack })))
 const nonogramPackLevels = nonogramPacks.flatMap(pack => nonogramLevels(pack).map(level => ({ level, pack })))
 
@@ -193,7 +191,6 @@ async function attempt(kind, task) {
 
 for (const [index, user] of users.entries()) {
   console.info(`[${index + 1}/${users.length}] ${user.name}`)
-  for (const level of standaloneSudoku) await attempt('sudoku', () => postSudokuLevel(user, level))
   for (const { level, pack } of sudokuPackLevels) await attempt('sudoku', () => postSudokuLevel(user, level, pack))
   for (const difficulty of difficulties)
     for (let iteration = 0; iteration < perBoard; iteration++)
