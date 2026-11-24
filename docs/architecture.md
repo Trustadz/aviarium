@@ -166,6 +166,14 @@ Foreground sync runs when an authenticated player visits the library, returns to
 
 The production service worker caches the library shell and installs game assets when a game opens. Enable **Manage installs** in **Device settings** to reveal download removal on library cards. Removing a download preserves saves and their versioned puzzle references. Downloads are specific to the browser and are removed after 30 days of inactivity once the server is reachable. While offline, the browser can reopen downloaded games until its last verified session expires. Signing out clears the cached session. API and authentication traffic stay network-only.
 
+## Game contract
+
+The shared game contract is documented in [game contract](game-contract.md). A
+game supplies its level/attempt codecs, generation, pack materialization and
+result interpretation; the platform owns routing, packs, leaderboards, saves and
+daily challenges. The Sudoku `GameDefinition`, the runtime registry and a
+fake-game fixture are in place; server/web registry injection is the next slice.
+
 ## Current scope
 
 The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships Sudoku packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges are planned. Scheduling and rankings belong to Aviarium, while each game supplies challenge content, completion validation, and how to interpret its results.
