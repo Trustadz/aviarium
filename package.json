@@ -11,7 +11,7 @@
     "dev": "vite --config apps/web/vite.config.ts",
     "build": "vite build --config apps/web/vite.config.ts && tsc -p tsconfig.server.json",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test --test-isolation=none packages/*/src/*.test.ts apps/server/src/*.test.ts",
+    "test": "node --import tsx --test --test-isolation=none packages/*/src/*.test.ts apps/server/src/*.test.ts apps/web/src/*.test.ts",
     "start": "node dist/apps/server/src/app.js",
     "worker": "node dist/apps/server/src/worker.js",
     "migrate": "node dist/apps/server/src/migrate.js",

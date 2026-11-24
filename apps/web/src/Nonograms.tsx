@@ -240,7 +240,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
     aria-labelledby="nonogram-puzzle-title">
     {art && <img className="pack-play-art" src={art} alt=""/>}
     <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(trial ? 'Back to editor' : 'Game menu')}</button>
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Game menu')}</button>
       <div className="game-nav-tools">
         {testMode && !solved && <button className="text-button" onClick={autoSolve} title={t('Test environment')}>
           <WandSparkles size={17}/> {t('Auto solve')}

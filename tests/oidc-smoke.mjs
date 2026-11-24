@@ -263,7 +263,7 @@ try {
   })
   await page.getByRole('button', { name: '1', exact: true }).click()
   await cell('1').waitFor()
-  await page.getByRole('button', { name: 'Game menu' }).click()
+  await page.getByRole('button', { name: 'Back to roadmap' }).click()
   await page.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
   await page.getByRole('button', { name: 'Exit to library' }).click()
   await page.reload()
@@ -275,7 +275,7 @@ try {
   assert.deepEqual(syncRequests, [])
 
   const toLibrary = async () => {
-    await page.getByRole('button', { name: 'Game menu' }).click()
+    await page.getByRole('button', { name: 'Back to roadmap' }).click()
     await page.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
     await page.getByRole('button', { name: 'Exit to library' }).click()
   }
