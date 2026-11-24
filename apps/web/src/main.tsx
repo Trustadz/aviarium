@@ -3,8 +3,9 @@ import { liveQuery } from 'dexie'
 import type { Locale } from '../../../packages/game-sdk/src/locales.js'
 import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
+import { useIntl } from 'react-intl'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, BookOpen, LogIn, LogOut, Newspaper,
+import { ArrowLeft, BookOpen, CalendarDays, LogIn, LogOut, Newspaper,
   Pencil, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
@@ -13,11 +14,12 @@ import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
 import { AccountMenu, ProfileForm } from './AccountSettings.js'
 import { News } from './News.js'
-import { ContinueGames } from './ContinueGames.js'
+import { ContinueGames, type ContinueGame } from './ContinueGames.js'
 import { LibraryHero } from './LibraryHero.js'
 import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
+import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, formatChallengeDate, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
@@ -27,6 +29,7 @@ import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
 import { PackCards, PackRoadmap, packApi, packPath } from './GamePacks.js'
+import { packLevels } from './game-definitions.js'
 import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory, type ScreenRef } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
   sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession, type MutationExtras, type ProfilePreferences } from './storage.js'
@@ -165,6 +168,7 @@ interface LibraryProps {
 
 function Library({ account, online, activate, refreshSession, signOut, languageError, theme, preference, onThemeChange }: LibraryProps) {
   const t = useT()
+  const intl = useIntl()
   const accountId = account?.id
   const profile = accountId ?? localProfile
   const packIndexKey = 'aviarium:pack-index:' + profile
@@ -182,7 +186,12 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
   const [manageInstalls, setManageInstalls] = useState(() => localStorage.getItem('aviarium:manage-installs') === 'on')
   const [active, setActive] = useState<{ session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision
-    parent: string; from?: ScreenRef; persisted: boolean }>()
+    parent: string; from?: ScreenRef; persisted: boolean; playerPath?: string
+    replay?: { label: string; backLabel?: string }
+    challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string } }>()
+  const [challengeSummary, setChallengeSummary] = useState<{ enabled: boolean; open: number }>()
+  const [challengeDay, setChallengeDay] = useState<ChallengeDayView>()
+  const [challengeRefresh, setChallengeRefresh] = useState(0)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
   const [dialog, showDialog] = useState<'display' | 'game' | 'account'>()
@@ -193,7 +202,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [removalNotices, setRemovalNotices] = useState<LeaderboardRemovalNotice[]>([])
   const openGame = games.find(game => path === game.url || path.startsWith(game.url + '/'))
   const studioMatch = /^\/studio\/([a-z0-9-]+)(\/admin)?$/.exec(path)
-  const studioGame = path === '/studio/packs' ? findGame('sudoku') : studioMatch && findGame(studioMatch[1])
+  const studioGame = path === '/studio/packs' ? games.find(game => game.packs) : studioMatch && findGame(studioMatch[1])
   const adminPackStudio = Boolean(studioMatch?.[2])
   const { installed, remove, recordActivity } = useGameDownloads(studioGame?.id ?? openGame?.id, online)
   const canPlay = (game: WebGame) => online || installed.includes(game.id)
@@ -297,6 +306,22 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   }, [path, openGame, findPack])
   useEffect(() => { void refreshLocal().catch(error => setNotice(errorMessage(error))) }, [refreshLocal, active])
   useEffect(() => {
+    if (!accountId || !online) { setChallengeSummary(undefined); setChallengeDay(undefined); return }
+    let current = true
+    void api<{ enabled: boolean; open: number }>('/challenges/summary', undefined, accountId).then(
+      value => { if (current) setChallengeSummary(value) },
+      () => { if (current) setChallengeSummary(undefined) })
+    return () => { current = false }
+  }, [accountId, online, path, challengeRefresh])
+  useEffect(() => {
+    if (!accountId || !online || path !== '/') { setChallengeDay(undefined); return }
+    let current = true
+    void api<ChallengeDayView>('/challenges', undefined, accountId).then(
+      value => { if (current) setChallengeDay(value) },
+      () => { if (current) setChallengeDay(undefined) })
+    return () => { current = false }
+  }, [accountId, online, path, challengeRefresh])
+  useEffect(() => {
     if (!accountId || !online) return
     let current = true
     void api<{ notices: LeaderboardRemovalNotice[] }>('/leaderboards/notices', undefined, accountId).then(
@@ -363,13 +388,16 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       }
       attempt.head = await writeAttempt(attempt.head, data)
       if (attempt.head.id !== attempt.session.id) setNotice('This attempt changed in another tab or device. Your moves are saved in a separate copy.')
+      if (data.completed && attempt.challenge) setChallengeRefresh(value => value + 1)
     })
     saves.current = result
     return result
   }
   async function open(game: WebGame, level: GameLevel, existing?: LocalSession, suppliedPack?: PackRevision,
-    options: { replace?: boolean } = {}) {
+    options: { replace?: boolean; parent?: string; replay?: { label: string; backLabel?: string } } = {}) {
     if (!canPlay(game)) throw new Error(game.connectMessage)
+    if (level.source === 'Challenge' && !existing?.challenge)
+      throw new Error('Open this from Challenges.')
     const pack = suppliedPack ?? (level.pack && !level.pack.legacyStandalone ? await findPack(game, level.pack.id, level.pack.revision) : undefined)
     if (!existing && pack && level.pack &&
         !packProgress(pack, packCompletionEvents(completed, sessions)).playable[level.pack.stop - 1])
@@ -377,7 +405,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
-    const parent = pack ? packPath(pack) : game.url
+    const parent = options.parent ?? (pack ? packPath(pack) : game.url)
     // A new attempt is only written on the first real move. This keeps a
     // mis-click from becoming a resumable game that Back can land on later.
     if (options.replace) {
@@ -386,10 +414,90 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       pushLayer(game.url, { player: true, from: { path } })
     }
     const from = options.replace ? navigationLayer(history.state)?.from : { path }
-    setNotice(''); setActive({ game, session, level, head: session, pack, parent, from, persisted: Boolean(existing) })
+    setNotice(''); setActive({ game, session, level, head: session, pack, parent, from, persisted: Boolean(existing),
+      playerPath: game.url, replay: options.replay })
     setPath(game.url)
     window.scrollTo(0, 0)
   }
+
+  async function openChallengeSession(session: LocalSession, level: GameLevel, game: WebGame) {
+    const claim = session.challenge
+    const occurrenceId = claim?.occurrenceId
+    const slotId = claim?.slotId
+    const endsAt = claim?.endsAt
+    if (!claim || !occurrenceId || !slotId || !endsAt) throw new Error('This daily challenge is unavailable.')
+    const dayPath = '/challenges/' + occurrenceId
+    const playerPath = dayPath + '/' + game.id + '/play'
+    const challenge = { attemptId: claim.attemptId, status: claim.status, ranked: claim.ranked, invalid: claim.invalid,
+      slotId, occurrenceId, endsAt, game: game.id }
+    if (path !== dayPath) {
+      if (path.startsWith('/challenges/')) replaceLayer(dayPath)
+      else pushLayer(dayPath)
+    }
+    pushLayer(playerPath, { player: true, from: { path: dayPath } })
+    recordActivity(game.id)
+    setNotice('')
+    setActive({ game, session, level, head: session, parent: dayPath, playerPath, challenge,
+      from: { path: dayPath }, persisted: true })
+    setPath(playerPath)
+    setChallengeRefresh(value => value + 1)
+    window.scrollTo(0, 0)
+  }
+
+  interface ChallengeStartResponse {
+    attemptId: string
+    sessionId: string
+    startedAt: string
+    resumed: boolean
+    occurrence: { id: string; periodKey: string; endsAt: string; timezone: string }
+    save?: { data: GameAttempt; revision: number; archived: boolean; updatedAt?: number }
+    slot: {
+      id: string; game: string; position: number; level: GameLevel
+      options: Record<string, unknown>; rules: Record<string, unknown>
+    }
+  }
+
+  async function startChallenge(day: ChallengeDayView, slot: ChallengeSlotView) {
+    if (!accountId || !online) throw new Error('Connect to start a daily challenge.')
+    if (!day.occurrence) throw new Error('This daily challenge is unavailable.')
+    const response = await api<ChallengeStartResponse>('/challenges/slots/' + encodeURIComponent(slot.id) + '/start',
+      { method: 'POST' }, accountId)
+    const game = findGame(response.slot.game)
+    if (!game) throw new Error('This game is not available in this version.')
+    const level = response.slot.level
+    await cacheLevels([level])
+    const challenge = {
+      attemptId: response.attemptId,
+      slotId: slot.id,
+      occurrenceId: day.occurrence.id,
+      endsAt: response.occurrence.endsAt,
+      game: slot.game,
+    }
+    const existing = await db.sessions.get(response.sessionId)
+    const session: LocalSession = existing
+      ? { ...existing, challenge }
+      : response.save
+        ? { id: response.sessionId, revision: response.save.revision, data: response.save.data as GameAttempt,
+            archived: response.save.archived, profile, updated: response.save.updatedAt ?? Date.now(), dirty: false, challenge }
+        : { id: response.sessionId, revision: 0, data: await game.createAttempt(level), archived: false,
+            profile, updated: Date.now(), dirty: true, challenge }
+    await saveLocal(session)
+    await openChallengeSession(session, level, game)
+  }
+
+  async function playReplay(replay: ChallengeReplayView) {
+    const game = findGame(replay.game)
+    if (!game) throw new Error('This game is not available in this version.')
+    const level = await api<GameLevel>('/games/' + encodeURIComponent(replay.game) + '/quick-play',
+      json('POST', { ...replay.options, seed: replay.seed, version: replay.generatorVersion }), accountId)
+    await open(game, level, undefined, undefined, {
+      ...(replay.occurrenceId ? { parent: '/challenges/' + replay.occurrenceId } : {}),
+      replay: { label: t('Replay · {date} · daily board closed', {
+        date: replay.periodKey ? formatChallengeDate(intl, replay.periodKey + 'T12:00:00Z', replay.timeZone ?? 'UTC') : '' }),
+        backLabel: t('Back to challenge') },
+    })
+  }
+
   async function finishGame(attempt: NonNullable<typeof active>) {
     const target = attempt.pack ? packPath(attempt.pack) : attempt.game.url
     setActive(undefined)
@@ -408,9 +516,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (!game) throw new Error('This saved game is unavailable.')
     const stored = await db.levels.get(levelKey(session.data.level, session.data.levelRevision))
     if (!stored) throw new Error('This level revision is not downloaded yet.')
+    if (session.challenge) {
+      await openChallengeSession(session, stored.level, game)
+      return
+    }
     if (stored.level.pack && (!stored.level.pack.legacyStandalone || session.data.packRevision !== undefined)) {
       const pack = await findPack(game, stored.level.pack.id, session.data.packRevision ?? stored.level.pack.revision)
-      const level = game.packs?.levels(pack).find(item => item.id === session.data.level && item.revision === session.data.levelRevision)
+      const level = packLevels(game.id, pack).find(item => item.id === session.data.level && item.revision === session.data.levelRevision)
       if (level) { await open(game, level, session, pack); return }
     }
     await open(game, stored.level, session)
@@ -459,7 +571,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     })
   }
   const continueCards = sessions.flatMap(session => {
-    if (!isResumable(session)) return []
+    if (!isResumable(session) || session.challenge) return []
     const game = games.find(game => game.id === session.data.game)
     if (!game || (reader && !game.eReader)) return []
     const level = savedLevels.get(levelKey(session.data.level, session.data.levelRevision))
@@ -473,9 +585,30 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       canResume: Boolean(level) && canPlay(game),
     }]
   })
+  const dailySlot = challengeDay?.enabled
+    ? challengeDay.slots.find(slot => slot.player.status === 'started') ??
+      challengeDay.slots.find(slot => slot.player.status === 'available')
+    : undefined
+  const dailyGame = dailySlot ? games.find(game => game.id === dailySlot.game) : undefined
+  const dailyCards: ContinueGame[] = dailySlot && dailyGame && challengeDay?.occurrence ? [{
+    id: 'daily:' + dailySlot.id,
+    title: dailyGame.title,
+    details: t('Daily challenge · {date}', {
+      date: formatChallengeDate(intl, challengeDay.occurrence.startsAt, challengeDay.occurrence.timezone) }),
+    progress: dailySlot.player.status === 'started' ? t('In progress') : t('Ready'),
+    preview: <span className="continue-daily-art"><CalendarDays size={24}/></span>,
+    canResume: online,
+    removable: false,
+    daily: true,
+  }] : []
   function continueRow(gameId?: string) {
-    return <ContinueGames games={gameId ? continueCards.filter(card => card.game === gameId) : continueCards}
-      resume={id => perform(() => resume(id))} remove={id => {
+    const cards = gameId ? continueCards.filter(card => card.game === gameId) : [...dailyCards, ...continueCards]
+    return <ContinueGames games={cards}
+      resume={id => {
+        if (id.startsWith('daily:') && challengeDay && dailySlot) { perform(() => startChallenge(challengeDay, dailySlot)); return }
+        perform(() => resume(id))
+      }} remove={id => {
+        if (id.startsWith('daily:')) return
         const card = continueCards.find(card => card.id === id)
         if (!card || !confirm(t('Delete the saved game for “{title}”?', { title: card.title }))) return
         perform(async () => {
@@ -503,7 +636,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const studioLeaveLabel = studioOrigin === 'game' && studioGame ? t('{game} menu', { game: studioGame.title }) : t('Studio')
   const inAdmin = path === '/admin'
   const inAbout = path === '/about'
-  const inGame = Boolean(openGame)
+  const challengeParts = path.split('/').filter(Boolean)
+  const inChallenges = challengeParts[0] === 'challenges'
+  const challengeOccurrence = inChallenges ? challengeParts[1] : undefined
+  const challengeBoard = Boolean(inChallenges && challengeOccurrence && challengeParts.length === 3)
+  const challengeGame = challengeBoard ? challengeParts[2] : undefined
+  const playingNow = active && path === (active.playerPath ?? active.game.url) ? active : undefined
+  const inGame = Boolean(openGame) || Boolean(playingNow)
   const inGameLeaderboards = Boolean(openGame && path.startsWith(openGame.url + '/leaderboards'))
   const leaderboardTail = openGame && path.startsWith(openGame.url + '/leaderboards')
     ? path.slice((openGame.url + '/leaderboards').length) : undefined
@@ -516,7 +655,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (id && Number.isInteger(Number(revision))) leaderboardPack = { id: decodeURIComponent(id), revision: Number(revision) }
   }
   const activeRemoval = removalNotices[0]
-  const playing = active && path === active.game.url ? active : undefined
+  const playing = playingNow
   const inPackRoadmap = Boolean(openGame?.packs && path.startsWith(openGame.url + '/packs/'))
   // Gameplay and the pack roadmap are immersive pack modes. Everything else,
   // including the game menu, history, guide, and leaderboards, is inside the
@@ -525,13 +664,15 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const inShell = !immersive
   const playPack = playing?.pack
   const surface = immersive ? 'game' : inStudio ? 'studio' : 'library'
-  const navLibrary = inLibrary || Boolean(inGame && !inGameLeaderboards)
+  const navLibrary = inLibrary || Boolean(inGame && !inGameLeaderboards && !inChallenges)
+  const navChallenges = inChallenges
   const navLeaderboards = inLeaderboards || inGameLeaderboards
   const app = useRef<HTMLDivElement>(null)
   const gameSurface = useRef<HTMLElement>(null)
+  const themeGame = openGame ?? playing?.game ?? studioGame
+  const settings = (openGame ?? playing?.game)?.settings
   useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
-    [reader, surface, theme, openGame?.id, playPack?.data.theme])
-  const settings = openGame?.settings
+    [reader, surface, theme, themeGame?.id, playPack?.data.theme])
   const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
     item.data.game === playing.game.id && item.data.level === playing.level.id &&
     item.data.levelRevision === playing.level.revision && item.data.completed).map(item => item.data.elapsedMs)) : Number.POSITIVE_INFINITY
@@ -558,6 +699,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         </div>
         <nav aria-label={t("Main navigation")} className="app-destinations">
           <a href="/" aria-current={navLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
+          {account && challengeSummary?.enabled === true && <a href="/challenges" aria-current={navChallenges ? 'page' : undefined}
+            aria-label={challengeSummary?.open ? t('Challenges, {count} open', { count: challengeSummary.open }) : t('Challenges')}
+            onClick={event => link(event, '/challenges')}><span className="nav-icon"><CalendarDays size={21}/>
+              {Boolean(challengeSummary?.open) && <span className="nav-badge" aria-hidden="true">{challengeSummary!.open > 9 ? '9+' : challengeSummary!.open}</span>}</span>
+            <span>{t('Challenges')}</span></a>}
           {account && <a href="/leaderboards" aria-current={navLeaderboards ? 'page' : undefined}
             onClick={event => link(event, '/leaderboards')}><Trophy size={21}/><span>{t("Leaderboards")}</span></a>}
           <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>{t("News")}</span></a>
@@ -570,7 +716,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       </div>
     </>}
     <main ref={gameSurface} className={(immersive ? 'game-frame' : inGame ? 'main-frame game-content' : 'frame main-frame') +
-      (openGame || studioGame ? ' game-theme ' + (openGame || studioGame)?.theme : '') + (studioGame ? ' studio-game-canvas' : '') +
+      (themeGame ? ' game-theme ' + themeGame.theme : '') + (studioGame ? ' studio-game-canvas' : '') +
       (playPack ? ` pack-palette pack-${playPack.data.theme}` : '')}>
       {notice && <div className="notice" role="alert">{knownMessage(t, notice)}<button onClick={() => setNotice('')}>{t("Dismiss")}</button></div>}
       {inLibrary && networkNotice && <p role="status" className="network-notice">{t("Sync delayed.")}{" "}{knownMessage(t, networkNotice)}</p>}
@@ -592,23 +738,38 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       </>
       : inLeaderboards ? <LeaderboardCatalog games={games} sessions={sessions} accountId={account?.id} online={online} link={link}/>
       : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
-        preferences={prefs} reader={reader} bestMs={Number.isFinite(bestMs) ? bestMs : undefined} testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
-        leaderboard={playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
+        preferences={prefs} reader={reader} bestMs={playing.challenge ? undefined : Number.isFinite(bestMs) ? bestMs : undefined}
+        testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
+        challenge={playing.challenge ? { occurrenceId: playing.challenge.occurrenceId, slotId: playing.challenge.slotId,
+          game: playing.challenge.game, attemptId: playing.challenge.attemptId, endsAt: playing.challenge.endsAt } : undefined}
+        standingsPanel={playing.challenge ? <ChallengeStandingsPanel occurrenceId={playing.challenge.occurrenceId}
+          gameId={playing.challenge.game} accountId={account?.id} online={online}/> : undefined}
+        replay={playing.replay}
+        leaderboard={playing.challenge
+          ? { open: () => go('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
+          : playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
         openSettings={settings ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
           try { await refreshLocal() }
           finally { back(playing.parent) }
         })}
-        finish={() => perform(async () => {
+        finish={playing.challenge || playing.replay ? undefined : () => perform(async () => {
           await saves.current.catch(() => undefined)
           try { await refreshLocal() }
           finally { await finishGame(playing) }
         })}
-        reset={() => perform(async () => {
+        reset={playing.challenge ? () => undefined : () => perform(async () => {
           await deleteAttempt(playing.head.id)
           await open(playing.game, playing.level, undefined, playing.pack, { replace: true })
         })}/>
+      : inChallenges && challengeBoard ? <ChallengeBoard occurrenceId={challengeOccurrence!} gameId={challengeGame!}
+        accountId={account?.id} online={online} back={() => back('/challenges/' + challengeOccurrence)}/>
+      : inChallenges ? <ChallengesPage occurrenceId={challengeOccurrence} accountId={account?.id} online={online} link={link}
+        start={(day, slot) => perform(() => startChallenge(day, slot))}
+        replay={replay => perform(() => playReplay(replay))}
+        openDay={occurrenceId => go('/challenges/' + occurrenceId)}
+        openToday={() => go('/challenges')}/>
       : openGame?.leaderboards && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
         accountId={account?.id} online={online} link={link} back={() => back(openGame.url)}/>
       : openGame?.leaderboards && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
@@ -623,7 +784,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
         leave={() => back(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
       : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && packPath(viewedPack) === path
-        ? <PackRoadmap presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
+        ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
           canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))}
           leave={() => back(openGame.url)} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
@@ -643,7 +804,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         {!canPlay(openGame) && <p className="notice">{t(openGame.connectMessage)}</p>}
         {openGame.menu?.({ canPlay: canPlay(openGame), online, profile, params: new URLSearchParams(location.search),
           launch: level => open(openGame, level), perform })}
-        {openGame.packs && <PackCards presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
+        {openGame.packs && <PackCards game={openGame.id} presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
           completed={completed} status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>}
       </GameMenu>
       : inNews ? <News account={account} online={online}/>

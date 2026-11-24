@@ -8,12 +8,12 @@ import {
   type LeaderboardPackSummary, type LeaderboardPlayerResult, type LeaderboardPlayerSummary, type LeaderboardRecords,
   type LeaderboardRemovalNotice, type LeaderboardStanding, type LeaderboardSummary, type LeaderboardValueUnit,
 } from '../../../packages/game-sdk/src/leaderboards.js'
-import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
+import type { ChallengeResult } from '../../../packages/game-sdk/src/challenges.js'
+import type { PackRevision, ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
 import type { AttemptMutation, SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { digest, HttpError, requireUser, type User } from './auth.js'
 import { pool, testEnvironment, transaction } from './config.js'
 import type { LevelRecord, ServerGame } from './game-runtime.js'
-import { serverGames } from './games.js'
 
 const levelFields = `l.id,l.revision,l.ruleset,l.title,l.grid,l.difficulty,l.source,l.pack,l.content,
   l.game_id AS game,l.seed,l.generator_version AS "generatorVersion"`
@@ -41,8 +41,8 @@ interface SummaryRow {
 type Summary = Omit<LeaderboardSummary, 'board'>
 const iso = (value: Date | string) => (value instanceof Date ? value : new Date(value)).toISOString()
 
-function gameFor(id: string): ServerGame {
-  const game = serverGames.get(gameParam.parse(id))
+function gameFor(id: string, games: ReadonlyMap<string, ServerGame>): ServerGame {
+  const game = games.get(gameParam.parse(id))
   if (!game?.leaderboards) throw new HttpError(404, 'leaderboard_game_not_found')
   return game
 }
@@ -79,7 +79,7 @@ async function levelsForPairs(db: Pool | PoolClient, game: ServerGame, pairs: re
   return new Map(rows.map(level => [level.id + ':' + level.revision, level]))
 }
 
-async function boardSummaries(db: Pool | PoolClient, game: ServerGame, keys: readonly string[], viewer: string, limit: number) {
+export async function boardSummaries(db: Pool | PoolClient, game: ServerGame, keys: readonly string[], viewer: string, limit: number) {
   const unique = [...new Set(keys)]
   if (!unique.length) return new Map<string, Summary>()
   const { rows } = await db.query<SummaryRow>(`WITH best AS (
@@ -148,23 +148,26 @@ function playerResult(row: PlayerRow, rank: number, total: number): LeaderboardP
   }
 }
 
-async function playerSummary(db: Pool | PoolClient, viewer: string, gameId?: string): Promise<LeaderboardPlayerSummary> {
+async function playerSummary(db: Pool | PoolClient, viewer: string, gameId?: string,
+  games?: ReadonlyMap<string, ServerGame>): Promise<LeaderboardPlayerSummary> {
   const scope = gameId ? 'AND game_id=$2' : ''
   const params = gameId ? [viewer, gameId] : [viewer]
   const { rows: [counts] } = await db.query<{ posted: number; boards: number }>(`SELECT
       count(*)::int AS posted, count(DISTINCT game_id || ':' || board_key)::int AS boards
-    FROM leaderboard_results WHERE owner_id=$1 AND status='active' ${scope}`, params)
+    FROM leaderboard_results WHERE owner_id=$1 AND status='active' AND board_kind <> 'challenge' ${scope}`, params)
   const { rows: [latest] } = await db.query<PlayerRow>(`SELECT game_id, board_key, board_kind, board_meta,
       level_title, pack_title, seed_code, score_value, value_unit, completed_at, recorded_at
-    FROM leaderboard_results WHERE owner_id=$1 AND status='active' ${scope}
+    FROM leaderboard_results WHERE owner_id=$1 AND status='active' AND board_kind <> 'challenge' ${scope}
     ORDER BY recorded_at DESC, id DESC LIMIT 1`, params)
   if (!latest) return { ...emptyLeaderboardPlayerSummary(), posted: counts?.posted ?? 0, boards: counts?.boards ?? 0 }
-  const latestSummary = (await boardSummaries(db, gameFor(latest.game_id), [latest.board_key], viewer, 1)).get(latest.board_key)
+  const latestSummary = games
+    ? (await boardSummaries(db, gameFor(latest.game_id, games), [latest.board_key], viewer, 1)).get(latest.board_key)
+    : undefined
   const lastPosted = playerResult(latest, latestSummary?.you?.rank ?? 0, latestSummary?.total ?? 0)
   const { rows: [best] } = await db.query<RankedPlayerRow>(`WITH best AS (
       SELECT DISTINCT ON (game_id, board_key, owner_id) game_id, board_key, owner_id, board_kind, board_meta,
         level_title, pack_title, seed_code, score_value, value_unit, completed_at, recorded_at, rank_value
-      FROM leaderboard_results WHERE status='active' ${gameId ? 'AND game_id=$2' : ''}
+      FROM leaderboard_results WHERE status='active' AND board_kind <> 'challenge' ${gameId ? 'AND game_id=$2' : ''}
       ORDER BY game_id, board_key, owner_id, rank_value, completed_at, id
     ), ranked AS (
       SELECT *, rank() OVER (PARTITION BY game_id, board_key ORDER BY rank_value)::int AS rank,
@@ -253,13 +256,13 @@ async function visiblePacks(db: Pool | PoolClient, game: ServerGame) {
  * puzzle inside the cooldown is stored as `cooldown` and hidden from standings.
  */
 export async function recordLeaderboardResult(db: PoolClient, user: User, game: ServerGame, level: LevelRecord,
-  mutation: AttemptMutation, saved: SavedAttempt, pack?: PackRevision) {
+  mutation: AttemptMutation, saved: SavedAttempt, pack?: PackRevision, rules?: ProgressionRules) {
   const leaderboards = game.leaderboards
   if (!leaderboards) return
-  const record = leaderboards.record(level, mutation.data, pack?.data.title)
+  const record = leaderboards.record(level, mutation.data, pack?.data.title, rules)
   const puzzleKey = digest(game.id + '|' + record.puzzleContent)
   const recent = await db.query(`SELECT 1 FROM leaderboard_results
-    WHERE owner_id=$1 AND game_id=$2 AND puzzle_key=$3
+    WHERE owner_id=$1 AND game_id=$2 AND puzzle_key=$3 AND board_kind <> 'challenge'
       AND recorded_at > now() - make_interval(days => $4) LIMIT 1`,
   [user.id, game.id, puzzleKey, leaderboardCooldownDays])
   const now = Date.now()
@@ -271,13 +274,75 @@ export async function recordLeaderboardResult(db: PoolClient, user: User, game: 
     level_id,level_revision,pack_id,pack_revision,pack_stop,level_title,pack_title,seed_code,puzzle_key,
     score_value,value_unit,lower_is_better,aids,rules_version,completed_at,recorded_at,status)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,COALESCE($22::timestamptz,now()),$23)
-    ON CONFLICT (save_id) DO NOTHING`,
+    ON CONFLICT (save_id, board_key) DO NOTHING`,
   [saved.id, user.id, game.id, record.boardKey, record.boardKind, JSON.stringify(record.boardMeta),
     level.id, level.revision, level.pack?.id ?? null, level.pack?.revision ?? null, level.pack?.stop ?? null,
     level.title, record.packTitle ?? null, record.seedCode ?? null, puzzleKey,
     record.value, record.unit, record.lowerIsBetter,
     record.aids === undefined || record.aids === null ? null : JSON.stringify(record.aids),
     record.rulesVersion, completedAt, recordedAt, recent.rowCount ? 'cooldown' : 'active'])
+}
+
+export interface ChallengeResultContext {
+  slotId: string
+  attemptId?: string
+  occurrenceId: string
+  periodKey: string
+  timeZone: string
+  game: string
+  options: Record<string, unknown>
+  rules: Record<string, unknown>
+}
+
+/**
+ * Write the challenge result and the matching normal game result for a
+ * completed, verified attempt. The challenge row is always active on the
+ * challenge board. The normal row uses the challenge's real difficulty/size and
+ * rules, shares the same save, and is excluded from the challenge summaries.
+ */
+export async function recordChallengeResult(db: PoolClient, user: User, game: ServerGame, level: LevelRecord,
+  saved: SavedAttempt, context: ChallengeResultContext, record: ChallengeResult, now: Date) {
+  const boardKey = 'challenge:' + context.slotId
+  const puzzleKey = digest('challenge|' + game.id + '|' + context.slotId + '|' + record.puzzleContent)
+  const boardMeta = {
+    occurrenceId: context.occurrenceId,
+    periodKey: context.periodKey,
+    timeZone: context.timeZone,
+    game: context.game,
+    ...context.options,
+  }
+  await db.query(`INSERT INTO leaderboard_results(save_id,owner_id,game_id,board_key,board_kind,board_meta,
+      level_id,level_revision,pack_id,pack_revision,pack_stop,level_title,pack_title,seed_code,puzzle_key,
+      score_value,value_unit,lower_is_better,aids,rules_version,completed_at,recorded_at,status,
+      challenge_slot_id,challenge_attempt_id)
+    VALUES($1,$2,$3,$4,'challenge',$5,$6,$7,NULL,NULL,NULL,$8,NULL,NULL,$9,$10,$11,$12,$13,$14,$15,now(),'active',$16,$17)
+    ON CONFLICT (save_id, board_key) DO NOTHING`,
+  [saved.id, user.id, game.id, boardKey, JSON.stringify(boardMeta), level.id, level.revision, level.title,
+    puzzleKey, record.value, record.unit, record.lowerIsBetter,
+    record.aids === undefined || record.aids === null ? null : JSON.stringify(record.aids),
+    record.rulesVersion, now, context.slotId, context.attemptId ?? null])
+
+  const leaderboards = game.leaderboards
+  if (!leaderboards) return
+  // The challenge level behaves like a normal generated level for the game
+  // leaderboard, so the result lands on the Quick Play difficulty/size board
+  // with the challenge's actual settings rather than a hidden level board.
+  const generalRecord = leaderboards.record({ ...level, source: 'Generated' }, saved.data, undefined,
+    context.rules as ProgressionRules)
+  const general = { ...generalRecord, value: record.value, unit: record.unit,
+    lowerIsBetter: record.lowerIsBetter, aids: record.aids, rulesVersion: record.rulesVersion }
+  const generalPuzzleKey = digest(game.id + '|' + general.puzzleContent)
+  await db.query(`INSERT INTO leaderboard_results(save_id,owner_id,game_id,board_key,board_kind,board_meta,
+      level_id,level_revision,pack_id,pack_revision,pack_stop,level_title,pack_title,seed_code,puzzle_key,
+      score_value,value_unit,lower_is_better,aids,rules_version,completed_at,recorded_at,status)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now(),'active')
+    ON CONFLICT (save_id, board_key) DO NOTHING`,
+  [saved.id, user.id, game.id, general.boardKey, general.boardKind, JSON.stringify(general.boardMeta),
+    level.id, level.revision, level.pack?.id ?? null, level.pack?.revision ?? null, level.pack?.stop ?? null,
+    general.levelTitle, general.packTitle ?? null, general.seedCode ?? null, generalPuzzleKey,
+    general.value, general.unit, general.lowerIsBetter,
+    general.aids === undefined || general.aids === null ? null : JSON.stringify(general.aids),
+    general.rulesVersion, now])
 }
 
 function boardFromResult(row: { game: string; boardKey: string; boardKind: string; boardMeta: unknown;
@@ -289,7 +354,7 @@ function boardFromResult(row: { game: string; boardKey: string; boardKind: strin
   }
 }
 
-export function registerLeaderboards(app: FastifyInstance) {
+export function registerLeaderboards(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>) {
   app.get('/api/leaderboards', async request => {
     const user = await requireUser(request)
     const entries = await Promise.all([...serverGames.values()].filter(game => game.leaderboards).map(async game => {
@@ -300,14 +365,14 @@ export function registerLeaderboards(app: FastifyInstance) {
       const level = board.kind === 'level' ? await levelForBoard(pool, game, board) : undefined
       const info = boardInfo(game, board, level, level ? await packTitleFor(pool, level) : undefined)
       const summary = (await boardSummaries(pool, game, [board.key], user.id, summaryLimit)).get(board.key)
-      const player = await playerSummary(pool, user.id, game.id)
+      const player = await playerSummary(pool, user.id, game.id, serverGames)
       return { game: game.id, board: info, ...(summary ?? emptyLeaderboardSummary(info)), player }
     }))
-    return { games: entries, player: await playerSummary(pool, user.id) }
+    return { games: entries, player: await playerSummary(pool, user.id, undefined, serverGames) }
   })
 
   app.get('/api/leaderboards/games/:game', async request => {
-    const game = gameFor((request.params as { game: string }).game)
+    const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const packs = await visiblePacks(pool, game)
     const quick = game.leaderboards!.quickBoards
@@ -317,12 +382,12 @@ export function registerLeaderboards(app: FastifyInstance) {
       game: game.id,
       quick: quick.map(board => ({ board: boardInfo(game, board), ...summaryFor(board.key) })),
       packs: await Promise.all(packs.map(pack => packSummary(pool, game, pack, user.id))),
-      player: await playerSummary(pool, user.id, game.id),
+      player: await playerSummary(pool, user.id, game.id, serverGames),
     }
   })
 
   app.get('/api/leaderboards/games/:game/boards/:key', async request => {
-    const game = gameFor((request.params as { game: string }).game)
+    const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const key = (request.params as { key: string }).key
     const board = game.leaderboards!.parseBoard(key)
@@ -363,7 +428,7 @@ export function registerLeaderboards(app: FastifyInstance) {
   })
 
   app.get('/api/leaderboards/games/:game/boards/:key/records', async request => {
-    const game = gameFor((request.params as { game: string }).game)
+    const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const key = (request.params as { key: string }).key
     if (!game.leaderboards!.parseBoard(key)) throw new HttpError(404, 'leaderboard_board_not_found')
@@ -386,7 +451,7 @@ export function registerLeaderboards(app: FastifyInstance) {
   })
 
   app.get('/api/leaderboards/games/:game/packs/:id/:revision', async request => {
-    const game = gameFor((request.params as { game: string }).game)
+    const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const { id, revision } = request.params as { id: string; revision: string }
     const packs = await visiblePacks(pool, game)

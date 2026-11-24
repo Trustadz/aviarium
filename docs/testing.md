@@ -33,3 +33,59 @@ AVIARIUM_BROWSER_TEST_DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432
 The runner creates and removes separate databases for the OIDC, localization, and signed-in smoke tests. The signed-in run also executes `tests/leaderboards-smoke.mjs` with a second player fixture and the disposable database URL; it covers Sudoku and Nonograms boards, the per-exact-puzzle cooldown, tie ranks, admin removal, the once-only notice, and playing a result's exact grid. The **Verify** workflow runs the same suite on pull requests and pushes to `main`. **Publish container** calls it again when you start a manual release.
 
 The browser suite also upgrades a database containing legacy Sudoku publications, checks ordered pack expansion with ten completed stops, and covers offline Studio autosave and level rule overrides.
+
+## Daily challenges
+
+The challenge foundation has pure timezone tests in
+`apps/server/src/challenges-time.test.ts`; they cover UTC, Amsterdam, New York,
+Kolkata, Chatham and Lord Howe, including spring gaps, fall repeats and 23/25-hour
+days.
+
+For the API and browser flow, use a disposable instance with
+`TEST_ENVIRONMENT=true`, `LOGIN_ENABLED=false`, and the daily series enabled:
+
+1. Two accounts see the same Sudoku level for the day.
+2. The first account starts once; a second tab/device resumes the same
+   `sessionId`. Start after completion is rejected.
+3. Input-only reset clears the board and keeps the elapsed time and the same
+   attempt. It does not create a new save.
+4. A completion before reset posts one `challenge:<slotId>` result. The
+   after-game panel shows the top three and the viewer. The challenge board is
+   closed to new results after `ends_at`; a late completion is saved but not
+   posted.
+5. The challenge level does not appear in the catalog, Studio, general boards or
+   the normal History/Continue replay. A general progress mutation for a
+   `source='Challenge'` level is rejected.
+6. A past day shows its final board and **Play this seed**. The replay is a
+   normal generated game and posts to the general board.
+7. Admin settings enable/disable the feature, change the reset minute and
+   enabled difficulties, and **Prepare now** for today or a past `periodKey`.
+8. Check the nav badge, 360/393 px and 200% text, English/Dutch, offline and
+   terminal-sync states.
+
+The pack-content unit test uses the definition-backed Sudoku `ServerGame`
+adapter, not the deleted legacy server-game module.
+
+The unit suite runs `apps/server/src/game-fixture.test.ts`, which sends a
+package-backed third definition through the server compatibility map and the
+challenge derivation, and `apps/server/src/game-source-scan.test.ts`, which fails when
+a platform module branches on a `'sudoku'`/`'nonograms'` string literal outside
+the explicit registration/game/legacy allowlist.
+
+The browser suite also runs `tests/platform-fixture-smoke.mjs`, which starts
+`makeApp(createGameRegistry([sudokuGame, fixtureGame]))` on a disposable
+database and exercises the package-backed third game through real HTTP Quick
+Play, progress, leaderboard and challenge endpoints.
+
+The browser suite runs `tests/challenges-smoke.mjs` on a disposable database. It
+starts its own `TEST_ENVIRONMENT=true` server, enables a two-game series,
+claims and completes one Sudoku with a second start rejected, verifies the
+server time floor (completion ten seconds after the claim with a client-reported
+one second), starts a late attempt before reset and completes it after reset,
+checks that the late result is saved but not posted, checks history and launches
+the replay through the generic Quick Play endpoint, then checks the next day and
+the nav badge.
+
+`TEST_ENVIRONMENT=true` also accepts the test-only
+`X-Aviarium-Test-Now: <ISO>` header on challenge and progress requests so
+boundary/late scenarios do not wait for real time. Production ignores it.

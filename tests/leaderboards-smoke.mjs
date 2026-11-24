@@ -104,9 +104,9 @@ assert.ok(adminResults.some(result => result.playerName === 'Test Player Two' &&
 console.log('cooldown expiry passed')
 
 // Quick Play groups different seeds by difficulty; each result keeps its exact grid.
-const quickA = await request('/api/sudoku/quick-play', { method: 'POST', headers: playerHeaders,
+const quickA = await request('/api/games/sudoku/quick-play', { method: 'POST', headers: playerHeaders,
   body: { difficulty: 'Hard', seed: 'leaderboard-hard-a' } })
-const quickB = await request('/api/sudoku/quick-play', { method: 'POST', headers: player2Headers,
+const quickB = await request('/api/games/sudoku/quick-play', { method: 'POST', headers: player2Headers,
   body: { difficulty: 'Hard', seed: 'leaderboard-hard-b' } })
 await sudokuCompletion(playerHeaders, quickA, 120_000,
   { seed: 'leaderboard-hard-a', difficulty: 'Hard', version: quickPlayVersion })

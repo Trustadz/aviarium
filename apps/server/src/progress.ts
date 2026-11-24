@@ -1,21 +1,151 @@
 import type { FastifyInstance } from 'fastify'
+import type { PoolClient } from 'pg'
 import { z } from 'zod'
 import { locales } from '../../../packages/game-sdk/src/locales.js'
-import { isResumable, mutationHeader, savedGameLimit, type SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
+import { isResumable, mutationHeader, savedGameLimit, type AttemptMutation, type SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { effectivePackRules, packProgress, packProgressPath, type PackCompletion, type PackDocument, type PackRevision, type ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
-import type { LevelRecord } from './game-runtime.js'
-import { serverGames } from './games.js'
+import type { LevelRecord, ServerGame } from './game-runtime.js'
 import { accountRoleSchema, digest, HttpError, requireUser, userFields, withLegacyEditorGames, type User } from './auth.js'
 import { pool, transaction } from './config.js'
-import { recordLeaderboardResult } from './leaderboards.js'
+import { recordChallengeResult, recordLeaderboardResult } from './leaderboards.js'
+import type { ChallengeResultContext } from './leaderboards.js'
+import { requestNow } from './challenges/now.js'
+import type { OccurrenceRow, SlotRow } from './challenges/store.js'
+import type { ChallengeGameRuntime } from './challenges/types.js'
 import { packHistory } from './pack-progress.js'
 
 const fields = 'id,revision,data,parent_id AS "parentId",archived,floor(extract(epoch FROM updated_at) * 1000)::double precision AS "updatedAt"'
-const gamePreferenceFields = Object.assign({}, ...[...serverGames.values()].map(game => game.preferences?.shape ?? {})) as Record<string, z.ZodType>
-const preferencesPatch = z.object({ ...gamePreferenceFields, locale: z.enum(locales) }).partial()
+const preferenceFields = (games: ReadonlyMap<string, ServerGame>) =>
+  Object.assign({}, ...[...games.values()].map(game => game.preferences?.shape ?? {})) as Record<string, z.ZodType>
 const continueOrder = 'updated_at DESC NULLS LAST, revision DESC, id DESC'
 
-export function registerProgress(app: FastifyInstance) {
+interface ChallengeAttemptRow {
+  id: string
+  slot_id: string
+  occurrence_id: string
+  owner_id: string
+  session_id: string
+  status: 'started' | 'completed' | 'closed'
+  started_at: Date | string
+  completed_at: Date | string | null
+}
+
+interface ChallengeMutationResult extends SavedAttempt {
+  challenge: { attemptId: string; status: 'started' | 'completed' | 'closed'; ranked: boolean; invalid?: boolean }
+}
+
+async function writeChallengeSave(db: PoolClient, user: User, mutation: AttemptMutation,
+  now: number): Promise<SavedAttempt> {
+  const updatedAt = new Date(Math.min(mutation.updatedAt ?? now, now))
+  const { rows: [existing] } = await db.query<SavedAttempt>(`SELECT ${fields} FROM saves WHERE id=$1 AND owner_id=$2`,
+    [mutation.sessionId, user.id])
+  if (existing) {
+    const { rows: [saved] } = await db.query<SavedAttempt>(`UPDATE saves SET data=$1,revision=revision+1,
+      archived=$2,updated_at=GREATEST(updated_at,$3) WHERE id=$4 AND owner_id=$5 RETURNING ${fields}`,
+    [mutation.data, mutation.archived, updatedAt, mutation.sessionId, user.id])
+    if (saved) return saved
+  }
+  const { rows: [saved] } = await db.query<SavedAttempt>(`INSERT INTO saves(id,owner_id,data,parent_id,archived,updated_at)
+    VALUES($1,$2,$3,NULL,$4,$5) RETURNING ${fields}`,
+  [mutation.sessionId, user.id, mutation.data, mutation.archived, updatedAt])
+  return saved!
+}
+
+async function closeChallengeAttempt(db: PoolClient, attempt: ChallengeAttemptRow, now: number) {
+  await db.query(`UPDATE challenge_attempts SET status='closed', completed_at=$2 WHERE id=$1`,
+    [attempt.id, new Date(now)])
+}
+
+async function handleChallengeMutation(db: PoolClient, user: User, game: ServerGame, level: LevelRecord,
+  mutation: AttemptMutation, now: number, challengeGames: readonly ChallengeGameRuntime[]): Promise<ChallengeMutationResult> {
+  const claim = mutation.challenge!
+  const { rows: [attempt] } = await db.query<ChallengeAttemptRow>(`SELECT * FROM challenge_attempts
+    WHERE id=$1 AND owner_id=$2 FOR UPDATE`, [claim.attemptId, user.id])
+  if (!attempt || attempt.session_id !== mutation.sessionId || attempt.owner_id !== user.id)
+    throw new HttpError(409, 'challenge_attempt_mismatch')
+  if (mutation.data.game !== game.id || mutation.data.level !== level.id ||
+      mutation.data.levelRevision !== level.revision || mutation.data.ruleset !== level.ruleset)
+    throw new HttpError(409, 'challenge_attempt_mismatch')
+
+  const { rows: [slot] } = await db.query<SlotRow>('SELECT * FROM challenge_slots WHERE id=$1', [attempt.slot_id])
+  const { rows: [occurrence] } = await db.query<OccurrenceRow>('SELECT * FROM challenge_occurrences WHERE id=$1',
+    [attempt.occurrence_id])
+  if (!slot || !occurrence || slot.game_id !== game.id || slot.level_id !== level.id ||
+      slot.level_revision !== level.revision || slot.status !== 'ready')
+    throw new HttpError(409, 'challenge_attempt_mismatch')
+  if (level.source !== 'Challenge') throw new HttpError(409, 'challenge_attempt_mismatch')
+
+  const saved = await writeChallengeSave(db, user, mutation, now)
+  const ended = now >= new Date(occurrence.ends_at).getTime()
+  const finish = async (status: 'started' | 'completed' | 'closed', ranked: boolean,
+    invalid?: boolean): Promise<ChallengeMutationResult> => {
+    const result: ChallengeMutationResult = {
+      ...saved,
+      challenge: { attemptId: attempt.id, status, ranked, ...(invalid ? { invalid } : {}) },
+    }
+    await db.query('INSERT INTO sync_receipts(owner_id,id,fingerprint,result) VALUES($1,$2,$3,$4)',
+      [user.id, mutation.mutationId, digest(JSON.stringify(mutation)), result])
+    return result
+  }
+
+  if (attempt.status === 'completed') return finish('completed', true)
+  if (attempt.status === 'closed') return finish('closed', false)
+  if (mutation.archived) {
+    await closeChallengeAttempt(db, attempt, now)
+    return finish('closed', false)
+  }
+  if (!mutation.data.completed && mutation.data.lives === 0) {
+    await closeChallengeAttempt(db, attempt, now)
+    return finish('closed', false)
+  }
+  if (!mutation.data.completed) {
+    if (ended) {
+      await closeChallengeAttempt(db, attempt, now)
+      return finish('closed', false)
+    }
+    return finish('started', false)
+  }
+
+  try {
+    game.validateAttempt(mutation.data, level)
+  } catch {
+    await closeChallengeAttempt(db, attempt, now)
+    return finish('closed', false, true)
+  }
+
+  if (ended) {
+    await db.query(`INSERT INTO completions(owner_id,level_id,level_revision) VALUES($1,$2,$3)
+      ON CONFLICT DO NOTHING`, [user.id, level.id, level.revision])
+    await closeChallengeAttempt(db, attempt, now)
+    return finish('closed', false)
+  }
+
+  const adapter = challengeGames.find(item => item.id === slot.game_id)
+  if (!adapter) throw new HttpError(409, 'challenge_game_unsupported')
+  const record = adapter.record(level, mutation.data, slot.rules)
+  // The server start time is authoritative for time-based challenges. Leaving
+  // and resuming cannot reduce the recorded time, and a client cannot report a
+  // faster run than the wall clock allows.
+  if (record.unit === 'ms') {
+    const elapsed = Math.max(0, now - new Date(attempt.started_at).getTime())
+    if (Number.isFinite(elapsed) && elapsed > record.value) record.value = elapsed
+  }
+  const context: ChallengeResultContext = {
+    slotId: slot.id, attemptId: attempt.id, occurrenceId: occurrence.id, periodKey: occurrence.period_key,
+    timeZone: occurrence.timezone, game: slot.game_id, options: slot.options, rules: slot.rules,
+  }
+  await recordChallengeResult(db, user, game, level, saved, context, record, new Date(now))
+  await db.query(`UPDATE challenge_attempts SET status='completed', completed_at=$2 WHERE id=$1`,
+    [attempt.id, new Date(now)])
+  await db.query(`INSERT INTO completions(owner_id,level_id,level_revision) VALUES($1,$2,$3)
+    ON CONFLICT DO NOTHING`, [user.id, level.id, level.revision])
+  return finish('completed', true)
+}
+
+
+export function registerProgress(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>,
+  challengeGames: readonly ChallengeGameRuntime[]) {
+  const preferencesPatch = z.object({ ...preferenceFields(serverGames), locale: z.enum(locales) }).partial()
   app.get('/api/progress', async request => {
     const user = await requireUser(request)
     const [saves, completions, prefs, levels] = await Promise.all([
@@ -74,6 +204,9 @@ export function registerProgress(app: FastifyInstance) {
       } else if (mutation.data.packRevision !== undefined) {
         throw new HttpError(422, 'level_version_unavailable')
       }
+      if (mutation.challenge)
+        return handleChallengeMutation(db, user, game, level, mutation, requestNow(request), challengeGames)
+      if (level.source === 'Challenge') throw new HttpError(422, 'challenge_required')
       game.validateAttempt(mutation.data, level, packRules)
       const lives = mutation.data.lives
       const existing = (await db.query<SavedAttempt>(`SELECT ${fields} FROM saves WHERE id=$1 AND owner_id=$2`,
@@ -106,13 +239,14 @@ export function registerProgress(app: FastifyInstance) {
         const expired = await db.query<SavedAttempt>(`UPDATE saves SET archived=true,revision=revision+1
           WHERE id IN (SELECT id FROM saves WHERE owner_id=$1 AND NOT archived AND data->>'completed' = 'false'
             AND COALESCE(data->>'lives','1') <> '0'
+            AND NOT EXISTS (SELECT 1 FROM challenge_attempts a WHERE a.session_id=saves.id AND a.status='started')
             ORDER BY ${continueOrder} OFFSET $2) RETURNING ${fields}`, [user.id, savedGameLimit])
         saved = expired.rows.find(item => item.id === saved.id) ?? saved
       }
       if (mutation.data.completed) {
         await db.query(`INSERT INTO completions(owner_id,level_id,level_revision)
           VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, [user.id, mutation.data.level, mutation.data.levelRevision])
-        await recordLeaderboardResult(db, user, game, level, mutation, saved, activePack)
+        await recordLeaderboardResult(db, user, game, level, mutation, saved, activePack, packRules)
       }
       await db.query('INSERT INTO sync_receipts(owner_id,id,fingerprint,result) VALUES($1,$2,$3,$4)',
         [user.id, mutation.mutationId, fingerprint, saved])

@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { pool, transaction } from './config.js'
 import { seedPacks } from './packs.js'
-import { serverGames } from './games.js'
+import { createServerGames } from './games.js'
 
 export async function migrate() {
   await transaction(async db => {
@@ -16,7 +16,7 @@ export async function migrate() {
       await db.query('INSERT INTO migrations(name) VALUES ($1)', [file])
       console.info('Applied migration', file)
     }
-    for (const game of serverGames.values()) await seedPacks(db, game)
+    for (const game of createServerGames().values()) await seedPacks(db, game)
   })
 }
 

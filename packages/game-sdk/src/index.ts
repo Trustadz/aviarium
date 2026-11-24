@@ -30,7 +30,7 @@ export interface GameLevel {
   revision: number
   ruleset: number
   title: string
-  source: 'Built-in' | 'Generated' | 'Creator'
+  source: 'Built-in' | 'Generated' | 'Creator' | 'Challenge'
   seed?: string | null
   generatorVersion?: number | null
   pack?: { id: string; revision: number; stop: number; legacyStandalone?: boolean }
@@ -54,3 +54,18 @@ export type {
   LeaderboardPackSummary, LeaderboardPlayerResult, LeaderboardPlayerSummary, LeaderboardRecord, LeaderboardRemovalNotice, LeaderboardResultStatus, LeaderboardStanding,
   LeaderboardSummary, LeaderboardValueUnit,
 } from './leaderboards.js'
+
+export { emptyChallengeStandings } from './challenges.js'
+export type {
+  ChallengeDayView, ChallengeGameDefinition, ChallengeGeneratedLevel, ChallengeKind, ChallengeLevelView, ChallengeOccurrenceView,
+  ChallengeOptionChoice, ChallengeOptionGroup, ChallengeOptionValue, ChallengePlayerResult, ChallengePlayerSlot,
+  ChallengePlayerStatus, ChallengeReplay, ChallengeResult, ChallengeSelection, ChallengeSeriesView, ChallengeSlotRecipe,
+  ChallengeSlotStatus, ChallengeSlotView, ChallengeStandings,
+} from './challenges.js'
+export {
+  GameRuleError, gameContractVersion, validateGameRegistry,
+} from './game.js'
+export type {
+  GameDefinition, GameGeneration, GameLeaderboard, GameOptionField, GameOptionGroup, GamePacks, GamePlay,
+  GameRegistry, GameResult, GameRuleValues, GeneratedContent, RegisteredGame, SaveContext, StoredLevel,
+} from './game.js'

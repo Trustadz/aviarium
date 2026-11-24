@@ -2,6 +2,15 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { navigationLayer, routeTrail } from './navigation.js'
 
+
+test('challenge screens keep the day and player layers', () => {
+  assert.deepEqual(routeTrail('/challenges'), ['/', '/challenges'])
+  assert.deepEqual(routeTrail('/challenges/abc'), ['/', '/challenges', '/challenges/abc'])
+  assert.deepEqual(routeTrail('/challenges/abc/sudoku'), ['/', '/challenges', '/challenges/abc', '/challenges/abc/sudoku'])
+  assert.deepEqual(routeTrail('/challenges/abc/sudoku/play'),
+    ['/', '/challenges', '/challenges/abc', '/challenges/abc/sudoku/play'])
+})
+
 test('a game trail moves through the library, menu, and level selector', () => {
   assert.deepEqual(routeTrail('/'), ['/'])
   assert.deepEqual(routeTrail('/games/sudoku'), ['/', '/games/sudoku'])

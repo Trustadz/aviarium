@@ -5,12 +5,14 @@ import type { GamePacks } from './game-runtime.js'
 import { zipSync } from 'fflate'
 import { builtInPacks } from '../../../packages/sudoku/src/built-in-packs.js'
 import { exportPack as exportArchive, importPack as importArchive, readPackDraft as readDraft } from './pack-content.js'
-import { sudokuServer, verifySudokuPack as gradePack } from './sudoku-game.js'
+import { sudokuGame, verifySudokuPack as gradePack } from '../../../packages/sudoku/src/game.js'
+import { serverGameFromDefinition } from './server-game-adapter.js'
 import { definePackSchemas, maxPackManifestBytes, packLevelFields, packLevelLimit, progressionRules, type PackDocument } from '../../../packages/game-sdk/src/packs.js'
 
-const exportPack = (data: PackDocument) => exportArchive(sudokuServer.packs, data)
-const importPack = (bytes: Uint8Array) => importArchive(sudokuServer.packs, bytes)
-const readPackDraft = (data: unknown) => readDraft(sudokuServer.packs, data)
+const sudoku = serverGameFromDefinition(sudokuGame)
+const exportPack = (data: PackDocument) => exportArchive(sudoku.packs, data)
+const importPack = (bytes: Uint8Array) => importArchive(sudoku.packs, bytes)
+const readPackDraft = (data: unknown) => readDraft(sudoku.packs, data)
 
 test('round-trips a pack with its artwork, ordered puzzles and challenge rules', () => {
   const data = readPackDraft({
@@ -40,7 +42,7 @@ test('rejects incompatible archives and puzzles without a unique solution', () =
   const data = builtInPacks[0].data
   assert.throws(() => importPack(zipSync({ '../manifest.json': Buffer.from('{}') })), /valid Aviarium pack/)
   assert.throws(() => importPack(zipSync({ 'manifest.json': Buffer.from('{') })), /malformed/)
-  assert.throws(() => gradePack({ ...data, puzzles: [{ ...data.puzzles[0], grid: '0'.repeat(81) }] }), /unique solution/)
+  assert.throws(() => gradePack({ ...data, puzzles: [{ ...data.puzzles[0], grid: '0'.repeat(81) }] }), /pack_puzzle_unverified/)
 })
 
 test('grades and exports a pack with inherited and overridden diagonal rules', () => {
@@ -58,7 +60,7 @@ test('grades and exports a pack with inherited and overridden diagonal rules', (
   assert.deepEqual(restored, draft)
   const pack = gradePack(restored)
   assert.deepEqual(pack.puzzles.map(puzzle => puzzle.ruleset), [2, 1])
-  assert.throws(() => gradePack({ ...draft, puzzles: [data.puzzles[0]] }), /unique solution/)
+  assert.throws(() => gradePack({ ...draft, puzzles: [data.puzzles[0]] }), /pack_puzzle_unverified/)
 })
 
 test('new drafts use pack-only level access while old published data remains readable', () => {
@@ -69,7 +71,7 @@ test('new drafts use pack-only level access while old published data remains rea
   assert.equal(old.puzzles[0].rules.inOrder, false)
 })
 
-test('shared pack formats accept another game’s own content and rules', () => {
+test('shared pack formats accept another game’s own content and rules', async () => {
   const puzzle = z.object({ ...packLevelFields, letters: z.array(z.string()), rules: z.object({ guesses: z.number() }).partial().optional() })
   const schemas = definePackSchemas('words-fixture', z.literal('default'), progressionRules.extend({ guesses: z.number() }),
     puzzle, puzzle)
@@ -83,6 +85,6 @@ test('shared pack formats accept another game’s own content and rules', () => 
     ] })
   const copy = importArchive(adapter, exportArchive(adapter, draft))
   assert.deepEqual(copy, draft)
-  assert.deepEqual(adapter.verify(copy, []).puzzles, draft.puzzles)
+  assert.deepEqual((await adapter.verify(copy, [])).puzzles, draft.puzzles)
   assert.throws(() => importPack(exportArchive(adapter, draft)))
 })

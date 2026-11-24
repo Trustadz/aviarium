@@ -4,7 +4,7 @@ import { knownMessage, useT, type Translate } from './i18n.js'
 import { useState } from 'react'
 import { Share2, Shuffle } from 'lucide-react'
 import { difficulties, type Difficulty } from '../../../packages/game-sdk/src/index.js'
-import { effectivePackRules, packLevels, type PackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { effectivePackRules, type PackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { quickPlayVersion } from '../../../packages/sudoku/src/contracts.js'
 import { formatSeedCode, parseSeedCode } from '../../../packages/sudoku/src/seed-code.js'
 import { errorMessage } from './api.js'
@@ -116,7 +116,6 @@ function ruleLabels(t: Translate, rules: PackRules) {
 
 export const sudokuPackPresentation: PackPresentation = {
   menuLabel: 'Sudoku menu',
-  levels: pack => packLevels(pack as PublishedPack),
   title: (t, pack) => packTitle(t, pack as PublishedPack),
   description: (t, pack) => packDescription(t, pack as PublishedPack),
   levelTitle: (t, level) => levelTitle(t, level as PublishedLevel),

@@ -7,6 +7,7 @@ import { api, errorMessage, json, type Account } from './api.js'
 import { findGame, games } from './registry.js'
 import { formatLeaderboardValue, type LeaderboardBoardInfo, type LeaderboardValueUnit } from '../../../packages/game-sdk/src/leaderboards.js'
 import { leaderboardBoardTitle } from './Leaderboards.js'
+import { ChallengeSettings } from './ChallengeSettings.js'
 
 interface Backup {
   folder: string; schedule: string; retention: number
@@ -192,6 +193,8 @@ export default function Admin({ account, openPackStudio }: {account: Account; op
           </ul>}
         </details>
       </section>
+
+      <ChallengeSettings accountId={account.id}/>
     </div>
   </section>
 }
