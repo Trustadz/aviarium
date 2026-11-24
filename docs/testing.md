@@ -63,6 +63,10 @@ For the API and browser flow, use a disposable instance with
 8. Check the nav badge, 360/393 px and 200% text, English/Dutch, offline and
    terminal-sync states.
 
+The unit suite runs `apps/server/src/game-source-scan.test.ts`, which fails when
+a platform module branches on a `'sudoku'`/`'nonograms'` string literal outside
+the explicit registration/game/legacy allowlist.
+
 The browser suite runs `tests/challenges-smoke.mjs` on a disposable database. It
 starts its own `TEST_ENVIRONMENT=true` server, enables a two-game series,
 claims and completes one Sudoku with a second start rejected, verifies the

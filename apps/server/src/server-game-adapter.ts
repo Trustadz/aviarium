@@ -63,7 +63,7 @@ export function serverGameFromDefinition(
       sameLevel: (entry, rules, previous, previousRules) =>
         definition.packs.sameContent
           ? definition.packs.sameContent(entry, rules as never, previous, previousRules as never)
-          : entry.ruleset === previous.ruleset,
+          : entry.ruleset === previous.ruleset && JSON.stringify(entry) === JSON.stringify(previous),
       builtIn: definition.packs.builtIn,
     },
     leaderboards: definition.leaderboard && {

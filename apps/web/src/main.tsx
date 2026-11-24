@@ -208,7 +208,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [removalNotices, setRemovalNotices] = useState<LeaderboardRemovalNotice[]>([])
   const openGame = games.find(game => path === game.url || path.startsWith(game.url + '/'))
   const studioMatch = /^\/studio\/([a-z0-9-]+)(\/admin)?$/.exec(path)
-  const studioGame = path === '/studio/packs' ? findGame('sudoku') : studioMatch && findGame(studioMatch[1])
+  const studioGame = path === '/studio/packs' ? games.find(game => game.packs) : studioMatch && findGame(studioMatch[1])
   const adminPackStudio = Boolean(studioMatch?.[2])
   const { installed, remove, recordActivity } = useGameDownloads(studioGame?.id ?? openGame?.id, online)
   const canPlay = (game: WebGame) => online || installed.includes(game.id)
@@ -225,7 +225,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     }
     if (!updated.size) return
     const levels = [
-      ...latestCatalog.current.filter(level => !updated.has(level.game ?? 'sudoku')),
+      ...latestCatalog.current.filter(level => !updated.has(level.game ?? '')),
       ...[...updated.values()].flat(),
     ]
     latestCatalog.current = levels
