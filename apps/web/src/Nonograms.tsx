@@ -135,6 +135,12 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
   const t = useT()
   const width = puzzle.columns.length
   const height = puzzle.rows.length
+  const maxRowClues = Math.max(...puzzle.rows.map(runs => runs.length))
+  const maxColumnClues = Math.max(...puzzle.columns.map(runs => runs.length))
+  // The clue font is half the cell size (see nonograms.css). These factors turn
+  // that into the board width and height for the available container.
+  const widthFactor = width + maxRowClues * 0.425 + 0.25
+  const heightFactor = height + maxColumnClues * 0.575 + 0.15
   const [painted, setPainted] = useState<Cell[]>()
   const cells = painted ?? committed
   const rowConflicts = puzzle.rows.map((runs, row) =>
@@ -256,42 +262,49 @@ function PuzzleBoard({ puzzle, title, pack, leave, reset, openSettings, committe
     </div>
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
     <div className="play-layout">
-      <div className="nonogram-board" data-solved={solved} data-size={width} style={{
-        '--columns': width,
-        '--row-clues': Math.max(...puzzle.rows.map(clue => clue.length)),
-      } as CSSProperties}>
-        <div className="nonogram-column-clues" aria-hidden="true">
-          {puzzle.columns.map((runs, column) => <div key={column} data-conflict={columnConflicts[column]}>{runs.map((run, index) => <span key={index}>{run}</span>)}</div>)}
-        </div>
-        <div className="nonogram-cells" role="group" aria-label={t('Puzzle grid')}
-          onPointerDown={startStroke} onPointerMove={paint} onPointerUp={endStroke}
-          onPointerCancel={endStroke} onLostPointerCapture={endStroke}>
-          {puzzle.rows.map((runs, row) => <div className="nonogram-row" key={row} role="group"
-            aria-label={t('Row {row}, clues {clues}', { row: row + 1, clues: runs.join(', ') })}>
-            <div className="nonogram-row-clue" data-conflict={rowConflicts[row]} aria-hidden="true">{runs.join(' ')}</div>
-            {puzzle.columns.map((columnRuns, column) => {
-              const index = row * width + column
-              const state = cells[index]
-              return <button key={column} className="nonogram-cell"
-                ref={element => { squares.current[index] = element }}
-                type="button" tabIndex={focus === index ? 0 : -1} data-mark={state} data-cell={index}
-                aria-disabled={solved}
-                aria-description={[
-                  rowConflicts[row] && t('Filled squares conflict with the row clues.'),
-                  columnConflicts[column] && t('Filled squares conflict with the column clues.'),
-                ].filter(Boolean).join(' ') || undefined}
-                aria-label={t('Column {column}, clues {clues}, {mark}', {
-                  column: column + 1, clues: columnRuns.join(', '),
-                  mark: t(state === 1 ? 'filled' : state === 2 ? 'marked blank' : 'unmarked'),
-                })}
-                onFocus={() => setFocus(index)}
-                onClick={event => { if (event.detail === 0) move(index, mode) }}
-                onContextMenu={event => { event.preventDefault(); move(index, 2) }}
-                onKeyDown={event => keyboard(event, index)}>
-                {state === 2 && !solved && <span aria-hidden="true">×</span>}
-              </button>
-            })}
-          </div>)}
+      <div className="board-wrap">
+        <div className="nonogram-board" data-solved={solved} data-size={width} style={{
+          '--columns': width,
+          '--row-clues': maxRowClues,
+          '--cell-width-factor': widthFactor,
+          '--cell-height-factor': heightFactor,
+          '--cell-width-share': 1 / (widthFactor * 1.02),
+          '--cell-height-share': 1 / (heightFactor * 1.02),
+          '--cell-cap': `${410 / widthFactor}px`,
+        } as CSSProperties}>
+          <div className="nonogram-column-clues" aria-hidden="true">
+            {puzzle.columns.map((runs, column) => <div key={column} data-conflict={columnConflicts[column]}>{runs.map((run, index) => <span key={index}>{run}</span>)}</div>)}
+          </div>
+          <div className="nonogram-cells" role="group" aria-label={t('Puzzle grid')}
+            onPointerDown={startStroke} onPointerMove={paint} onPointerUp={endStroke}
+            onPointerCancel={endStroke} onLostPointerCapture={endStroke}>
+            {puzzle.rows.map((runs, row) => <div className="nonogram-row" key={row} role="group"
+              aria-label={t('Row {row}, clues {clues}', { row: row + 1, clues: runs.join(', ') })}>
+              <div className="nonogram-row-clue" data-conflict={rowConflicts[row]} aria-hidden="true">{runs.join(' ')}</div>
+              {puzzle.columns.map((columnRuns, column) => {
+                const index = row * width + column
+                const state = cells[index]
+                return <button key={column} className="nonogram-cell"
+                  ref={element => { squares.current[index] = element }}
+                  type="button" tabIndex={focus === index ? 0 : -1} data-mark={state} data-cell={index}
+                  aria-disabled={solved}
+                  aria-description={[
+                    rowConflicts[row] && t('Filled squares conflict with the row clues.'),
+                    columnConflicts[column] && t('Filled squares conflict with the column clues.'),
+                  ].filter(Boolean).join(' ') || undefined}
+                  aria-label={t('Column {column}, clues {clues}, {mark}', {
+                    column: column + 1, clues: columnRuns.join(', '),
+                    mark: t(state === 1 ? 'filled' : state === 2 ? 'marked blank' : 'unmarked'),
+                  })}
+                  onFocus={() => setFocus(index)}
+                  onClick={event => { if (event.detail === 0) move(index, mode) }}
+                  onContextMenu={event => { event.preventDefault(); move(index, 2) }}
+                  onKeyDown={event => keyboard(event, index)}>
+                  {state === 2 && !solved && <span aria-hidden="true">×</span>}
+                </button>
+              })}
+            </div>)}
+          </div>
         </div>
       </div>
       <div className="play-controls">

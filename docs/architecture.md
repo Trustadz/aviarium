@@ -41,6 +41,14 @@ an origin.
   level-selector layers first. A directly opened deep link is seeded with its
   parent layers so back stays inside the app. Keep this hierarchy when adding
   screens that sit under a game or Studio.
+- **Game play fits the viewport.** The Sudoku and Nonograms play screens fill
+  the dynamic viewport and size their boards from the space left by the header
+  and controls, so the board, inputs, tools, and result actions stay visible
+  without page scrolling from phone portrait through ultrawide desktop. Short
+  viewports compact the heading and controls, and Nonograms derive their cell
+  size from both available dimensions. Menus, catalogs, and long lists may
+  still scroll because their content is not a fixed play surface. A new game
+  should follow the same rule or explain why its play surface needs to scroll.
 - **Shared game contracts with game-specific logic.** The renderer-neutral SDK
   defines common types. Each game owns its codecs, rules, and generation. A
   stable ruleset, save format, and generator version let the browser and
