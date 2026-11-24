@@ -166,9 +166,34 @@ Foreground sync runs when an authenticated player visits the library, returns to
 
 The production service worker caches the library shell and installs game assets when a game opens. Enable **Manage installs** in **Device settings** to reveal download removal on library cards. Removing a download preserves saves and their versioned puzzle references. Downloads are specific to the browser and are removed after 30 days of inactivity once the server is reachable. While offline, the browser can reopen downloaded games until its last verified session expires. Signing out clears the cached session. API and authentication traffic stay network-only.
 
+## Daily challenges
+
+Daily challenges are a platform-owned scheduled drop. Aviarium stores the
+series, occurrence, slot, attempt and challenge-result grains; generates and
+persists the exact level once; claims one attempt per player per game; closes the
+challenge board at the next reset; and exposes the current day, a closed day and
+a seed replay. A game supplies its normal generation, attempt validation and
+result interpretation; it does not implement scheduling, boards, attempts or
+challenge UI. The first release uses the game's default rules and a fixed Sudoku
+Medium profile; pack-rule variants are a future option-group extension.
+
+Occurrence boundaries use an instance-wide IANA timezone from
+`CHALLENGE_TIMEZONE` (default UTC) and an admin reset minute. Spring-forward gap
+times resolve to the first valid instant after the gap; fall-back repeats use
+the earlier instant. A day with less than two hours remaining is not created.
+The daily board closes at `ends_at`; a late completion is saved but not posted.
+The closed day exposes a replay seed, which launches a normal generated game and
+posts to the general board, not the closed daily board. Challenge levels use
+`source='Challenge'`, `catalog_visible=false`, and are rejected by normal
+progress mutations. Challenge results use `board_kind='challenge'` and
+`board_key='challenge:<slotId>'` and are excluded from general cooldowns,
+player summaries and board selection. The pure boundary helper is
+[`challenges/time.ts`](../apps/server/src/challenges/time.ts); the API and
+product rules are documented in [daily challenges](challenges.md).
+
 ## Current scope
 
-The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships Sudoku packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges are planned. Scheduling and rankings belong to Aviarium, while each game supplies challenge content, completion validation, and how to interpret its results.
+The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships Sudoku packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges use the platform-owned scheduling and ranking model described above; the first release is Sudoku-only and disabled until an admin enables it.
 
 ## Release announcements
 

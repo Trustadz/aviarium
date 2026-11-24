@@ -5,29 +5,26 @@ import type {
 } from '../../../../packages/game-sdk/src/challenges.js'
 import type { LeaderboardStanding } from '../../../../packages/game-sdk/src/leaderboards.js'
 import { HttpError, requireUser } from '../auth.js'
-import { challengeTimeZone, challengesEnabled, pool, testEnvironment } from '../config.js'
+import { challengeTimeZone, challengesEnabled, pool } from '../config.js'
 import { serverGames } from '../games.js'
 import { boardSummaries } from '../leaderboards.js'
+import { requestNow } from './now.js'
+import {
+  addCivilDays, localBoundary, nextOccurrenceStart, occurrenceFor, parsePeriodKey,
+} from './time.js'
 import { challengeGames } from './registry.js'
 import {
-  ensureOccurrence, occurrenceView, prepareOccurrence, readSeries, seriesView, syncSeriesTimezone,
+  ensureOccurrence, minimumWindowMinutes, occurrenceView, prepareOccurrence, readSeries, seriesView, syncSeriesTimezone,
   type OccurrenceRow, type SeriesRow, type SlotRow,
 } from './store.js'
 
-const occurrenceIdParam = (request: FastifyRequest) => z.uuid().parse((request.params as { id: string }).id)
-const slotIdParam = (request: FastifyRequest) => z.uuid().parse((request.params as { id: string }).id)
+const occurrenceIdParam = (request: FastifyRequest) =>
+  z.uuid().parse((request.params as { occurrenceId: string }).occurrenceId)
+const slotIdParam = (request: FastifyRequest) =>
+  z.uuid().parse((request.params as { slotId: string }).slotId)
 const gameParam = z.string().regex(/^[a-z0-9-]{1,64}$/)
 const iso = (value: Date | string) => new Date(value).toISOString()
 
-/** A test-only clock makes reset/boundary browser tests deterministic. */
-export function requestNow(request: FastifyRequest): number {
-  const header = request.headers['x-aviarium-test-now']
-  if (!testEnvironment || typeof header !== 'string') return Date.now()
-  const parsed = Date.parse(header)
-  if (!Number.isFinite(parsed) || Math.abs(parsed - Date.now()) > 400 * 86_400_000)
-    throw new HttpError(400, 'invalid_request')
-  return parsed
-}
 
 function levelView(level: {
   id: string; revision: number; ruleset: number; title: string; source: string;
@@ -102,12 +99,21 @@ function playerStatus(occurrence: OccurrenceRow, slot: SlotRow, attempt: Attempt
   return open ? 'started' : 'expired'
 }
 
+function stripChallengeStanding(row: LeaderboardStanding | null): LeaderboardStanding | null {
+  if (!row) return null
+  return { ...row, seedCode: null, level: row.level ? { ...row.level, seed: null, generatorVersion: null } : undefined }
+}
+
 async function standingsFor(slot: SlotRow, viewer: string): Promise<ChallengeStandings> {
   const game = serverGames.get(slot.game_id)
   if (!game) return { top: [], you: null, total: 0 }
   const key = 'challenge:' + slot.id
   const summary = (await boardSummaries(pool, game, [key], viewer, 3)).get(key)
-  return { top: summary?.top ?? [], you: summary?.you ?? null, total: summary?.total ?? 0 }
+  return {
+    top: (summary?.top ?? []).map(row => stripChallengeStanding(row)!).filter(Boolean),
+    you: stripChallengeStanding(summary?.you ?? null),
+    total: summary?.total ?? 0,
+  }
 }
 
 async function slotView(occurrence: OccurrenceRow, slot: SlotRow, viewer: string, now: number,
@@ -276,6 +282,8 @@ export function registerChallenges(app: FastifyInstance) {
     const serverGame = serverGames.get(game)
     const key = 'challenge:' + slot.id
     const summary = serverGame ? (await boardSummaries(pool, serverGame, [key], user.id, limit)).get(key) : undefined
+    const top = (summary?.top ?? []).map(row => stripChallengeStanding(row)!).filter(Boolean)
+    const you = stripChallengeStanding(summary?.you ?? null)
     const level = await loadLevel(slot)
     return {
       board: {
@@ -288,7 +296,7 @@ export function registerChallenges(app: FastifyInstance) {
       },
       slot: { id: slot.id, game: slot.game_id, options: slot.options, rules: slot.rules,
         playerStatus: playerStatus(occurrence, slot, await loadAttempt(slot.id, user.id), now, Boolean(serverGame)) },
-      top: summary?.top ?? [], you: summary?.you ?? null, total: summary?.total ?? 0,
+      top, you, total: summary?.total ?? 0,
       serverNow: new Date(now).toISOString(),
     }
   })
@@ -315,8 +323,12 @@ export function registerChallenges(app: FastifyInstance) {
     if (existing?.status === 'started') {
       const level = await loadLevel(slot)
       if (!level) throw new HttpError(409, 'challenge_slot_unavailable')
+      const { rows: [save] } = await pool.query<{ data: unknown; revision: number; archived: boolean; updatedAt: number }>(`
+        SELECT data,revision,archived,floor(extract(epoch FROM updated_at) * 1000)::double precision AS "updatedAt"
+        FROM saves WHERE id=$1 AND owner_id=$2`, [existing.session_id, user.id])
       return {
         attemptId: existing.id, sessionId: existing.session_id, startedAt: iso(existing.started_at), resumed: true,
+        ...(save ? { save: { data: save.data, revision: save.revision, archived: save.archived, updatedAt: save.updatedAt } } : {}),
         occurrence: { id: occurrence.id, periodKey: occurrence.period_key, endsAt: iso(occurrence.ends_at), timezone: occurrence.timezone },
         slot: { id: slot.id, game: slot.game_id, position: slot.position, level: levelView(level),
           options: slot.options, rules: slot.rules },
@@ -353,6 +365,129 @@ export function registerChallenges(app: FastifyInstance) {
       slot: { id: slot.id, game: slot.game_id, position: slot.position, level: levelView(level),
         options: slot.options, rules: slot.rules },
     }
+  })
+
+  async function settingsPayload(series: SeriesRow, now: number) {
+    const ensured = series.enabled ? await ensureOccurrence(pool, series, now) : { occurrence: undefined, nextStart: null }
+    const nextStart = nextOccurrenceStart(now, series.timezone, series.reset_minute)
+    const next = occurrenceFor(nextStart, series.timezone, series.reset_minute)
+    return {
+      ...seriesView(series),
+      timezoneSource: 'env' as const,
+      registeredGames: challengeGames.map(game => ({
+        id: game.id, label: game.label, optionGroups: game.optionGroups,
+      })),
+      current: ensured.occurrence ? occurrenceView(ensured.occurrence) : null,
+      next: {
+        periodKey: next.periodKey,
+        startsAt: new Date(next.startsAt).toISOString(),
+        endsAt: new Date(next.endsAt).toISOString(),
+        timezone: series.timezone,
+      },
+      appliesFrom: new Date(nextStart).toISOString(),
+      minimumWindowMinutes,
+    }
+  }
+
+  app.get('/api/admin/challenges/settings', async request => {
+    await requireUser(request, 'admin')
+    const now = requestNow(request)
+    const series = await readSeries(pool)
+    if (!series) throw new HttpError(404, 'challenge_not_found')
+    return settingsPayload(series, now)
+  })
+
+  app.patch('/api/admin/challenges/settings', async request => {
+    await requireUser(request, 'admin')
+    const input = z.strictObject({
+      enabled: z.boolean().optional(),
+      gameLimit: z.number().int().min(1).max(50).optional(),
+      eligibleGames: z.array(gameParam).nullable().optional(),
+      gameOptions: z.record(z.string(), z.record(z.string(), z.array(z.string()))).optional(),
+      resetMinute: z.number().int().min(0).max(1439).optional(),
+      expectedUpdatedAt: z.string().datetime().optional(),
+    }).parse(request.body)
+    const now = requestNow(request)
+    const series = await readSeries(pool)
+    if (!series) throw new HttpError(404, 'challenge_not_found')
+    if (input.expectedUpdatedAt && new Date(series.updated_at).toISOString() !== input.expectedUpdatedAt)
+      throw new HttpError(409, 'challenge_settings_conflict')
+
+    const capable = new Map(challengeGames.map(game => [game.id, game]))
+    const eligible = input.eligibleGames === undefined ? series.eligible_games : input.eligibleGames
+    if (eligible) {
+      const unknown = eligible.find(id => !capable.has(id))
+      if (unknown) throw new HttpError(422, 'challenge_game_unknown', { game: unknown })
+      if (!eligible.length) throw new HttpError(422, 'challenge_no_eligible_games')
+    }
+    const options = { ...(series.game_options ?? {}), ...(input.gameOptions ?? {}) }
+    for (const [gameId, groups] of Object.entries(input.gameOptions ?? {})) {
+      const game = capable.get(gameId)
+      if (!game) throw new HttpError(422, 'challenge_game_unknown', { game: gameId })
+      for (const group of game.optionGroups) {
+        const ids = groups[group.key]
+        if (!ids || !ids.length) throw new HttpError(422, 'challenge_options_required', { game: gameId })
+        if (ids.some(id => !group.choices.some(choice => choice.id === id)))
+          throw new HttpError(422, 'challenge_game_unknown', { game: gameId })
+      }
+    }
+    const allowed = challengeGames.filter(game => !eligible || eligible.includes(game.id))
+    if (!allowed.length) throw new HttpError(422, 'challenge_no_eligible_games')
+    const gameLimit = input.gameLimit ?? series.game_limit
+    if (gameLimit > allowed.length)
+      throw new HttpError(422, 'challenge_game_limit_invalid', { count: String(allowed.length) })
+    for (const game of allowed) {
+      for (const group of game.optionGroups) {
+        const ids = options[game.id]?.[group.key] ?? group.defaultEnabled
+        if (!ids?.length) throw new HttpError(422, 'challenge_options_required', { game: game.id })
+      }
+    }
+
+    const { rows: [updated] } = await pool.query<SeriesRow>(`UPDATE challenge_series SET
+        enabled=$1,game_limit=$2,eligible_games=$3,game_options=$4,reset_minute=$5,updated_at=now()
+      WHERE id=$6 RETURNING *`,
+    [input.enabled ?? series.enabled, gameLimit, eligible, JSON.stringify(options),
+      input.resetMinute ?? series.reset_minute, series.id])
+    if (updated.enabled) {
+      const ensured = await ensureOccurrence(pool, updated, now)
+      if (ensured.occurrence && !ensured.occurrence.prepared_at)
+        await prepareOccurrence(pool, ensured.occurrence, challengeGames, updated)
+    }
+    return settingsPayload(updated, now)
+  })
+
+  app.post('/api/admin/challenges/prepare', async request => {
+    await requireUser(request, 'admin')
+    const now = requestNow(request)
+    const input = z.object({ periodKey: z.string().optional() }).parse(request.body ?? {})
+    const series = await readSeries(pool)
+    if (!series) throw new HttpError(404, 'challenge_not_found')
+    let occurrence: OccurrenceRow | undefined
+    if (input.periodKey) {
+      const date = parsePeriodKey(input.periodKey)
+      if (!date) throw new HttpError(400, 'invalid_request')
+      const startsAt = localBoundary(date, series.reset_minute, series.timezone)
+      const endsAt = localBoundary(addCivilDays(date, 1), series.reset_minute, series.timezone)
+      const settings = { gameLimit: series.game_limit, eligibleGames: series.eligible_games, gameOptions: series.game_options }
+      const { rows: [created] } = await pool.query<OccurrenceRow>(`INSERT INTO challenge_occurrences(
+          series_id,period_key,starts_at,ends_at,timezone,reset_minute,generation_version,settings,seed)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ON CONFLICT (series_id,period_key) DO NOTHING RETURNING *`,
+      [series.id, input.periodKey, new Date(startsAt), new Date(endsAt), series.timezone, series.reset_minute,
+        series.generation_version, JSON.stringify(settings), crypto.randomUUID().replaceAll('-', '')])
+      occurrence = created ?? (await pool.query<OccurrenceRow>(
+        'SELECT * FROM challenge_occurrences WHERE series_id=$1 AND period_key=$2',
+        [series.id, input.periodKey])).rows[0]
+    } else {
+      occurrence = (await ensureOccurrence(pool, series, now)).occurrence
+    }
+    if (!occurrence) throw new HttpError(409, 'challenge_prepare_failed')
+    const prepared = await prepareOccurrence(pool, occurrence, challengeGames, series)
+    const { rows: [fresh] } = await pool.query<OccurrenceRow>('SELECT * FROM challenge_occurrences WHERE id=$1',
+      [occurrence.id])
+    const { rows: slots } = await pool.query(`SELECT id,game_id,position,status,failure_code FROM challenge_slots
+      WHERE occurrence_id=$1 ORDER BY position`, [occurrence.id])
+    return { ...prepared, occurrence: fresh ? occurrenceView(fresh) : null, slots }
   })
 
   // Keep the series timezone in step with the environment without relabelling history.

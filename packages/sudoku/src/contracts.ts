@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { difficulties, type Difficulty, type GameLevel } from '../../game-sdk/src/index.js'
-import { attemptIdentity, attemptOutcome, mutationIdentity, mutationStatus, packRevisionField, type SavedAttempt } from '../../game-sdk/src/progress.js'
+import { attemptIdentity, attemptOutcome, challengeMutationField, mutationIdentity, mutationStatus, packRevisionField, type SavedAttempt } from '../../game-sdk/src/progress.js'
 import { rulesFor } from './rules.js'
 
 export interface PublishedLevel extends GameLevel {
@@ -54,7 +54,7 @@ export const defaults: Preferences = {
 }
 
 export const mutationSchema = z.object({
-  ...mutationIdentity, data: saveSchema, ...mutationStatus,
+  ...mutationIdentity, data: saveSchema, ...mutationStatus, ...challengeMutationField,
   quickPlay: quickPlayDescriptorSchema.optional(),
 })
 export type Mutation = z.infer<typeof mutationSchema>

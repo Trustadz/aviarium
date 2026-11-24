@@ -77,7 +77,8 @@ export async function makeApp() {
     const path = request.url.split('?')[0].replace(/\/$/, '')
     const game = /^\/(?:games|studio)\/([a-z0-9-]+)(?:\/|$)/.exec(path)?.[1]
     const standalonePage = ['', '/news', '/about', '/leaderboards', '/studio', '/studio/packs', '/admin'].includes(path)
-    if (request.method === 'GET' && (standalonePage || (game && serverGames.has(game))))
+    const challengePage = path === '/challenges' || path.startsWith('/challenges/')
+    if (request.method === 'GET' && (standalonePage || challengePage || (game && serverGames.has(game))))
       return reply.sendFile('index.html')
     return reply.code(404).send({ error: apiMessages.not_found, code: 'not_found' })
   })

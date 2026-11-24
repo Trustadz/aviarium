@@ -154,10 +154,10 @@ async function playerSummary(db: Pool | PoolClient, viewer: string, gameId?: str
   const params = gameId ? [viewer, gameId] : [viewer]
   const { rows: [counts] } = await db.query<{ posted: number; boards: number }>(`SELECT
       count(*)::int AS posted, count(DISTINCT game_id || ':' || board_key)::int AS boards
-    FROM leaderboard_results WHERE owner_id=$1 AND status='active' ${scope}`, params)
+    FROM leaderboard_results WHERE owner_id=$1 AND status='active' AND board_kind <> 'challenge' ${scope}`, params)
   const { rows: [latest] } = await db.query<PlayerRow>(`SELECT game_id, board_key, board_kind, board_meta,
       level_title, pack_title, seed_code, score_value, value_unit, completed_at, recorded_at
-    FROM leaderboard_results WHERE owner_id=$1 AND status='active' ${scope}
+    FROM leaderboard_results WHERE owner_id=$1 AND status='active' AND board_kind <> 'challenge' ${scope}
     ORDER BY recorded_at DESC, id DESC LIMIT 1`, params)
   if (!latest) return { ...emptyLeaderboardPlayerSummary(), posted: counts?.posted ?? 0, boards: counts?.boards ?? 0 }
   const latestSummary = (await boardSummaries(db, gameFor(latest.game_id), [latest.board_key], viewer, 1)).get(latest.board_key)
@@ -165,7 +165,7 @@ async function playerSummary(db: Pool | PoolClient, viewer: string, gameId?: str
   const { rows: [best] } = await db.query<RankedPlayerRow>(`WITH best AS (
       SELECT DISTINCT ON (game_id, board_key, owner_id) game_id, board_key, owner_id, board_kind, board_meta,
         level_title, pack_title, seed_code, score_value, value_unit, completed_at, recorded_at, rank_value
-      FROM leaderboard_results WHERE status='active' ${gameId ? 'AND game_id=$2' : ''}
+      FROM leaderboard_results WHERE status='active' AND board_kind <> 'challenge' ${gameId ? 'AND game_id=$2' : ''}
       ORDER BY game_id, board_key, owner_id, rank_value, completed_at, id
     ), ranked AS (
       SELECT *, rank() OVER (PARTITION BY game_id, board_key ORDER BY rank_value)::int AS rank,
@@ -267,7 +267,7 @@ export async function recordLeaderboardResult(db: PoolClient, user: User, game: 
   const record = leaderboards.record(level, mutation.data, pack?.data.title)
   const puzzleKey = digest(game.id + '|' + record.puzzleContent)
   const recent = await db.query(`SELECT 1 FROM leaderboard_results
-    WHERE owner_id=$1 AND game_id=$2 AND puzzle_key=$3
+    WHERE owner_id=$1 AND game_id=$2 AND puzzle_key=$3 AND board_kind <> 'challenge'
       AND recorded_at > now() - make_interval(days => $4) LIMIT 1`,
   [user.id, game.id, puzzleKey, leaderboardCooldownDays])
   const now = Date.now()
@@ -341,7 +341,7 @@ export function registerLeaderboards(app: FastifyInstance) {
     const user = await requireUser(request)
     const entries = await Promise.all([...serverGames.values()].filter(game => game.leaderboards).map(async game => {
       const { rows: [busiest] } = await pool.query<{ board_key: string }>(`SELECT board_key FROM leaderboard_results
-        WHERE game_id=$1 AND status='active' GROUP BY board_key ORDER BY count(*) DESC, board_key LIMIT 1`, [game.id])
+        WHERE game_id=$1 AND status='active' AND board_kind <> 'challenge' GROUP BY board_key ORDER BY count(*) DESC, board_key LIMIT 1`, [game.id])
       const board = (busiest && game.leaderboards!.parseBoard(busiest.board_key)) || game.leaderboards!.quickBoards[0]!
       const level = board.kind === 'level' ? await levelForBoard(pool, game, board) : undefined
       const info = boardInfo(game, board, level, level ? await packTitleFor(pool, level) : undefined)

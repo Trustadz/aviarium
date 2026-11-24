@@ -25,6 +25,18 @@ export interface SavedAttempt<Attempt extends GameAttempt = GameAttempt> {
   parentId?: string
   archived: boolean
   updatedAt?: number | null
+  /** Present when this save belongs to a daily-challenge claim. */
+  challenge?: {
+    attemptId: string
+    /** Server status after a sync; optional for a locally claimed attempt. */
+    status?: 'started' | 'completed' | 'closed'
+    ranked?: boolean
+    invalid?: boolean
+    slotId?: string
+    occurrenceId?: string
+    endsAt?: string
+    game?: string
+  }
 }
 
 export const mutationIdentity = {
@@ -36,7 +48,11 @@ export const mutationStatus = {
   /** Test deployments only: backdate the leaderboard posting time for seeded data. */
   seedRecordedAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 }
-export const mutationHeader = z.object({ ...mutationIdentity, data: attemptHeader, ...mutationStatus })
+export const challengeMutationField = {
+  /** Daily-challenge claim; absent for normal practice/Quick Play. */
+  challenge: z.object({ attemptId: z.uuid() }).optional(),
+}
+export const mutationHeader = z.object({ ...mutationIdentity, data: attemptHeader, ...mutationStatus, ...challengeMutationField })
 export type AttemptMutation<Attempt extends GameAttempt = GameAttempt> =
   Omit<z.infer<typeof mutationHeader>, 'data'> & { data: Attempt }
 

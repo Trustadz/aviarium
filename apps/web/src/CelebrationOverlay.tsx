@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowRight } from 'lucide-react'
 import { BudgieFlock, CelebrationBurst, CelebrationSparkle } from './celebrations.js'
@@ -27,12 +27,14 @@ export interface CelebrationResult {
 
 const resultsLeadMs = 2500
 
-export function CelebrationOverlay({ result, actions, onClose, reader, preview = false }: {
+export function CelebrationOverlay({ result, actions, onClose, reader, preview = false, children, heading }: {
   result: CelebrationResult
   actions: readonly CelebrationAction[]
   onClose: () => void
   reader: boolean
   preview?: boolean
+  children?: ReactNode
+  heading?: string
 }) {
   const t = useT()
   const [reduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -42,7 +44,7 @@ export function CelebrationOverlay({ result, actions, onClose, reader, preview =
   const closeRef = useRef(onClose)
   closeRef.current = onClose
   const duration = reader ? 3200 : 3600
-  const title = t(preview ? 'Celebration preview' : 'Puzzle solved')
+  const title = heading ?? t(preview ? 'Celebration preview' : 'Puzzle solved')
   const newBest = result.bestMs !== undefined && result.elapsedMs < result.bestMs
 
   useEffect(() => {
@@ -130,6 +132,7 @@ export function CelebrationOverlay({ result, actions, onClose, reader, preview =
             <dd>{stat.value}</dd>
           </div>)}
         </dl>
+        {children}
         {result.saveNote && <p className={result.saveError ? 'celebration-save error' : 'celebration-save'}
           role={result.saveError ? 'alert' : undefined}>{result.saveNote}</p>}
         <div className="celebration-actions">

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { GameLevel } from '../../game-sdk/src/index.js'
 import { definePackSchemas, packLevelFields, packLevelId, progressionRules, type PackRevision } from '../../game-sdk/src/packs.js'
-import { attemptIdentity, attemptOutcome, mutationHeader, packRevisionField } from '../../game-sdk/src/progress.js'
+import { attemptIdentity, attemptOutcome, challengeMutationField, mutationHeader, packRevisionField } from '../../game-sdk/src/progress.js'
 import { fromPicture, randomDifficulties, randomPuzzle, type Cell, type Puzzle } from './puzzles.js'
 import { sha256 } from '../../game-sdk/src/sha256.js'
 
@@ -35,7 +35,7 @@ export function resetNonogramInput(save: NonogramSave): NonogramSave {
 export const quickDescriptor = z.object({
   seed: z.uuid(), size: gridSizeSchema, difficulty: z.enum(randomDifficulties), version: z.literal(1),
 })
-export const nonogramMutation = mutationHeader.extend({ data: nonogramSaveSchema, quickPlay: quickDescriptor.optional() })
+export const nonogramMutation = mutationHeader.extend({ data: nonogramSaveSchema, ...challengeMutationField, quickPlay: quickDescriptor.optional() })
 type QuickDescriptor = z.infer<typeof quickDescriptor>
 
 const pictureSchema = z.array(z.string().regex(/^[.#]+$/).max(10)).max(10)

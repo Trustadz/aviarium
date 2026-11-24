@@ -40,6 +40,11 @@ export function routeTrail(pathname: string): string[] {
     const menu = '/games/' + segments[1]
     return path === menu ? ['/', menu] : ['/', menu, path]
   }
+  if (segments[0] === 'challenges') {
+    if (path === '/challenges') return ['/', path]
+    const day = '/challenges/' + segments[1]
+    return path === day ? ['/', '/challenges', path] : ['/', '/challenges', day, path]
+  }
   if (segments[0] === 'studio') {
     if (path === '/studio') return ['/', path]
     if (segments.length === 3 && segments[2] === 'admin') return ['/', '/admin', path]
