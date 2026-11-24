@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import pg from 'pg'
 import { chromium } from 'playwright'
 import { validate } from '../dist/packages/sudoku/src/solver.js'
+import { generateQuickPuzzle } from '../dist/packages/sudoku/src/quick-play.js'
+import { packLevels } from '../dist/packages/sudoku/src/packs.js'
 import { quickPlayVersion } from '../dist/packages/sudoku/src/contracts.js'
 import { quickNonogram } from '../dist/packages/nonograms/src/contracts.js'
 import { solveByDeduction } from '../dist/packages/nonograms/src/puzzles.js'
@@ -52,12 +54,24 @@ assert.notEqual(player.id, player2.id)
 assert.equal((await request('/api/me', { headers: adminHeaders })).user.role, 'admin')
 console.log('permission checks passed')
 
-const catalog = await request('/api/catalog', { headers: playerHeaders })
-const afterglow = catalog.find(level => level.id === 'afterglow')
-assert.ok(afterglow)
-await sudokuCompletion(playerHeaders, afterglow, 300_000)
-await sudokuCompletion(player2Headers, afterglow, 240_000)
-let board = await request(boardUrl('sudoku', 'level:afterglow:1'), { headers: playerHeaders })
+// Use a dedicated pack so the fixed-level board checks do not depend on levels
+// completed by other smoke tests or on the 30-day exact-puzzle cooldown.
+const packId = randomUUID()
+const levelId = 'pack:' + packId + ':1'
+const packDraft = await request('/api/pack-drafts', { method: 'POST', headers: adminHeaders, body: {
+  localId: packId, format: 1, game: 'sudoku', title: 'Leaderboard smoke pack', description: '', theme: 'default',
+  rules: { hints: true, autoNotes: true, inOrder: true, lives: null, timeTrial: false },
+  puzzles: [{ title: 'Leaderboard smoke level', grid: generateQuickPuzzle('leaderboard-smoke-' + randomUUID(), 'Easy'),
+    ruleset: 1, levelId }],
+} })
+const published = await request('/api/pack-drafts/' + packId + '/publish', { method: 'POST', headers: adminHeaders,
+  body: { version: packDraft.version } })
+const fixedPack = await request('/api/games/sudoku/packs/' + packId + '/' + published.published, { headers: playerHeaders })
+const fixedLevel = packLevels(fixedPack)[0]
+const fixedKey = 'level:' + fixedLevel.id + ':' + fixedLevel.revision
+await sudokuCompletion(playerHeaders, fixedLevel, 300_000)
+await sudokuCompletion(player2Headers, fixedLevel, 240_000)
+let board = await request(boardUrl('sudoku', fixedKey), { headers: playerHeaders })
 assert.equal(board.top.length, 2)
 assert.equal(board.top[0].name, 'Test Player Two')
 assert.equal(board.top[0].value, 240_000)
@@ -66,27 +80,27 @@ assert.equal(playerRow.value, 300_000)
 console.log('fixed level board passed')
 
 // The same exact puzzle inside the cooldown is stored but hidden from the board.
-await sudokuCompletion(player2Headers, afterglow, 200_000)
-board = await request(boardUrl('sudoku', 'level:afterglow:1'), { headers: player2Headers })
+await sudokuCompletion(player2Headers, fixedLevel, 200_000)
+board = await request(boardUrl('sudoku', fixedKey), { headers: player2Headers })
 playerRow = board.top.find(row => row.you)
 assert.equal(playerRow.value, 240_000)
 let adminResults = await request('/api/admin/leaderboards/results', { headers: adminHeaders })
 assert.ok(adminResults.some(result => result.playerName === 'Test Player Two' &&
-  result.board.key === 'level:afterglow:1' && result.status === 'cooldown' && result.value === 200_000))
+  result.board.key === fixedKey && result.status === 'cooldown' && result.value === 200_000))
 console.log('per-puzzle cooldown passed')
 
 // Once the exact-puzzle window has passed, a new completion posts again.
 const db = new pg.Client({ connectionString: process.env.AVIARIUM_TEST_DATABASE_URL })
 await db.connect()
 await db.query(`UPDATE leaderboard_results SET recorded_at = now() - interval '31 days'
-  WHERE owner_id=$1 AND board_key='level:afterglow:1'`, [player2.id])
-await sudokuCompletion(player2Headers, afterglow, 210_000)
-board = await request(boardUrl('sudoku', 'level:afterglow:1'), { headers: player2Headers })
+  WHERE owner_id=$1 AND board_key=$2`, [player2.id, fixedKey])
+await sudokuCompletion(player2Headers, fixedLevel, 210_000)
+board = await request(boardUrl('sudoku', fixedKey), { headers: player2Headers })
 playerRow = board.top.find(row => row.you)
 assert.equal(playerRow.value, 210_000)
 adminResults = await request('/api/admin/leaderboards/results', { headers: adminHeaders })
 assert.ok(adminResults.some(result => result.playerName === 'Test Player Two' &&
-  result.board.key === 'level:afterglow:1' && result.status === 'active' && result.value === 210_000))
+  result.board.key === fixedKey && result.status === 'active' && result.value === 210_000))
 console.log('cooldown expiry passed')
 
 // Quick Play groups different seeds by difficulty; each result keeps its exact grid.
@@ -130,11 +144,11 @@ console.log('Nonograms board passed')
 
 // Admin removal drops the best result, reveals the remaining time, and creates one notice for its owner.
 const victim = adminResults.find(result => result.playerName === 'Test Player' &&
-  result.board.key === 'level:afterglow:1' && result.status === 'active')
+  result.board.key === fixedKey && result.status === 'active')
 assert.ok(victim)
 await request(`/api/admin/leaderboards/results/${victim.id}/remove`, { method: 'POST', headers: adminHeaders,
   body: { reason: 'Automated moderation reason' } })
-board = await request(boardUrl('sudoku', 'level:afterglow:1'), { headers: player2Headers })
+board = await request(boardUrl('sudoku', fixedKey), { headers: player2Headers })
 assert.equal(board.top.find(row => row.you).value, 210_000)
 const notices = await request('/api/leaderboards/notices', { headers: playerHeaders })
 assert.equal(notices.notices.length, 1)

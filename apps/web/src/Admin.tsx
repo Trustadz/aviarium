@@ -12,19 +12,17 @@ interface Backup {
   folder: string; schedule: string; retention: number
   last_success?: string; last_attempt?: string; next_run?: string; requested_at?: string; error?: string; archives: string[]
 }
-interface Publication { id: string; revision: number; title: string; source: string; hidden: boolean }
 interface LeaderboardResult { id: string; playerName: string; game: string; value: number; unit: LeaderboardValueUnit
   completedAt: string; recordedAt: string; status: string; board: LeaderboardBoardInfo }
 interface LeaderboardRemoval { id: string; playerName: string; adminName: string; reason: string
   removedAt: string; acknowledgedAt: string | null; value: number; unit: LeaderboardValueUnit; board: LeaderboardBoardInfo }
-export default function Admin({ account, onCatalogChange, openPackStudio }: {account: Account; onCatalogChange: () => void; openPackStudio: (game: string) => void}) {
+export default function Admin({ account, openPackStudio }: {account: Account; openPackStudio: (game: string) => void}) {
   const t = useT()
   const { formatDate: format } = useIntl()
   const formatDate = (value?: string) => value ? format(new Date(value), { dateStyle: 'medium', timeStyle: 'short' }) : '—'
   const [config, setConfig] = useState<Backup>()
   const [form, setForm] = useState({ folder: '', schedule: '0 3 * * *', retention: 3 })
   const [accounts, setAccounts] = useState<Account[]>([])
-  const [publications, setPublications] = useState<Publication[]>([])
   const [message, setMessage] = useState('')
   const [problem, setProblem] = useState('')
   const [busy, setBusy] = useState(false)
@@ -42,8 +40,6 @@ export default function Admin({ account, onCatalogChange, openPackStudio }: {acc
     }, error => { if (active) setProblem(errorMessage(error)) })
     fetchBackup(true)
     void api<Account[]>('/admin/users', undefined, account.id).then(value => { if (active) setAccounts(value) },
-      error => { if (active) setProblem(errorMessage(error)) })
-    void api<Publication[]>('/admin/levels', undefined, account.id).then(value => { if (active) setPublications(value) },
       error => { if (active) setProblem(errorMessage(error)) })
     const timer = setInterval(fetchBackup, 3000)
     return () => { active = false; clearInterval(timer) }
@@ -131,18 +127,6 @@ export default function Admin({ account, onCatalogChange, openPackStudio }: {acc
         {games.map(game => <button key={game.id} className="secondary" onClick={() => openPackStudio(game.id)}>
           {games.length === 1 ? t('Edit as admin') : t('Edit {game} as admin', { game: game.title })}
         </button>)}
-      </section>
-      <section className="panel padded"><h2>{t("Published puzzles")}</h2>
-        {publications.length === 0 && <p>{t("No creator puzzles published yet.")}</p>}
-        {publications.map(level => <div className="setting-row" key={level.id}>
-          <div><strong>{level.title}</strong><p>{knownMessage(t, level.source)} · {t('Revision {revision}', { revision: level.revision })}{level.hidden ? ' · ' + t('Hidden') : ''}</p></div>
-          <button className="secondary" disabled={busy} onClick={() => run(async () => {
-            const { hidden } = await api<{hidden: boolean}>('/admin/levels/' + level.id,
-              json('PATCH', { hidden: !level.hidden }), account.id)
-            setPublications(items => items.map(item => item.id === level.id ? { ...item, hidden } : item))
-            onCatalogChange()
-          })}>{level.hidden ? t("Show") : t("Hide")}</button>
-        </div>)}
       </section>
       <section className="panel padded admin-leaderboards">
         <div className="section-heading"><h2><Trophy size={21}/>{" "}{t('Leaderboards')}</h2>

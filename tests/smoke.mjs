@@ -60,18 +60,13 @@ async function gameFits(page, label, boardSelector) {
 }
 const playbackToken = playerToken || adminToken
 if (!playbackToken) throw new Error('Set AVIARIUM_TEST_PLAYER or AVIARIUM_TEST_ADMIN to a test session cookie.')
-await request('/api/catalog', { expected: 401 })
 await request('/api/progress', { expected: 401 })
-const starting = await request('/api/catalog', { headers: playerToken ? playerHeaders : adminHeaders })
-assert.ok(starting.some(level => level.id === 'first-light'))
 assert.equal((await request('/health/ready')).status, 'ok')
 await request('/api/drafts', { expected: 401 })
-const selected = starting.find(level => level.id === 'first-light')
-const level = Array.from(selected.grid, Number)
-const solution = validate(level).solution
-assert.ok(solution)
 const updatedTitle = 'Smoke check ' + crypto.randomUUID().slice(0, 8)
 const feedHeaders = playerToken ? playerHeaders : adminHeaders
+const leaderboardHub = await request('/api/leaderboards/games/sudoku', { headers: feedHeaders })
+assert.equal('standalone' in leaderboardHub, false)
 const englishLaunch = (await request('/api/news?locale=en', { headers: feedHeaders })).posts
   .filter(post => post.title === 'Nonograms joins the library')
 const dutchLaunch = (await request('/api/news?locale=nl', { headers: feedHeaders })).posts
@@ -107,25 +102,22 @@ if (adminToken && playerToken) {
   await request('/api/drafts', { headers: playerHeaders })
   await request('/api/games/nonograms/pack-drafts', { headers: playerHeaders })
   await request('/api/admin/users', { headers: playerHeaders, expected: 403 })
-  await request('/api/admin/levels', { headers: playerHeaders, expected: 403 })
   await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: editorPatch(false) })
   await request('/api/drafts', { headers: playerHeaders, expected: 403 })
-  assert.deepEqual(await request('/api/catalog', { headers: playerHeaders }), await request('/api/catalog', { headers: adminHeaders }))
   const promoted = await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: { role: 'admin' } })
   assert.equal(promoted.role, 'admin')
-  await request('/api/admin/levels', { headers: playerHeaders })
   await request('/api/drafts', { headers: playerHeaders })
   await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: { role: 'user' } })
-  await request('/api/admin/levels', { headers: playerHeaders, expected: 403 })
 
+  const generationSeed = 'aviarium-smoke-generation'
   const job = await request('/api/jobs', { method: 'POST', headers: adminHeaders,
-    body: { kind: 'generate', options: { seed: 'aviarium-v1:first-light', difficulty: 'Easy', unique: true } } })
+    body: { kind: 'generate', options: { seed: generationSeed, difficulty: 'Easy', unique: true } } })
   const jobResult = async id => until(async () => {
     const current = (await request('/api/jobs', { headers: adminHeaders })).find(item => item.id === id)
     return current?.status === 'complete' && current.result
   }, 'server puzzle job')
   const generated = await jobResult(job.id)
-  assert.equal(generated.grid, generateQuickPuzzle('aviarium-v1:first-light', 'Easy'))
+  assert.equal(generated.grid, generateQuickPuzzle(generationSeed, 'Easy'))
   const draft = await request('/api/drafts', { method: 'POST', headers: adminHeaders,
     body: { grid: generated.grid, title: updatedTitle, generationJob: job.id } })
   const verifyDraft = draft => request('/api/jobs', { method: 'POST', headers: adminHeaders,
@@ -199,6 +191,11 @@ if (adminToken && playerToken) {
   await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: editorPatch(false) })
   console.info('Pack update checks passed: permissions, stable level revisions, and 10 → 15 → 25 ordered progression.')
 
+  // Use an inserted level that the earlier progression checks did not complete.
+  const selected = thirdLevels[5]
+  const level = Array.from(selected.grid, Number)
+  const solution = validate(level).solution
+  assert.ok(solution)
   const sessionId = crypto.randomUUID()
   const initial = { game: 'sudoku', format: 1, ruleset: 1, level: selected.id, levelRevision: selected.revision,
     board: rules.create(level), undo: [], redo: [], elapsedMs: 0, completed: false }
@@ -439,18 +436,23 @@ try {
   await cachedCatalog.close()
   console.info('Pack catalog checks passed: retry, cached cards during a failed refresh, and opening a pack when the cache write fails.')
 
-  await page.goto(`${origin}/games/sudoku?puzzle=${selected.id}&revision=${selected.revision}`)
+  const readerDescriptor = { seed: 'reader-smoke-' + crypto.randomUUID(), difficulty: 'Medium', version: quickPlayVersion }
+  const readerGrid = generateQuickPuzzle(readerDescriptor.seed, readerDescriptor.difficulty)
+  const readerSolution = validate(Array.from(readerGrid, Number)).solution
+  assert.ok(readerSolution)
+  const readerSeed = formatSeedCode(readerDescriptor.seed, readerDescriptor.difficulty, readerDescriptor.version)
+  await page.goto(`${origin}/games/sudoku?seed=${encodeURIComponent(readerSeed)}`)
   await page.getByRole('button', { name: 'Sudoku settings' }).click()
   await page.getByLabel('Show timer').uncheck()
   assert.equal(await page.getByLabel('Theme').count(), 0)
   await page.getByRole('button', { name: 'Close' }).click()
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
   assert.equal(await page.getByRole('button', { name: /download/i }).count(), 0)
-  await page.getByRole('button', { name: 'Play shared puzzle' }).click()
+  await page.getByRole('button', { name: 'Play seed', exact: true }).click()
   await page.getByRole('button', { name: 'Game menu' }).waitFor()
   assert.equal(await page.getByRole('banner').count(), 0)
   assert.equal(await page.getByRole('contentinfo').count(), 0)
-  const firstBlank = level.indexOf(0)
+  const firstBlank = readerGrid.indexOf(0)
   const cell = (value) => page.getByRole('button', { name: `Row ${Math.floor(firstBlank / 9) + 1}, column ${firstBlank % 9 + 1}, ${value}`, exact: true })
   await cell('empty').tap()
   await page.getByRole('button', { name: 'Notes', exact: true }).tap()
@@ -461,7 +463,7 @@ try {
   await page.getByRole('button', { name: 'Redo' }).tap()
   await cell('empty').getByText('6', { exact: true }).waitFor()
   await page.getByRole('button', { name: 'Notes', exact: true }).tap()
-  await cell('empty').press(String(solution[firstBlank]))
+  await cell('empty').press(String(readerSolution[firstBlank]))
   await page.getByRole('button', { name: 'Pause', exact: true }).tap()
   await page.getByRole('heading', { name: 'Game paused' }).waitFor()
   await page.getByRole('button', { name: 'Resume game' }).tap()
@@ -481,7 +483,7 @@ try {
   const track = page.locator('.continue-track').first()
   assert.equal(await track.evaluate(element => getComputedStyle(element).paddingBottom), '16px')
   await page.getByRole('button', { name: 'Resume', exact: true }).first().tap()
-  await cell(String(solution[firstBlank])).waitFor()
+  await cell(String(readerSolution[firstBlank])).waitFor()
   const sudokuBoard = '.play-page .board'
   await page.setViewportSize({ width: 674, height: 896 })
   await gameFits(page, 'Sudoku e-reader portrait 674x896', sudokuBoard)
@@ -569,7 +571,7 @@ try {
       await adminPage.locator('.pack-level-menu.is-open').getByRole('button', { name: 'Remove level', exact: true }).click()
     }
     await adminPage.getByRole('button', { name: 'Paste grid', exact: true }).click()
-    await adminPage.getByLabel('Grid', { exact: true }).fill(selected.grid)
+    await adminPage.getByLabel('Grid', { exact: true }).fill(generateQuickPuzzle('studio-browser-check', 'Easy'))
     await adminPage.getByRole('button', { name: 'Use grid', exact: true }).click()
     await adminPage.getByText(/Unique solution/).waitFor()
     await adminPage.getByText('Level rules · Uses pack rules', { exact: true }).click()
@@ -731,23 +733,26 @@ try {
     await desktop.close()
   }
   if (playerToken) {
-    const quiet = starting.find(item => item.id === 'quiet-current')
-    const blank = quiet.grid.indexOf('0')
-    const digit = validate(Array.from(quiet.grid, Number)).solution[blank]
+    const descriptor = { seed: 'continue-smoke-' + crypto.randomUUID(), difficulty: 'Medium', version: quickPlayVersion }
+    const quickId = await quickPlayId(descriptor)
+    const quickGrid = generateQuickPuzzle(descriptor.seed, descriptor.difficulty)
+    const blank = quickGrid.indexOf('0')
+    const digit = validate(Array.from(quickGrid, Number)).solution[blank]
+    const label = `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, `
     const first = await browser.newContext()
     const second = await browser.newContext()
     for (const context of [first, second]) await context.addCookies([{ name: 'aviarium', value: playerToken, url: origin }])
     const deviceA = await first.newPage()
     await deviceA.goto(origin)
     await deviceA.getByRole('button', { name: 'Account menu' }).filter({ hasText: 'Test Player' }).waitFor()
-    await deviceA.goto(`${origin}/games/sudoku?puzzle=${quiet.id}&revision=${quiet.revision}`)
-    await deviceA.getByRole('button', { name: 'Play shared puzzle' }).click()
-    const label = `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, `
+    const seedCode = formatSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version)
+    await deviceA.goto(`${origin}/games/sudoku?seed=${encodeURIComponent(seedCode)}`)
+    await deviceA.getByRole('button', { name: 'Play seed', exact: true }).click()
     await deviceA.getByRole('button', { name: label + 'empty', exact: true }).press(String(digit))
     await deviceA.getByRole('button', { name: 'Game menu' }).click()
     await until(async () => {
       const progress = await request('/api/progress', { headers: playerHeaders })
-      return progress.sessions.some(item => item.data.level === quiet.id && item.data.board.entries[blank] === digit)
+      return progress.sessions.some(item => item.data.level === quickId && item.data.board.entries[blank] === digit)
     }, 'device A progress upload')
     await deviceA.waitForFunction(() => caches.has('aviarium-game-sudoku'))
     const deviceB = await second.newPage()
@@ -757,7 +762,7 @@ try {
     assert.equal(await deviceB.evaluate(() => caches.has('aviarium-game-sudoku')), false)
     assert.equal(await deviceB.getByRole('button', { name: 'Remove Sudoku download' }).count(), 0)
     await deviceB.getByRole('button', { name: 'Explore Sudoku' }).click()
-    const savedRow = deviceB.getByRole('region', { name: 'Continue' }).getByRole('listitem').filter({ hasText: 'Quiet Current' })
+    const savedRow = deviceB.getByRole('region', { name: 'Continue' }).getByRole('listitem').filter({ hasText: 'Quick Play' })
     const savedCell = savedRow.first().locator('.saved-board .cell').nth(blank)
     await savedCell.filter({ hasText: String(digit) }).waitFor()
     assert.deepEqual(await deviceB.locator('.game-menu > section').evaluateAll(sections =>
@@ -799,7 +804,7 @@ try {
   const firstGrid = Array.from(pack.data.puzzles[0].grid, Number)
   const firstSolution = validate(firstGrid).solution
   assert.ok(firstSolution)
-  await current.getByRole('button', { name: 'Play Garden Perch', exact: true }).click()
+  await current.getByRole('button', { name: /^(Play|Resume|Replay) Garden Perch$/ }).click()
   const cells = packPage.getByLabel('Sudoku board', { exact: true }).getByRole('button')
   for (const [index, given] of firstGrid.entries()) {
     if (!given) await cells.nth(index).press(String(firstSolution[index]))

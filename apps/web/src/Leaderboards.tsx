@@ -19,7 +19,7 @@ interface CatalogEntry extends LeaderboardSummary { game: string; player: Leader
 interface CatalogData { games: CatalogEntry[]; player: LeaderboardPlayerSummary }
 interface HubLevel extends LeaderboardSummary { level: GameLevel }
 interface HubData {
-  game: string; quick: LeaderboardSummary[]; packs: LeaderboardPackSummary[]; standalone: HubLevel[]
+  game: string; quick: LeaderboardSummary[]; packs: LeaderboardPackSummary[]
   player: LeaderboardPlayerSummary
 }
 interface BoardDetail extends LeaderboardSummary { level?: GameLevel; cooldown?: LeaderboardCooldown | null }
@@ -325,12 +325,6 @@ export function GameLeaderboards({ game, accountId, online, link, back }: {
           <span className="badge">{t('{count, plural, one {# pack} other {# packs}}', { count: hub.packs.length })}</span></div>
         <div className="leaderboard-games leaderboard-packs">{hub.packs.map(pack =>
           <PackCard key={pack.id + ':' + pack.revision} pack={pack} game={game} link={link}/>)}</div>
-      </section>}
-      {hub.standalone.length > 0 && <section className="leaderboard-section">
-        <div className="section-heading"><h2>{t('Puzzles')}</h2>
-          <span className="badge">{t('{count, plural, one {# board} other {# boards}}', { count: hub.standalone.length })}</span></div>
-        <div className="panel leaderboard-board-list">{hub.standalone.map(entry =>
-          <BoardRow key={entry.board.key} entry={entry} game={game} link={link}/>)}</div>
       </section>}
     </> : online ? <p role="status">{t('Loading…')}</p> : null}
   </section>
