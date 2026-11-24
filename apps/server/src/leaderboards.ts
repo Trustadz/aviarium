@@ -13,7 +13,6 @@ import type { AttemptMutation, SavedAttempt } from '../../../packages/game-sdk/s
 import { digest, HttpError, requireUser, type User } from './auth.js'
 import { pool, testEnvironment, transaction } from './config.js'
 import type { LevelRecord, ServerGame } from './game-runtime.js'
-import { serverGames } from './games.js'
 
 const levelFields = `l.id,l.revision,l.ruleset,l.title,l.grid,l.difficulty,l.source,l.pack,l.content,
   l.game_id AS game,l.seed,l.generator_version AS "generatorVersion"`
@@ -41,8 +40,8 @@ interface SummaryRow {
 type Summary = Omit<LeaderboardSummary, 'board'>
 const iso = (value: Date | string) => (value instanceof Date ? value : new Date(value)).toISOString()
 
-function gameFor(id: string): ServerGame {
-  const game = serverGames.get(gameParam.parse(id))
+function gameFor(id: string, games: ReadonlyMap<string, ServerGame>): ServerGame {
+  const game = games.get(gameParam.parse(id))
   if (!game?.leaderboards) throw new HttpError(404, 'leaderboard_game_not_found')
   return game
 }
@@ -148,7 +147,8 @@ function playerResult(row: PlayerRow, rank: number, total: number): LeaderboardP
   }
 }
 
-async function playerSummary(db: Pool | PoolClient, viewer: string, gameId?: string): Promise<LeaderboardPlayerSummary> {
+async function playerSummary(db: Pool | PoolClient, viewer: string, gameId?: string,
+  games?: ReadonlyMap<string, ServerGame>): Promise<LeaderboardPlayerSummary> {
   const scope = gameId ? 'AND game_id=$2' : ''
   const params = gameId ? [viewer, gameId] : [viewer]
   const { rows: [counts] } = await db.query<{ posted: number; boards: number }>(`SELECT
@@ -159,7 +159,9 @@ async function playerSummary(db: Pool | PoolClient, viewer: string, gameId?: str
     FROM leaderboard_results WHERE owner_id=$1 AND status='active' ${scope}
     ORDER BY recorded_at DESC, id DESC LIMIT 1`, params)
   if (!latest) return { ...emptyLeaderboardPlayerSummary(), posted: counts?.posted ?? 0, boards: counts?.boards ?? 0 }
-  const latestSummary = (await boardSummaries(db, gameFor(latest.game_id), [latest.board_key], viewer, 1)).get(latest.board_key)
+  const latestSummary = games
+    ? (await boardSummaries(db, gameFor(latest.game_id, games), [latest.board_key], viewer, 1)).get(latest.board_key)
+    : undefined
   const lastPosted = playerResult(latest, latestSummary?.you?.rank ?? 0, latestSummary?.total ?? 0)
   const { rows: [best] } = await db.query<RankedPlayerRow>(`WITH best AS (
       SELECT DISTINCT ON (game_id, board_key, owner_id) game_id, board_key, owner_id, board_kind, board_meta,
@@ -296,7 +298,7 @@ function boardFromResult(row: { game: string; boardKey: string; boardKind: strin
   }
 }
 
-export function registerLeaderboards(app: FastifyInstance) {
+export function registerLeaderboards(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>) {
   app.get('/api/leaderboards', async request => {
     const user = await requireUser(request)
     const entries = await Promise.all([...serverGames.values()].filter(game => game.leaderboards).map(async game => {
@@ -306,14 +308,14 @@ export function registerLeaderboards(app: FastifyInstance) {
       const level = board.kind === 'level' ? await levelForBoard(pool, game, board) : undefined
       const info = boardInfo(game, board, level, level ? await packTitleFor(pool, level) : undefined)
       const summary = (await boardSummaries(pool, game, [board.key], user.id, summaryLimit)).get(board.key)
-      const player = await playerSummary(pool, user.id, game.id)
+      const player = await playerSummary(pool, user.id, game.id, serverGames)
       return { game: game.id, board: info, ...(summary ?? emptyLeaderboardSummary(info)), player }
     }))
-    return { games: entries, player: await playerSummary(pool, user.id) }
+    return { games: entries, player: await playerSummary(pool, user.id, undefined, serverGames) }
   })
 
   app.get('/api/leaderboards/games/:game', async request => {
-    const game = gameFor((request.params as { game: string }).game)
+    const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const packs = await visiblePacks(pool, game)
     const standalone = await standaloneLevels(pool, game)
@@ -332,12 +334,12 @@ export function registerLeaderboards(app: FastifyInstance) {
         const board = game.leaderboards!.boardKey(level)
         return { level, board: boardInfo(game, board, level), ...summaryFor(board.key) }
       }),
-      player: await playerSummary(pool, user.id, game.id),
+      player: await playerSummary(pool, user.id, game.id, serverGames),
     }
   })
 
   app.get('/api/leaderboards/games/:game/boards/:key', async request => {
-    const game = gameFor((request.params as { game: string }).game)
+    const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const key = (request.params as { key: string }).key
     const board = game.leaderboards!.parseBoard(key)
@@ -378,7 +380,7 @@ export function registerLeaderboards(app: FastifyInstance) {
   })
 
   app.get('/api/leaderboards/games/:game/boards/:key/records', async request => {
-    const game = gameFor((request.params as { game: string }).game)
+    const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const key = (request.params as { key: string }).key
     if (!game.leaderboards!.parseBoard(key)) throw new HttpError(404, 'leaderboard_board_not_found')
@@ -401,7 +403,7 @@ export function registerLeaderboards(app: FastifyInstance) {
   })
 
   app.get('/api/leaderboards/games/:game/packs/:id/:revision', async request => {
-    const game = gameFor((request.params as { game: string }).game)
+    const game = gameFor((request.params as { game: string }).game, serverGames)
     const user = await requireUser(request)
     const { id, revision } = request.params as { id: string; revision: string }
     const packs = await visiblePacks(pool, game)

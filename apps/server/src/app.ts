@@ -10,7 +10,7 @@ import { registerBackups } from './backups.js'
 import { enabledLocales, listenHost, origin, pool } from './config.js'
 import { registerNews } from './news.js'
 import { runNewsTranslations } from './news-translation.js'
-import { serverGames } from './games.js'
+import { createServerGames } from './games.js'
 import { registerLeaderboards } from './leaderboards.js'
 import { registerPacks } from './packs.js'
 import { registerProgress } from './progress.js'
@@ -18,6 +18,7 @@ import { migrate } from './migrate.js'
 import { runPuzzleJobs } from './worker.js'
 
 export async function makeApp() {
+  const serverGames = createServerGames()
   const app = Fastify({
     logger: {
       serializers: {
@@ -62,8 +63,8 @@ export async function makeApp() {
     registerPacks(app, game, '/api/games/' + game.id)
     if (game.id === 'sudoku') registerPacks(app, game, '/api')
   }
-  registerProgress(app)
-  registerLeaderboards(app)
+  registerProgress(app, serverGames)
+  registerLeaderboards(app, serverGames)
   registerBackups(app)
   await app.register(staticFiles, {
     root: fileURLToPath(new URL('../../../../dist/web/', import.meta.url)),

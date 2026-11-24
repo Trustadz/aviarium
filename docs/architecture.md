@@ -172,9 +172,9 @@ The shared game contract is documented in [game contract](game-contract.md). A
 game supplies its level/attempt codecs, generation, pack materialization and
 result interpretation; the platform owns routing, packs, leaderboards, saves and
 daily challenges. The Sudoku and Nonograms `GameDefinition` adapters, the runtime registry and a
-fake-game fixture are in place. The server compatibility map is now built from
-the definitions; removing the remaining `serverGames` imports and adopting the
-web contract are the next slices.
+fake-game fixture are in place. The server compatibility map is built from the definitions and injected into
+the platform registrations; the legacy `ServerGame` adapter and the web contract
+remain for the next slices.
 
 ## Current scope
 

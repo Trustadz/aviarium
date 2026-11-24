@@ -12,6 +12,8 @@ const legacyRoutes = new Map([
   ['nonograms', nonogramsServer.routes],
 ])
 
-export const serverGames = new Map(gameRegistry.all().map(({ definition }) => [
-  definition.id, serverGameFromDefinition(definition, legacyRoutes.get(definition.id)),
-]))
+export function createServerGames() {
+  return new Map(gameRegistry.all().map(({ definition }) => [
+    definition.id, serverGameFromDefinition(definition, legacyRoutes.get(definition.id)),
+  ]))
+}

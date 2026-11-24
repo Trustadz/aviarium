@@ -2,11 +2,13 @@
 
 Status: the shared `GameDefinition`, the Sudoku and Nonograms adapters, the game
 registry and a fake third-game fixture are implemented on `agent/game-platform`.
-The server now builds its compatibility `serverGames` map from the registry, so
-the definitions drive packs, saves, leaderboards and generated levels at
-runtime. The remaining platform modules still import that map; removing those
-imports and adopting the registry directly is the next slice. The web still
-consumes `WebGame`.
+The server now builds its compatibility `serverGames` map from the registry and
+injects it into progress, leaderboards, packs, auth, app and migration. No
+platform module imports a global game map. The definitions drive packs, saves,
+leaderboards and generated levels at runtime. The compatibility adapter still
+wraps the legacy `ServerGame` shape, and the web still consumes `WebGame`;
+J4/J5 remove those interfaces. Daily-challenge inclusion still uses a separate
+challenge registry until the next integration slice.
 
 The target is simple: a new game supplies **gameplay and level creation**. The
 platform supplies everything around it.
@@ -94,9 +96,10 @@ branch. If one does, the contract is missing a hook.
 
 ## Current gaps
 
-- The server compatibility map is definition-backed, but `progress.ts`,
-  `leaderboards.ts`, `packs.ts`, `auth.ts`, `app.ts` and `migrate.ts` still import
-  `serverGames`; J3b removes those imports.
+- The server compatibility map is injected and definition-backed; the legacy
+  `ServerGame` adapter and the web `WebGame` remain for J4/J5.
+- Daily challenge inclusion still reads the separate challenge registry; it should
+  be derived from `GameDefinition.generation` next.
 - Generic Quick Play/level endpoints and the legacy Sudoku quarantine are J4.
 - The web platform still consumes `WebGame`; J5 shrinks it to the contract.
 - J6 turns the fixture into a package-backed proof and adds a source-scan test
