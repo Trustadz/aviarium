@@ -69,7 +69,7 @@ function Trial({ level, pack, profile, reader, leave }: StudioTrialProps) {
   const session = { id: level.id, revision: 0, data: createNonogramAttempt(level as NonogramLevel, pack),
     profile, updated: Date.now(), archived: false, dirty: false }
   return <Nonograms level={level} pack={pack} session={session} trial testMode
-    preferences={{}} reader={reader} persist={async () => {}} leave={leave} reset={leave}/>
+    preferences={{}} reader={reader} persist={async () => {}} leave={leave} restart={leave}/>
 }
 
 const studioGame: StudioGame = {

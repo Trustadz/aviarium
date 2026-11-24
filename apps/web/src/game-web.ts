@@ -19,7 +19,7 @@ export interface GamePlayerProps {
   testMode?: boolean
   persist: (data: GameAttempt) => Promise<void>
   leave: () => void
-  reset: () => void
+  restart: () => void
   openSettings?: () => void
   leaderboard?: { open: () => void }
 }

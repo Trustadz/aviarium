@@ -1,11 +1,10 @@
-import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
+import { resetSudokuInput, type Preferences, type PublishedLevel, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { errorMessage } from './api.js'
 import { levelTitle, packTitle, technique } from './sudoku-copy.js'
 import type { Message } from './messages.js'
 import { knownMessage, useT } from './i18n.js'
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { ArrowLeft, Eraser, Heart, Lightbulb, Pause, Pencil, Play, Redo2, RotateCcw, Settings2, Timer, Undo2, WandSparkles } from 'lucide-react'
-import type { Preferences, SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { bit, candidateMasks, column, conflicts, row, rules, rulesFor, type Board } from '../../../packages/sudoku/src/rules.js'
 import { logicalHint, type LogicalStep } from '../../../packages/sudoku/src/logic.js'
 import { effectivePackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
@@ -26,7 +25,7 @@ export function createSave(level: PublishedLevel, pack?: PublishedPack): SudokuS
 
 interface Props {
   session: LocalSession<SudokuSave>; level: PublishedLevel; preferences: Preferences; reader: boolean; pack?: PublishedPack
-  persist: (data: SudokuSave) => Promise<void>; leave: () => void; reset: () => void; openSettings?: () => void; trial?: boolean
+  persist: (data: SudokuSave) => Promise<void>; leave: () => void; restart: () => void; openSettings?: () => void; trial?: boolean
   leaderboard?: { open: () => void }
   bestMs?: number; testMode?: boolean
 }
@@ -36,7 +35,7 @@ function digitUsedUp(entries: readonly number[], digit: number) {
   return entries.filter(value => value === digit).length >= 9
 }
 
-export default function Player({ session, level, preferences, reader, pack, persist, leave, reset, openSettings, trial = false, bestMs, testMode = false, leaderboard }: Props) {
+export default function Player({ session, level, preferences, reader, pack, persist, leave, restart, openSettings, trial = false, bestMs, testMode = false, leaderboard }: Props) {
   const t = useT()
   const givens = useMemo(() => Array.from(level.grid, Number), [level.grid])
   const packRules = pack && level.pack ? effectivePackRules(pack, level.pack.stop) : undefined
@@ -84,6 +83,16 @@ export default function Player({ session, level, preferences, reader, pack, pers
   }
   const gameOver = data.lives === 0
   const finished = data.completed || gameOver
+  /** Clear the board only: keep the attempt, elapsed time, lives, aids and revisions. */
+  function resetInput() {
+    if (finished) return
+    excluded.current = []
+    setHint(undefined)
+    setLostLife(undefined)
+    setLockedDigit(0)
+    select(Math.max(givens.indexOf(0), 0))
+    void snapshot(resetSudokuInput(latest.current, givens))
+  }
   useEffect(() => {
     if (paused || finished) return
     started.current = Date.now()
@@ -242,7 +251,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
-    ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
+    ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: restart }]),
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
@@ -278,7 +287,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
               <strong>{displayTime(data.elapsedMs)}</strong>
               <span>{t(trial ? 'Test complete' : 'Saved')}</span>
             </div>}
-          <button className="primary" onClick={gameOver ? reset : leave}>{gameOver ? t("Retry puzzle") : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
+          <button className="primary" onClick={gameOver ? restart : leave}>{gameOver ? t("Retry puzzle") : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
           {!gameOver && <div className="button-bar">
             {leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
             <PuzzleShare level={level}/>
@@ -318,7 +327,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
           </p>}
           {!pack && level.seed && <PuzzleShare level={level}/>}
           </>}
-        {!gameOver && <button className="text-button" onClick={() => { if (confirm(t("Start over? Your current saved game will be deleted."))) reset() }}>
+        {!finished && <button className="text-button" onClick={() => { if (confirm(t("Reset the board? Your board clears, the game stays saved, and the timer keeps running."))) resetInput() }}>
           <RotateCcw size={16}/>{" "}{t("Reset puzzle")}
         </button>}
         <p role="alert" className="error">{problem && t('Save failed. {detail}', { detail: knownMessage(t, problem) })}</p>
