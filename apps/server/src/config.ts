@@ -1,5 +1,6 @@
 import { isLocale, locales } from '../../../packages/game-sdk/src/locales.js'
 import pg from 'pg'
+import { validTimeZone } from './challenges/time.js'
 
 const loginFlag = process.env.LOGIN_ENABLED ?? 'true'
 if (loginFlag !== 'true' && loginFlag !== 'false') throw new Error('LOGIN_ENABLED must be true or false')
@@ -9,6 +10,14 @@ if (testFlag !== 'true' && testFlag !== 'false') throw new Error('TEST_ENVIRONME
 export const testEnvironment = testFlag === 'true'
 const allowLanTest = testEnvironment && process.env.TEST_ENVIRONMENT_ALLOW_LAN === 'true'
 const pocketIdEnabled = loginEnabled && !testEnvironment
+
+const challengesFlag = process.env.CHALLENGES_ENABLED ?? 'true'
+if (challengesFlag !== 'true' && challengesFlag !== 'false') throw new Error('CHALLENGES_ENABLED must be true or false')
+/** Emergency kill switch. The database series switch is the graceful pause. */
+export const challengesEnabled = challengesFlag === 'true'
+export const challengeTimeZone = process.env.CHALLENGE_TIMEZONE ?? 'UTC'
+if (!validTimeZone(challengeTimeZone))
+  throw new Error('CHALLENGE_TIMEZONE must be a valid IANA timezone')
 
 const { DATABASE_URL, PUBLIC_ORIGIN, OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_CALLBACK_URL } = process.env
 export const pool = new pg.Pool({

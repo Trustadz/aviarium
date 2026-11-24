@@ -8,6 +8,7 @@ import {
   type LeaderboardPackSummary, type LeaderboardPlayerResult, type LeaderboardPlayerSummary, type LeaderboardRecords,
   type LeaderboardRemovalNotice, type LeaderboardStanding, type LeaderboardSummary, type LeaderboardValueUnit,
 } from '../../../packages/game-sdk/src/leaderboards.js'
+import type { ChallengeResult } from '../../../packages/game-sdk/src/challenges.js'
 import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { AttemptMutation, SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { digest, HttpError, requireUser, type User } from './auth.js'
@@ -79,7 +80,7 @@ async function levelsForPairs(db: Pool | PoolClient, game: ServerGame, pairs: re
   return new Map(rows.map(level => [level.id + ':' + level.revision, level]))
 }
 
-async function boardSummaries(db: Pool | PoolClient, game: ServerGame, keys: readonly string[], viewer: string, limit: number) {
+export async function boardSummaries(db: Pool | PoolClient, game: ServerGame, keys: readonly string[], viewer: string, limit: number) {
   const unique = [...new Set(keys)]
   if (!unique.length) return new Map<string, Summary>()
   const { rows } = await db.query<SummaryRow>(`WITH best AS (
@@ -285,6 +286,45 @@ export async function recordLeaderboardResult(db: PoolClient, user: User, game: 
     record.value, record.unit, record.lowerIsBetter,
     record.aids === undefined || record.aids === null ? null : JSON.stringify(record.aids),
     record.rulesVersion, completedAt, recordedAt, recent.rowCount ? 'cooldown' : 'active'])
+}
+
+export interface ChallengeResultContext {
+  slotId: string
+  attemptId?: string
+  occurrenceId: string
+  periodKey: string
+  timeZone: string
+  game: string
+  options: Record<string, unknown>
+  rules: Record<string, unknown>
+}
+
+/**
+ * Write the one challenge result for a completed, verified attempt. Challenge
+ * results never use the general cooldown: they are always active on the
+ * challenge board and are isolated from the general boards.
+ */
+export async function recordChallengeResult(db: PoolClient, user: User, game: ServerGame, level: LevelRecord,
+  saved: SavedAttempt, context: ChallengeResultContext, record: ChallengeResult, now: Date) {
+  const boardKey = 'challenge:' + context.slotId
+  const puzzleKey = digest('challenge|' + game.id + '|' + context.slotId + '|' + record.puzzleContent)
+  const boardMeta = {
+    occurrenceId: context.occurrenceId,
+    periodKey: context.periodKey,
+    timeZone: context.timeZone,
+    game: context.game,
+    ...context.options,
+  }
+  await db.query(`INSERT INTO leaderboard_results(save_id,owner_id,game_id,board_key,board_kind,board_meta,
+      level_id,level_revision,pack_id,pack_revision,pack_stop,level_title,pack_title,seed_code,puzzle_key,
+      score_value,value_unit,lower_is_better,aids,rules_version,completed_at,recorded_at,status,
+      challenge_slot_id,challenge_attempt_id)
+    VALUES($1,$2,$3,$4,'challenge',$5,$6,$7,NULL,NULL,NULL,$8,NULL,NULL,$9,$10,$11,$12,$13,$14,$15,now(),'active',$16,$17)
+    ON CONFLICT (save_id) DO NOTHING`,
+  [saved.id, user.id, game.id, boardKey, JSON.stringify(boardMeta), level.id, level.revision, level.title,
+    puzzleKey, record.value, record.unit, record.lowerIsBetter,
+    record.aids === undefined || record.aids === null ? null : JSON.stringify(record.aids),
+    record.rulesVersion, now, context.slotId, context.attemptId ?? null])
 }
 
 function boardFromResult(row: { game: string; boardKey: string; boardKind: string; boardMeta: unknown;

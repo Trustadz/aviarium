@@ -792,6 +792,22 @@ export const dutch = {
   "Auto solve": "Automatisch oplossen",
   "Celebration preview": "Viering bekijken",
   "Preview puzzle celebration": "Puzzelviering bekijken",
+  "That challenge was not found.": "Die uitdaging is niet gevonden.",
+  "Daily challenges are not enabled on this instance.": "Dagelijkse uitdagingen zijn niet ingeschakeld op deze installatie.",
+  "That challenge has closed.": "Die uitdaging is gesloten.",
+  "You have already completed this challenge.": "Je hebt deze uitdaging al voltooid.",
+  "This challenge game is not available.": "Dit uitdagingsspel is niet beschikbaar.",
+  "This game is not available in this version.": "Dit spel is niet beschikbaar in deze versie.",
+  "Open this daily challenge from the Daily Challenges page.": "Open deze dagelijkse uitdaging via de pagina Dagelijkse uitdagingen.",
+  "This challenge attempt could not be verified.": "Deze uitdagingspoging kon niet worden geverifieerd.",
+  "This challenge attempt does not match.": "Deze uitdagingspoging komt niet overeen.",
+  "The challenge settings changed. Reload and try again.": "De uitdagingsinstellingen zijn gewijzigd. Herlaad en probeer opnieuw.",
+  "Choose fewer games per day.": "Kies minder spellen per dag.",
+  "That game is not available for challenges.": "Dat spel is niet beschikbaar voor uitdagingen.",
+  "Enable at least one challenge-capable game.": "Schakel minstens één spel in dat uitdagingen ondersteunt.",
+  "Enter a valid reset time.": "Voer een geldige resettijd in.",
+  "The challenge could not be prepared. Try again.": "De uitdaging kon niet worden voorbereid. Probeer het opnieuw.",
+  "Enable at least one option for every challenge game.": "Schakel voor elk uitdagingsspel minstens één optie in.",
 } as const satisfies Record<typeof apiMessages[keyof typeof apiMessages], string> & Record<string, string>
 
 export type Message = keyof typeof dutch

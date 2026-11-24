@@ -7,6 +7,7 @@ import { ZodError } from 'zod'
 import { HttpError, pocketAvatarOrigin, registerAuth } from './auth.js'
 import { runBackups } from './backup-runner.js'
 import { registerBackups } from './backups.js'
+import { registerChallenges } from './challenges/routes.js'
 import { enabledLocales, listenHost, origin, pool } from './config.js'
 import { registerNews } from './news.js'
 import { runNewsTranslations } from './news-translation.js'
@@ -64,6 +65,7 @@ export async function makeApp() {
   }
   registerProgress(app)
   registerLeaderboards(app)
+  registerChallenges(app)
   registerBackups(app)
   await app.register(staticFiles, {
     root: fileURLToPath(new URL('../../../../dist/web/', import.meta.url)),
