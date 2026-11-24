@@ -62,3 +62,10 @@ export type {
   ChallengePlayerStatus, ChallengeReplay, ChallengeResult, ChallengeSelection, ChallengeSeriesView, ChallengeSlotRecipe,
   ChallengeSlotStatus, ChallengeSlotView, ChallengeStandings,
 } from './challenges.js'
+export {
+  GameRuleError, gameContractVersion, validateGameRegistry,
+} from './game.js'
+export type {
+  GameDefinition, GameGeneration, GameLeaderboard, GameOptionField, GameOptionGroup, GamePacks, GamePlay,
+  GameRegistry, GameResult, GameRuleValues, GeneratedContent, RegisteredGame, SaveContext, StoredLevel,
+} from './game.js'

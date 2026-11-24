@@ -1,9 +1,14 @@
-import { nonogramsChallenge } from './nonograms.js'
-import { sudokuChallenge } from './sudoku.js'
+import { gameRegistry } from '../game-registry.js'
+import { challengeGameFromDefinition } from './definition.js'
 import type { ChallengeGameRuntime } from './types.js'
 
 /**
- * Registered challenge-capable games. Adding a game is a module plus its
- * registration; the scheduler and board code never name Sudoku or Nonograms.
+ * Challenge-capable games are derived from the same GameRegistry as packs,
+ * leaderboards and saves. Adding a game with `generation` and `leaderboard`
+ * makes it eligible for daily challenges without editing challenge code.
  */
-export const challengeGames: readonly ChallengeGameRuntime[] = [sudokuChallenge, nonogramsChallenge]
+export const challengeGames: readonly ChallengeGameRuntime[] = gameRegistry.challengeCapable()
+  .flatMap(({ definition }) => {
+    const game = challengeGameFromDefinition(definition)
+    return game ? [game] : []
+  })

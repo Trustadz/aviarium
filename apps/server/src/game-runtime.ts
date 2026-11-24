@@ -15,7 +15,7 @@ export interface LevelRecord extends GameLevel {
 export interface GamePacks {
   readManifest(input: unknown): PackDocument
   readDraft(input: unknown): PackDocument
-  verify(input: PackDocument, prior: readonly LevelRecord[]): PackDocument
+  verify(input: PackDocument, prior: readonly LevelRecord[]): PackDocument | Promise<PackDocument>
   levels(pack: PackRevision): LevelRecord[]
   sameLevel(entry: PackEntry, rules: ProgressionRules, previous: PackEntry, previousRules: ProgressionRules): boolean
   builtIn: readonly { id: string; revision: number; coverFile?: string; data: PackDocument }[]

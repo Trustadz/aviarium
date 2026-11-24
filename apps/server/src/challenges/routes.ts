@@ -6,7 +6,7 @@ import type {
 import type { LeaderboardStanding } from '../../../../packages/game-sdk/src/leaderboards.js'
 import { HttpError, requireUser } from '../auth.js'
 import { challengeTimeZone, challengesEnabled, pool } from '../config.js'
-import { serverGames } from '../games.js'
+import type { ServerGame } from '../game-runtime.js'
 import { boardSummaries } from '../leaderboards.js'
 import { requestNow } from './now.js'
 import {
@@ -104,7 +104,8 @@ function stripChallengeStanding(row: LeaderboardStanding | null): LeaderboardSta
   return { ...row, seedCode: null, level: row.level ? { ...row.level, seed: null, generatorVersion: null } : undefined }
 }
 
-async function standingsFor(slot: SlotRow, viewer: string): Promise<ChallengeStandings> {
+async function standingsFor(slot: SlotRow, viewer: string,
+  serverGames: ReadonlyMap<string, ServerGame>): Promise<ChallengeStandings> {
   const game = serverGames.get(slot.game_id)
   if (!game) return { top: [], you: null, total: 0 }
   const key = 'challenge:' + slot.id
@@ -117,9 +118,9 @@ async function standingsFor(slot: SlotRow, viewer: string): Promise<ChallengeSta
 }
 
 async function slotView(occurrence: OccurrenceRow, slot: SlotRow, viewer: string, now: number,
-  includeReplay: boolean): Promise<ChallengeSlotView> {
+  includeReplay: boolean, serverGames: ReadonlyMap<string, ServerGame>): Promise<ChallengeSlotView> {
   const [attempt, playerResult, level, standings] = await Promise.all([
-    loadAttempt(slot.id, viewer), loadPlayerResult(slot.id, viewer), loadLevel(slot), standingsFor(slot, viewer),
+    loadAttempt(slot.id, viewer), loadPlayerResult(slot.id, viewer), loadLevel(slot), standingsFor(slot, viewer, serverGames),
   ])
   const registered = serverGames.has(slot.game_id)
   const status = playerStatus(occurrence, slot, attempt, now, registered)
@@ -170,7 +171,7 @@ async function enabledSeries(): Promise<{ enabled: boolean; series?: SeriesRow }
   return { enabled: series.enabled, series }
 }
 
-export function registerChallenges(app: FastifyInstance) {
+export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>) {
   app.get('/api/challenges/summary', async request => {
     const user = await requireUser(request)
     const now = requestNow(request)
@@ -216,7 +217,7 @@ export function registerChallenges(app: FastifyInstance) {
     }
     const { rows: slots } = await pool.query<SlotRow>('SELECT * FROM challenge_slots WHERE occurrence_id=$1 ORDER BY position',
       [occurrence.id])
-    const views = await Promise.all(slots.map(slot => slotView(occurrence!, slot, user.id, now, false)))
+    const views = await Promise.all(slots.map(slot => slotView(occurrence!, slot, user.id, now, false, serverGames)))
     return {
       enabled: true, slots: views, open: await openCount(occurrence, user.id, now), serverNow,
       occurrence: occurrenceView(occurrence), series: seriesView(series), nextStart: null,
@@ -242,7 +243,7 @@ export function registerChallenges(app: FastifyInstance) {
     const days = await Promise.all(occurrences.map(async occurrence => {
       const { rows: slots } = await pool.query<SlotRow>('SELECT * FROM challenge_slots WHERE occurrence_id=$1 ORDER BY position',
         [occurrence.id])
-      const views = await Promise.all(slots.map(slot => slotView(occurrence, slot, user.id, now, true)))
+      const views = await Promise.all(slots.map(slot => slotView(occurrence, slot, user.id, now, true, serverGames)))
       return { occurrence: occurrenceView(occurrence), slots: views }
     }))
     return {
@@ -260,7 +261,7 @@ export function registerChallenges(app: FastifyInstance) {
     const series = await readSeries(pool, occurrence.series_id)
     const { rows: slots } = await pool.query<SlotRow>('SELECT * FROM challenge_slots WHERE occurrence_id=$1 ORDER BY position',
       [occurrence.id])
-    const views = await Promise.all(slots.map(slot => slotView(occurrence, slot, user.id, now, true)))
+    const views = await Promise.all(slots.map(slot => slotView(occurrence, slot, user.id, now, true, serverGames)))
     const open = series?.enabled && now < Date.parse(iso(occurrence.ends_at))
       ? await openCount(occurrence, user.id, now) : 0
     return {

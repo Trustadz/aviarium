@@ -191,6 +191,15 @@ progress mutations. Challenge results use `board_kind='challenge'` and
 player summaries and board selection. The pure boundary helper is
 [`challenges/time.ts`](../apps/server/src/challenges/time.ts); the API and
 product rules are documented in [daily challenges](challenges.md).
+## Game contract
+
+The shared game contract is documented in [game contract](game-contract.md). A
+game supplies its level/attempt codecs, generation, pack materialization and
+result interpretation; the platform owns routing, packs, leaderboards, saves and
+daily challenges. The Sudoku and Nonograms `GameDefinition` adapters, the runtime registry and a
+fake-game fixture are in place. The server compatibility map is built from the definitions and injected into
+the platform registrations; the legacy `ServerGame` adapter and the web contract
+remain for the next slices.
 
 ## Current scope
 

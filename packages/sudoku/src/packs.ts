@@ -7,7 +7,7 @@ import { definePackSchemas, packLevelFields, packLevelId, progressionRules, effe
 export { authoringPack, effectivePackRules, packImageBytes, packLevelId, packProgress, packProgressPath, packUploadBytes,
   type PackCompletion, type PackPath } from '../../game-sdk/src/packs.js'
 
-const packRulesSchema = progressionRules.extend({
+export const packRulesSchema = progressionRules.extend({
   hints: z.boolean(), autoNotes: z.boolean(), lives: z.number().int().min(1).max(9).nullable(),
   timeTrial: z.boolean(), diagonal: z.boolean().optional(),
 })

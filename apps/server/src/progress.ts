@@ -5,7 +5,6 @@ import { locales } from '../../../packages/game-sdk/src/locales.js'
 import { isResumable, mutationHeader, savedGameLimit, type AttemptMutation, type SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { effectivePackRules, packProgress, packProgressPath, type PackCompletion, type PackDocument, type PackRevision, type ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
 import type { LevelRecord, ServerGame } from './game-runtime.js'
-import { serverGames } from './games.js'
 import { accountRoleSchema, digest, HttpError, requireUser, userFields, withLegacyEditorGames, type User } from './auth.js'
 import { pool, transaction } from './config.js'
 import { recordChallengeResult, recordLeaderboardResult } from './leaderboards.js'
@@ -16,8 +15,8 @@ import type { OccurrenceRow, SlotRow } from './challenges/store.js'
 import { packHistory } from './pack-progress.js'
 
 const fields = 'id,revision,data,parent_id AS "parentId",archived,floor(extract(epoch FROM updated_at) * 1000)::double precision AS "updatedAt"'
-const gamePreferenceFields = Object.assign({}, ...[...serverGames.values()].map(game => game.preferences?.shape ?? {})) as Record<string, z.ZodType>
-const preferencesPatch = z.object({ ...gamePreferenceFields, locale: z.enum(locales) }).partial()
+const preferenceFields = (games: ReadonlyMap<string, ServerGame>) =>
+  Object.assign({}, ...[...games.values()].map(game => game.preferences?.shape ?? {})) as Record<string, z.ZodType>
 const continueOrder = 'updated_at DESC NULLS LAST, revision DESC, id DESC'
 
 interface ChallengeAttemptRow {
@@ -136,7 +135,8 @@ async function handleChallengeMutation(db: PoolClient, user: User, game: ServerG
 }
 
 
-export function registerProgress(app: FastifyInstance) {
+export function registerProgress(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>) {
+  const preferencesPatch = z.object({ ...preferenceFields(serverGames), locale: z.enum(locales) }).partial()
   app.get('/api/progress', async request => {
     const user = await requireUser(request)
     const [saves, completions, prefs, levels] = await Promise.all([
