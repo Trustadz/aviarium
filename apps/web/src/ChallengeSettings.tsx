@@ -33,9 +33,10 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
   const intl = useIntl()
   const [data, setData] = useState<ChallengeSettingsData>()
   const [enabled, setEnabled] = useState(false)
+  const [gameLimit, setGameLimit] = useState(1)
   const [hour, setHour] = useState(0)
   const [minute, setMinute] = useState(0)
-  const [profile, setProfile] = useState<Record<string, string[]>>({})
+  const [profile, setProfile] = useState<Record<string, Record<string, string[]>>>({})
   const [problem, setProblem] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -46,18 +47,20 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
       if (!current) return
       setData(value)
       setEnabled(value.enabled)
+      setGameLimit(value.gameLimit)
       setHour(Math.floor(value.resetMinute / 60))
       setMinute(value.resetMinute % 60)
-      const game = value.registeredGames[0]
-      const group = game?.optionGroups.find(item => item.kind === 'generation') ?? game?.optionGroups[0]
-      setProfile(group ? { [group.key]: value.gameOptions[game!.id]?.[group.key] ?? [...group.defaultEnabled] } : {})
+      setProfile(Object.fromEntries(value.registeredGames.map(game => [game.id,
+        Object.fromEntries(game.optionGroups.map(group => [
+          group.key, value.gameOptions[game.id]?.[group.key] ?? [...group.defaultEnabled],
+        ]))])))
     }, error => { if (current) setProblem(errorMessage(error)) })
     return () => { current = false }
   }, [accountId])
 
-  const game = data?.registeredGames[0]
-  const group = game?.optionGroups.find(item => item.kind === 'generation') ?? game?.optionGroups[0]
-  const selected = group ? (profile[group.key] ?? group.defaultEnabled) : []
+  const games = data?.registeredGames ?? []
+  const valid = games.length > 0 && games.every(game => game.optionGroups.every(group =>
+    (profile[game.id]?.[group.key]?.length ?? 0) > 0))
 
   function run(task: () => Promise<void>) {
     setBusy(true); setProblem(''); setMessage('')
@@ -65,13 +68,13 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
   }
 
   function save() {
-    if (!data || !game || !group) return
+    if (!data || !valid) return
     run(async () => {
       const value = await api<ChallengeSettingsData>('/admin/challenges/settings', json('PATCH', {
         enabled,
-        gameLimit: 1,
+        gameLimit,
         resetMinute: hour * 60 + minute,
-        gameOptions: { [game.id]: { [group.key]: selected } },
+        gameOptions: profile,
         expectedUpdatedAt: data.updatedAt,
       }), accountId)
       setData(value)
@@ -81,9 +84,17 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
 
   function prepare() {
     run(async () => {
-      const value = await api<{ prepared: boolean; preparing: boolean; occurrence?: { periodKey: string } }>(
-        '/admin/challenges/prepare', json('POST', {}), accountId)
+      const value = await api<{ prepared: boolean; preparing: boolean }>('/admin/challenges/prepare', json('POST', {}), accountId)
       setMessage(value.prepared ? t('Challenge prepared.') : t('The challenge could not be prepared. Try again.'))
+    })
+  }
+
+  function toggle(gameId: string, groupKey: string, choiceId: string, checked: boolean) {
+    setProfile(current => {
+      const game = current[gameId] ?? {}
+      const selected = game[groupKey] ?? []
+      return { ...current, [gameId]: { ...game, [groupKey]: checked
+        ? [...new Set([...selected, choiceId])] : selected.filter(id => id !== choiceId) } }
     })
   }
 
@@ -97,6 +108,10 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
       <label className="setting-row">{t('Enable daily challenges')}<input type="checkbox" checked={enabled}
         disabled={busy} onChange={event => setEnabled(event.target.checked)}/></label>
       <div className="form-row">
+        <label>{t('Games per day')}<select value={gameLimit} disabled={busy || games.length < 2}
+          onChange={event => setGameLimit(Number(event.target.value))}>
+          {Array.from({ length: Math.max(1, games.length) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+        </select></label>
         <label>{t('Reset time')}
           <span className="challenge-time-selects">
             <select aria-label={t('Reset hour')} value={hour} disabled={busy} onChange={event => setHour(Number(event.target.value))}>
@@ -110,14 +125,16 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
         </label>
         <label>{t('Timezone')}<input value={data.timezone} readOnly aria-readonly="true"/></label>
       </div>
-      {group && <fieldset className="challenge-settings-options"><legend>{t('Generation options')}</legend>
-        <p className="muted">{t('The daily puzzle picks from the enabled values. Disable a value to keep it out of the rotation.')}</p>
-        {group.choices.map(choice => <label key={choice.id} className="setting-row">{t(choice.label as never)}
-          <input type="checkbox" checked={selected.includes(choice.id)} disabled={busy} onChange={event => {
-            const next = event.target.checked ? [...selected, choice.id] : selected.filter(id => id !== choice.id)
-            setProfile(current => ({ ...current, [group.key]: next }))
-          }}/></label>)}
-      </fieldset>}
+      {games.map(game => <section className="challenge-settings-game" key={game.id} aria-label={game.label}>
+        <h3>{game.label}</h3>
+        {game.optionGroups.map(group => <fieldset className="challenge-settings-options" key={group.key}>
+          <legend>{t(group.label as never)}</legend>
+          {group.choices.map(choice => <label key={choice.id} className="setting-row">{knownMessage(t, choice.label)}
+            <input type="checkbox" checked={(profile[game.id]?.[group.key] ?? []).includes(choice.id)} disabled={busy}
+              onChange={event => toggle(game.id, group.key, choice.id, event.target.checked)}/>
+          </label>)}
+        </fieldset>)}
+      </section>)}
       <div className="challenge-settings-status">
         {data.current ? <p><strong>{t('Today')}</strong> · {formatChallengeDate(intl, data.current.startsAt, data.current.timezone)} · {t('Resets at {time} ({zone})', {
           time: formatResetMinute(data.resetMinute), zone: data.timezone })} · {data.current.prepared ? t('Ready') : data.current.preparing ? t('Preparing challenge') : t('Not prepared')}</p>
@@ -125,7 +142,7 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
         <p className="muted">{t('Next: {time} ({zone})', { time: formatChallengeTime(t, intl, data.next.startsAt, data.timezone), zone: data.timezone })}</p>
       </div>
       <div className="button-bar">
-        <button className="primary" onClick={save} disabled={busy || !selected.length}><Save size={16}/> {t('Save challenge settings')}</button>
+        <button className="primary" onClick={save} disabled={busy || !valid}><Save size={16}/> {t('Save challenge settings')}</button>
         <button className="secondary" onClick={prepare} disabled={busy || !data.enabled}><WandSparkles size={16}/> {t('Prepare now')}</button>
       </div>
     </>}

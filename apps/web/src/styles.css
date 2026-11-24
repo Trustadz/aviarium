@@ -1643,3 +1643,5 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
 .challenge-yesterday { margin-top: 14px; }
 
 .admin-challenges { grid-column: 1 / -1; }
+.challenge-settings-game { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.challenge-settings-game h3 { margin: 0 0 8px; }

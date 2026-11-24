@@ -125,7 +125,8 @@ function SlotCard({ day, slot, past, accountId, link, start, board, replay }: {
   const intl = useIntl()
   const game = findGame(slot.game)
   const title = game ? knownMessage(t, game.title) : slot.game
-  const detail = slot.level?.difficulty ? t(slot.level.difficulty as Message) : ''
+  const size = typeof slot.options.size === 'number' ? slot.options.size : undefined
+  const detail = [size ? size + ' × ' + size : '', slot.level?.difficulty ? t(slot.level.difficulty as Message) : ''].filter(Boolean).join(' · ')
   const result = slot.player.result
   return <section className="challenge-slot panel" aria-label={title}>
     <div className="challenge-slot-head">

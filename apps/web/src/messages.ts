@@ -861,6 +861,7 @@ export const dutch = {
   "Tomorrow": "Morgen",
   "View daily challenges": "Bekijk dagelijkse uitdagingen",
   "View the challenge board": "Bekijk het uitdagingsbord",
+  "Games per day": "Spellen per dag",
   "Challenge settings saved.": "Uitdagingsinstellingen opgeslagen.",
   "Set the daily reset and the generation options. Challenge content is generated, never authored here.": "Stel de dagelijkse reset en de generatie-opties in. Uitdagingsinhoud wordt gegenereerd en hier niet geschreven.",
   "Reset hour": "Resetuur",
