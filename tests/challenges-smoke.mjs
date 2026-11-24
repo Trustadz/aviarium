@@ -148,6 +148,8 @@ try {
     const sudokuSlot = replayPage.locator('.challenge-slot').filter({ hasText: 'Sudoku' })
     await sudokuSlot.getByRole('button', { name: /Play this seed/ }).click()
     await replayPage.waitForURL(/\/games\/sudoku/, { timeout: 10000 })
+    await replayPage.locator('.replay-notice').waitFor()
+    assert.match(await replayPage.locator('.replay-notice').innerText(), /Replay/)
     await replayContext.context.close()
     await replayContext.launched.close()
     const next = await request('/api/challenges', { headers: headers1, now: clock.after })

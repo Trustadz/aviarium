@@ -194,6 +194,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [active, setActive] = useState<{
     session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision; parent: string
     playerPath?: string
+    replay?: { label: string }
     challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
   }>()
   const [challengeSummary, setChallengeSummary] = useState<{ enabled: boolean; open: number }>()
@@ -409,7 +410,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     return result
   }
   async function open(game: WebGame, level: GameLevel, existing?: LocalSession, suppliedPack?: PackRevision,
-    options: { replace?: boolean } = {}) {
+    options: { replace?: boolean; parent?: string; replay?: { label: string } } = {}) {
     if (!canPlay(game)) throw new Error(game.connectMessage)
     if (level.source === 'Challenge' && !existing?.challenge)
       throw new Error('Open this from Daily Challenges.')
@@ -421,7 +422,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     if (!existing) await saveLocal(session)
-    const parent = pack ? packPath(pack) : game.url
+    const parent = options.parent ?? (pack ? packPath(pack) : game.url)
     if (options.replace) {
       replaceLayer(game.url, { player: true })
     } else {
@@ -439,7 +440,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       }
       pushLayer(game.url, { player: true })
     }
-    setNotice(''); setActive({ game, session, level, head: session, pack, parent, playerPath: game.url })
+    setNotice(''); setActive({ game, session, level, head: session, pack, parent, playerPath: game.url, replay: options.replay })
     setPath(game.url)
     window.scrollTo(0, 0)
   }
@@ -519,7 +520,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (!game) throw new Error('This game is not available in this version.')
     const level = await api<GameLevel>('/games/' + encodeURIComponent(replay.game) + '/quick-play',
       json('POST', { ...replay.options, seed: replay.seed, version: replay.generatorVersion }), accountId)
-    await open(game, level)
+    await open(game, level, undefined, undefined, {
+      ...(replay.occurrenceId ? { parent: '/challenges/' + replay.occurrenceId } : {}),
+      replay: { label: t('Replay · {date} · daily board closed', { date: replay.periodKey ?? '' }) },
+    })
   }
 
 
@@ -711,6 +715,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
         challenge={playing.challenge ? { occurrenceId: playing.challenge.occurrenceId, slotId: playing.challenge.slotId,
           game: playing.challenge.game, attemptId: playing.challenge.attemptId, endsAt: playing.challenge.endsAt } : undefined}
+        replay={playing.replay}
         standingsPanel={playing.challenge ? <ChallengeStandingsPanel occurrenceId={playing.challenge.occurrenceId}
           gameId={playing.challenge.game} accountId={account?.id} online={online}
           onPlayOther={game => perform(() => playOtherChallenge(game))}/>

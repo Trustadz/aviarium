@@ -845,6 +845,7 @@ export const dutch = {
   "Leaderboard standings": "Klassementsuitslag",
   "This puzzle’s standings": "Klassement van deze puzzel",
   "Play the other challenge": "Speel de andere uitdaging",
+  "Replay · {date} · daily board closed": "Herhaling · {date} · dagklassement gesloten",
   "Resume the other challenge": "Hervat de andere uitdaging",
   "Your result is not on this board.": "Je resultaat staat niet op dit bord.",
   "General": "Algemeen",

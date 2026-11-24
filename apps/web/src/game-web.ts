@@ -14,6 +14,8 @@ export interface GamePlayerProps {
   challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
   /** Optional compact standings block rendered inside the after-game overlay. */
   standingsPanel?: ReactNode
+  /** Present when a closed challenge seed is being replayed outside the daily board. */
+  replay?: { label: string }
   level: GameLevel
   pack?: PackRevision
   session: LocalSession

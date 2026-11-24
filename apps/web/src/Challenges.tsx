@@ -12,6 +12,9 @@ import type { Message } from './messages.js'
 
 export interface ChallengeReplayView {
   game: string
+  occurrenceId?: string
+  periodKey?: string
+  timeZone?: string
   seed: string
   options: Record<string, string | number | boolean | null>
   rules: Record<string, string | number | boolean | null>
@@ -160,7 +163,9 @@ function SlotCard({ day, slot, past, accountId, link, start, board, replay }: {
       {!past && slot.player.status === 'available' && <p className="muted challenge-start-note">{t('One timed run. The clock starts when you begin.')}</p>}
       {slot.player.status === 'completed' && <button className="secondary" onClick={board}
         aria-label={t('View {game} challenge board', { game: title })}>{t('View board')}</button>}
-      {past && slot.replay && <button className="secondary" onClick={() => replay(slot.replay!)}><RotateCcw size={16}/> {t('Play this seed')}</button>}
+      {past && slot.replay && <button className="secondary" onClick={() => replay({ ...slot.replay!,
+        occurrenceId: day.occurrence?.id, periodKey: day.occurrence?.periodKey, timeZone: day.occurrence?.timezone })}>
+        <RotateCcw size={16}/> {t('Play this seed')}</button>}
       {slot.status !== 'failed' && slot.player.status !== 'completed' && <button className="text-button" onClick={board}
         aria-label={t('View {game} challenge board', { game: title })}>{t('Challenge board')} <ChevronRight size={16}/></button>}
     </div>

@@ -26,6 +26,7 @@ interface Props {
   bestMs?: number; testMode?: boolean
   challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
   standingsPanel?: ReactNode
+  replay?: { label: string }
 }
 type Hint = { cell?: number } & ({ stage: 1 | 2 | 3; step: LogicalStep } | { stage?: never; message: Message })
 
@@ -33,7 +34,7 @@ function digitUsedUp(entries: readonly number[], digit: number) {
   return entries.filter(value => value === digit).length >= 9
 }
 
-export default function Player({ session, level, preferences, reader, pack, persist, leave, restart, openSettings, trial = false, bestMs, testMode = false, leaderboard, challenge, standingsPanel }: Props) {
+export default function Player({ session, level, preferences, reader, pack, persist, leave, restart, openSettings, trial = false, bestMs, testMode = false, leaderboard, challenge, standingsPanel, replay }: Props) {
   const t = useT()
   const challengeMode = Boolean(challenge)
   const givens = useMemo(() => Array.from(level.grid, Number), [level.grid])
@@ -270,6 +271,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
         {data.lives !== undefined && <span className="clock" aria-label={t('{count, plural, one {# life remaining} other {# lives remaining}}', { count: data.lives })}><Heart size={16}/>{data.lives}/{lifeLimit}</span>}
         {showTimer && <span className="clock"><Timer size={17}/>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}
       </div></div>
+    {replay && <p className="notice replay-notice" role="status">{replay.label}</p>}
     <div className="play-layout">
       <div className="board-wrap">
         {paused ? <div className="pause-panel"><h2>{t("Game paused")}</h2><button className="primary" onClick={() => { started.current = Date.now(); setPaused(false) }}><Play size={18}/>{" "}{t("Resume game")}</button></div>

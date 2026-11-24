@@ -9,7 +9,7 @@ import { displayTime } from './SudokuMenu.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences, leave, persist, restart, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel }:
+export default function Nonograms({ level, pack, session, preferences, leave, persist, restart, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel, replay }:
 GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const challengeMode = Boolean(challenge)
@@ -108,7 +108,7 @@ GamePlayerProps & { trial?: boolean }) {
   return <>
     <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} testMode={testMode}
       leave={exit} resetInput={resetInput} openSettings={openSettings} committed={saved.board} undo={saved.undo}
-      problem={problem} trial={trial} challengeMode={challengeMode} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard}/>
+      problem={problem} trial={trial} challengeMode={challengeMode} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard} replay={replay}/>
     {celebration !== undefined && <CelebrationOverlay reader={reader}
       result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
         saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) })
@@ -124,7 +124,7 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard }: {
+function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard, replay }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
@@ -141,6 +141,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, com
   showTimer: boolean
   onMove: (cells: Cell[], undo: Cell[][]) => void
   leaderboard?: { open: () => void }
+  replay?: { label: string }
 }) {
   const t = useT()
   const width = puzzle.columns.length
@@ -270,6 +271,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, resetInput, openSettings, com
         {showTimer && <span className="clock"><Timer size={17}/>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}
       </div>
     </div>
+    {replay && <p className="notice replay-notice" role="status">{replay.label}</p>}
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
     <div className="play-layout">
       <div className="board-wrap">

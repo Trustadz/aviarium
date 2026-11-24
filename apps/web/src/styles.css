@@ -1648,6 +1648,7 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
 
 
 .challenge-start-note { margin: 0; font-size: .8rem; }
+.replay-notice { margin: 0 0 12px; }
 .challenge-other { margin-top: 10px; width: 100%; }
 .challenge-admin-note,
 .challenge-settings-help { margin: 4px 0 0; font-size: .82rem; }
