@@ -842,6 +842,8 @@ export const dutch = {
   "This daily leaderboard is closed.": "Dit dagelijkse klassement is gesloten.",
   "{done} of {total} completed": "{done} van {total} voltooid",
   "Starting…": "Starten…",
+  "Leaderboard standings": "Klassementsuitslag",
+  "Your result is not on this board.": "Je resultaat staat niet op dit bord.",
   "General": "Algemeen",
   "Challenges": "Uitdagingen",
   "Leaderboard views": "Klassementweergaven",

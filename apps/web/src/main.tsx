@@ -18,6 +18,7 @@ import { LibraryHero } from './LibraryHero.js'
 import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
+import { ResultStandingsPanel } from './ResultStandingsPanel.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
@@ -398,8 +399,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     const result = saves.current.catch(() => undefined).then(async () => {
       attempt.head = await writeAttempt(attempt.head, data)
       if (attempt.head.id !== attempt.session.id) setNotice('This attempt changed in another tab or device. Your moves are saved in a separate copy.')
-      if (attempt.challenge && data.completed)
-        void sync(profile, mutationExtras).then(() => setChallengeRefresh(value => value + 1)).catch(() => undefined)
+      if (data.completed && online && account)
+        void sync(profile, mutationExtras).then(() => {
+          if (attempt.challenge) setChallengeRefresh(value => value + 1)
+        }).catch(() => undefined)
     })
     saves.current = result
     return result
@@ -715,7 +718,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         challenge={playing.challenge ? { occurrenceId: playing.challenge.occurrenceId, slotId: playing.challenge.slotId,
           game: playing.challenge.game, attemptId: playing.challenge.attemptId, endsAt: playing.challenge.endsAt } : undefined}
         standingsPanel={playing.challenge ? <ChallengeStandingsPanel occurrenceId={playing.challenge.occurrenceId}
-          gameId={playing.challenge.game} accountId={account?.id} online={online}/> : undefined}
+          gameId={playing.challenge.game} accountId={account?.id} online={online}/>
+          : playing.game.leaderboards ? <ResultStandingsPanel game={playing.game} level={playing.level}
+            accountId={account?.id} online={online}/> : undefined}
         leaderboard={playing.challenge
           ? { open: () => go('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
           : playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}

@@ -139,13 +139,13 @@ Shipped in this slice: Sudoku and Nonograms daily challenges, X 1–2 with one
 slot per game, one attempt, input-only reset, closed-at-reset challenge boards,
 after-game challenge standings, nav/badge, minimal admin settings, replay seed
 to the general board, the Leaderboards **General | Challenges** tabs, a
-current-day and paginated past list, English/Dutch, mobile and offline/error
+current-day and paginated past list, all-mode after-game standings on the played
+level's board (Quick Play and packs), English/Dutch, mobile and offline/error
 states.
 
-Deferred: all-mode after-game standings (general/pack); pack-rule variants
-(hints/Auto notes/lives/timer/diagonal); admin recovery UI; per-game custom
-challenge profiles; first-class replay context; authoritative wall-clock
-timing.
+Deferred: the secondary pack aggregate panel; pack-rule variants (hints/Auto
+notes/lives/timer/diagonal); admin recovery UI; per-game custom challenge
+profiles; first-class replay context; authoritative wall-clock timing.
 
 ## Verification
 
