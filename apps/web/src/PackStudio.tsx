@@ -8,6 +8,7 @@ import { api, ApiError, errorMessage, json, type SessionAccount } from './api.js
 import { packApi, packExportUrl, PackRoadmap } from './GamePacks.js'
 import type { LevelReview, StudioGame } from './game-studio.js'
 import { knownMessage, useT } from './i18n.js'
+import { navigationLayer, pushLayer } from './navigation.js'
 import { PackLevelList } from './PackLevelList.js'
 import { randomId } from './random.js'
 import { PackWorkspace } from './PackWorkspace.js'
@@ -68,7 +69,10 @@ export default function PackStudio({ game, account, online, admin = false, reade
   const scope = account.id + ':' + game.id + (admin ? '-admin' : '')
   const draftUrl = '/games/' + game.id + '/pack-drafts'
   const query = admin ? '?mode=admin' : ''
+  const routePath = location.pathname.replace(/\/$/, '') || '/'
   const [records, setRecords] = useState<StudioPack[]>([])
+  const recordsRef = useRef(records)
+  recordsRef.current = records
   const [selected, setSelected] = useState<StudioPack>()
   const [levelId, setLevelId] = useState<string>()
   const [tab, setTab] = useState('levels')
@@ -173,6 +177,49 @@ export default function PackStudio({ game, account, online, admin = false, reade
     return () => controller.abort()
   }, [account.id, admin, online, query, scope])
 
+  useEffect(() => {
+    function layerChanged() {
+      if ((location.pathname.replace(/\/$/, '') || '/') !== routePath) return
+      const layer = navigationLayer(history.state)
+      if (layer?.studio === 'pack' || layer?.studio === 'trial') {
+        if (!active.current && layer.studioPack) {
+          const cached = recordsRef.current.find(item => item.draft.id === layer.studioPack)
+          if (cached) openEditor(cached)
+          else void db.studioPacks.get(scope + ':' + layer.studioPack).then(record => {
+            if (!record) return
+            const current = navigationLayer(history.state)
+            if ((location.pathname.replace(/\/$/, '') || '/') === routePath &&
+                current?.studio && current.studioPack === layer.studioPack) openEditor(record)
+          }, () => undefined)
+        }
+        setTrial(undefined)
+        return
+      }
+      openEditor(undefined)
+    }
+    window.addEventListener('popstate', layerChanged)
+    return () => window.removeEventListener('popstate', layerChanged)
+  }, [routePath, scope])
+
+  useEffect(() => {
+    // A reload or a back step into this URL has no selected draft yet. Restore
+    // the pack layer from the local draft so Back continues from the editor.
+    // Test play cannot be restored without its level, so step back to the pack.
+    const layer = navigationLayer(history.state)
+    if (layer?.studio === 'trial') {
+      history.back()
+      return
+    }
+    if (layer?.studio === 'pack' && layer.studioPack) {
+      let cancelled = false
+      void db.studioPacks.get(scope + ':' + layer.studioPack).then(record => {
+        const current = navigationLayer(history.state)
+        if (!cancelled && record && current?.studio && current.studioPack === layer.studioPack) openEditor(record)
+      }, () => undefined)
+      return () => { cancelled = true }
+    }
+  }, [scope])
+
   function show(record?: StudioPack) {
     active.current = record
     setSelected(record)
@@ -206,16 +253,34 @@ export default function PackStudio({ game, account, online, admin = false, reade
     if (item) persist({ ...item, dirty: true, draft: { ...item.draft, data: authoringPack(change(item.draft.data)) } })
   }
 
-  function open(record?: StudioPack) {
+  function openEditor(record?: StudioPack) {
     show(record && { ...record, draft: stableDraft(record.draft) }); setTab('levels'); setLevelId(record?.draft.data.puzzles[0]?.levelId)
     setShowLevelList(false); setTrial(undefined); setProblem(''); setConflict(false); setNotice(''); setSaved(Boolean(record))
+  }
+
+  function selectPack(record: StudioPack) {
+    openEditor(record)
+    const layer = navigationLayer(history.state)
+    if (layer?.studio !== 'pack' || layer.studioPack !== record.draft.id)
+      pushLayer(location.pathname, { studio: 'pack', studioPack: record.draft.id })
+  }
+
+  function closeEditor() {
+    const layer = navigationLayer(history.state)
+    if (layer?.studio === 'pack' || layer?.studio === 'trial') history.back()
+    else openEditor(undefined)
+  }
+
+  function leaveTrial() {
+    if (navigationLayer(history.state)?.studio === 'trial') history.back()
+    else setTrial(undefined)
   }
 
   function create(data: PackDraftData) {
     const id = randomId()
     const puzzles = data.puzzles.map(puzzle => ({ ...puzzle, levelId: newLevelId(id), levelRevision: undefined }))
     const record = wrap({ id, version: 0, published: null, visible: false, data: { ...data, puzzles } }, true)
-    open(record); persist(record)
+    selectPack(record); persist(record)
   }
 
   function task(run: () => Promise<void>) {
@@ -341,7 +406,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
             if (file.size > packUploadBytes) throw new Error('This pack exceeds the upload limit.')
             const content = (await readFile(file)).split(',', 2)[1]
             const record = wrap(await api<PackDraft>(draftUrl + '/import', json('POST', { content }), account.id))
-            await db.studioPacks.put(record); open(record)
+            await db.studioPacks.put(record); selectPack(record)
           })
         }}/></label>}
     </div>
@@ -373,7 +438,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
         <p>{[record.draft.ownerName, record.draft.visible && record.draft.published ? t('Live revision {revision}', { revision: record.draft.published })
           : record.draft.published ? t('Unpublished') : t('Draft'),
           record.dirty ? t('Changes on this device') : t('Draft saved online')].filter(Boolean).join(' · ')}</p></div>
-      <button className="secondary" onClick={() => open(record)}>{admin ? t('Edit as admin') : t('Open pack')}</button>
+      <button className="secondary" onClick={() => selectPack(record)}>{admin ? t('Edit as admin') : t('Open pack')}</button>
     </li>)}</ul>
   </section>
 
@@ -440,7 +505,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
       }
       await enqueueWrite(() => db.studioPacks.delete(current.key))
       deleteDialog.current?.close()
-      open(); onPublish()
+      closeEditor(); onPublish()
     })
   }
 
@@ -481,6 +546,12 @@ export default function PackStudio({ game, account, online, admin = false, reade
 
   function startTrial(level: GameLevel) {
     if (!reviews.get(level.id)?.ready) { setProblem(t('Check this level before test play.')); return }
+    const layer = navigationLayer(history.state)
+    if (layer?.studio !== 'trial') {
+      if (layer?.studio !== 'pack')
+        pushLayer(location.pathname, { studio: 'pack', studioPack: draft.id })
+      pushLayer(location.pathname, { studio: 'trial', studioPack: draft.id })
+    }
     setTrial({ level, pack: preview })
   }
 
@@ -488,7 +559,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
     data-theme={mode === 'dark' ? 'dark' : 'light'}>
     <div className={`game-theme ${game.theme} pack-${trial.pack.data.theme} pack-palette studio-pack-preview`}>
       <p className="notice">{t('Test play · progress stays in this preview')}</p>
-      <game.Trial key={trial.level.id} {...trial} profile={account.id} reader={mode === 'reader'} leave={() => setTrial(undefined)}/>
+      <game.Trial key={trial.level.id} {...trial} profile={account.id} reader={mode === 'reader'} leave={leaveTrial}/>
     </div>
   </div>
 
@@ -528,7 +599,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
   </> : undefined
 
   return <PackWorkspace title={data.title || t('Untitled pack')} sections={tabs} active={tab} choose={setTab} sidebar={sidebar}
-    navigation={<button className="text-button studio-pack-back" onClick={() => open()} disabled={busy}><ArrowLeft size={17}/> {admin ? t('Edit as admin') : t('My packs')}</button>}
+    navigation={<button className="text-button studio-pack-back" onClick={closeEditor} disabled={busy}><ArrowLeft size={17}/> {admin ? t('Edit as admin') : t('My packs')}</button>}
     context={<><p role="status">{publishing ? t('Verifying pack on the server…') : busy ? t('Working…') : notice ||
       (syncConflict ? t('Draft saved here · online copy changed') : syncing === selected.key ? t('Saving draft online…')
         : saved ? dirty ? t('Saved on this device') : t('Draft saved online') : t('Saving on this device…'))}</p>
@@ -567,7 +638,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
           const next = wrap(remote)
           await db.studioPacks.put(next)
           setRemoteConflicts(current => new Set([...current].filter(key => key !== selected.key)))
-          open(next)
+          openEditor(next)
         })
       }}>{t('Open synced version')}</button>
     </div>}

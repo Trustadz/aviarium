@@ -125,7 +125,7 @@ try {
   await page.getByRole('button', { name: 'Hint', exact: true }).click()
   await admin.setOffline(true)
   assert.equal(await page.getByRole('button', { name: 'Accountinstellingen', exact: true }).count(), 0)
-  await page.getByRole('button', { name: 'Spelmenu', exact: true }).click()
+  await page.getByRole('button', { name: 'Terug naar de route', exact: true }).click()
   await page.getByRole('button', { name: 'Sudokumenu', exact: true }).click()
   await page.getByRole('button', { name: 'Terug naar de bibliotheek', exact: true }).click()
   await page.getByRole('button', { name: /Accountmenu/ }).click()

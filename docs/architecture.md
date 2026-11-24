@@ -30,6 +30,16 @@ an origin.
   independently when a level's puzzle or effective gameplay rules change.
   Draft edits and catalog visibility can change independently of saved
   attempts. Keep the referenced level revisions available.
+- **Back follows the visible screen hierarchy.** Gameplay, Studio pack
+  editing, and Studio test play are history layers. Browser, hardware, and
+  in-app back move a game to its level selector (or game menu), a selector to
+  the game menu, a game menu to the library, test play to the pack editor, and
+  the pack editor to **My packs**. In-app back actions pop the current layer
+  rather than pushing a duplicate. Opening a game from a shortcut such as
+  Continue, History, or a shared puzzle lays down the missing menu and
+  level-selector layers first. A directly opened deep link is seeded with its
+  parent layers so back stays inside the app. Keep this hierarchy when adding
+  screens that sit under a game or Studio.
 - **Shared game contracts with game-specific logic.** The renderer-neutral SDK
   defines common types. Each game owns its codecs, rules, and generation. A
   stable ruleset, save format, and generator version let the browser and

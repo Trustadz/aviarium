@@ -25,6 +25,7 @@ import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
 import { PackCards, PackRoadmap, packApi, packPath } from './GamePacks.js'
+import { canGoBack, pushLayer, replaceLayer, seedHistory } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
   sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession, type MutationExtras, type ProfilePreferences } from './storage.js'
 import './styles.css'
@@ -185,7 +186,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [prefs, setPrefs] = useState<ProfilePreferences>({})
   const [reader, setReader] = useState(() => localStorage.getItem('aviarium:reader') === 'on')
   const [manageInstalls, setManageInstalls] = useState(() => localStorage.getItem('aviarium:manage-installs') === 'on')
-  const [active, setActive] = useState<{ session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision }>()
+  const [active, setActive] = useState<{ session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision; parent: string }>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All games')
   const [dialog, showDialog] = useState<'display' | 'game' | 'account'>()
@@ -283,6 +284,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     setPrefs(settings?.data ?? {})
     setCompletions(completed.map(item => levelKey(item.level, item.revision)))
   }, [profile])
+  useLayoutEffect(() => {
+    seedHistory(location.pathname, location.search, location.hash)
+  }, [])
   useEffect(() => {
     const locationChanged = () => {
       setActive(undefined)
@@ -335,15 +339,25 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     return () => { current = false; clearInterval(interval); document.removeEventListener('visibilitychange', run) }
   }, [accountId, active, online, profile, refreshLocal, refreshSession])
 
-  function go(next: string, keepActive = false) {
-    if (!keepActive) setActive(undefined)
-    if (location.pathname !== next) history.pushState(null, '', next)
-    setPath(next)
-    window.scrollTo(0, 0)
+  function go(next: string) {
+    setActive(undefined)
+    if ((location.pathname.replace(/\/$/, '') || '/') !== next) {
+      pushLayer(next)
+      setPath(next)
+      window.scrollTo(0, 0)
+    }
   }
   function link(event: MouseEvent<HTMLAnchorElement>, next: string) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault(); go(next)
+  }
+  function back(fallback: string) {
+    if (canGoBack()) history.back()
+    else go(fallback)
+  }
+  function backLink(event: MouseEvent<HTMLAnchorElement>, fallback: string) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault(); back(fallback)
   }
   function record(attempt: NonNullable<typeof active>, data: GameAttempt) {
     recordActivity(attempt.game.id)
@@ -354,7 +368,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     saves.current = result
     return result
   }
-  async function open(game: WebGame, level: GameLevel, existing?: LocalSession, suppliedPack?: PackRevision) {
+  async function open(game: WebGame, level: GameLevel, existing?: LocalSession, suppliedPack?: PackRevision,
+    options: { replace?: boolean } = {}) {
     if (!canPlay(game)) throw new Error(game.connectMessage)
     const pack = suppliedPack ?? (level.pack && !level.pack.legacyStandalone ? await findPack(game, level.pack.id, level.pack.revision) : undefined)
     if (!existing && pack && level.pack &&
@@ -364,7 +379,27 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     if (!existing) await saveLocal(session)
-    setNotice(''); setActive({ game, session, level, head: session, pack }); go(game.url, true)
+    const parent = pack ? packPath(pack) : game.url
+    if (options.replace) {
+      replaceLayer(game.url, { player: true })
+    } else {
+      // Lay down the selector and menu when a game starts from a shortcut
+      // such as Continue or History, so back never skips a level.
+      if (path !== parent) {
+        if (path === game.url) {
+          if (parent !== game.url) pushLayer(parent)
+        } else if (path.startsWith(game.url + '/')) {
+          replaceLayer(parent)
+        } else {
+          if (path !== game.url) pushLayer(game.url)
+          if (parent !== game.url) pushLayer(parent)
+        }
+      }
+      pushLayer(game.url, { player: true })
+    }
+    setNotice(''); setActive({ game, session, level, head: session, pack, parent })
+    setPath(game.url)
+    window.scrollTo(0, 0)
   }
   async function resume(id: string) {
     const session = await db.sessions.get(id)
@@ -506,27 +541,27 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
           try { await refreshLocal() }
-          finally {
-            const pack = playing.pack && (packs.find(item => item.id === playing.pack?.id && item.revision >= playing.pack.revision) ?? playing.pack)
-            go(pack ? packPath(pack) : playing.game.url)
-          }
+          finally { back(playing.parent) }
         })}
-        reset={() => perform(async () => { await deleteAttempt(playing.head.id); await open(playing.game, playing.level, undefined, playing.pack) })}/>
+        reset={() => perform(async () => {
+          await deleteAttempt(playing.head.id)
+          await open(playing.game, playing.level, undefined, playing.pack, { replace: true })
+        })}/>
       : openGame?.guide && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
-        sections={openGame.guide} leave={event => link(event, openGame.url)}/>
+        sections={openGame.guide} leave={event => backLink(event, openGame.url)}/>
       : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
-        leave={() => go(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
+        leave={() => back(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
       : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && packPath(viewedPack) === path
         ? <PackRoadmap presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
           canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))}
-          leave={() => go(openGame.url)} play={level => perform(() => {
+          leave={() => back(openGame.url)} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
               item.data.level === level.id && item.data.levelRevision === level.revision)
             return existing ? resume(existing.id) : open(openGame, level, undefined, viewedPack)
           })}/>
-        : <section className="catalog"><button className="text-button" onClick={() => go(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
+        : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
           <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
-      : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => go('/')}
+      : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
         history={openGame.history ? () => go(openGame.url + '/history') : undefined}
         settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
         guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
@@ -547,7 +582,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : studioGame && account && canEdit && (!adminPackStudio || (online && account.role === 'admin')) ? <>
         <studioGame.Studio key={account.id + ':' + studioGame.id + (adminPackStudio ? ':admin' : '')} account={account} online={online}
           admin={adminPackStudio} reader={reader} theme={theme} packs={packs.filter(pack => pack.data.game === studioGame.id)}
-          leave={() => go(adminPackStudio ? '/admin' : '/studio')} onPublish={() => perform(() => refreshPacks())}/>
+          leave={() => back(adminPackStudio ? '/admin' : '/studio')} onPublish={() => perform(() => refreshPacks())}/>
       </>
       : studioGame && canEdit ? <section className="panel"><h1>{t('Access required')}</h1>
         <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio games')}</a></section>
