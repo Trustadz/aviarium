@@ -9,6 +9,7 @@ import { Avatar } from './Avatar.js'
 import { resultGroups, resultRows } from './standings.js'
 import { findGame } from './registry.js'
 import { knownMessage, useT } from './i18n.js'
+import dancingParrot from './art/dancing-parrot.webp'
 import type { Message } from './messages.js'
 
 export interface ChallengeReplayView {
@@ -171,19 +172,6 @@ function SlotCard({ day, slot, past, start, replay, link }: {
   </section>
 }
 
-function ChallengeParrot() {
-  return <svg className="challenge-parrot" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-    <path fill="var(--accent-strong)" d="M27 18c-2-5-6-9-11-10 2 5 5 8 9 11ZM34 16c0-6 3-10 8-12-1 6-3 10-6 13Z"/>
-    <circle cx="32" cy="33" r="16" fill="var(--accent)"/>
-    <circle cx="40" cy="35" r="10" fill="#f7f2e7"/>
-    <circle cx="43" cy="31" r="2.2" fill="var(--text)"/>
-    <circle cx="43.7" cy="30.3" r=".7" fill="#fff"/>
-    <path fill="#d99a32" d="M48 33c5 1 8 4 8 7s-4 5-8 3l-1-5Z"/>
-    <path fill="var(--accent-strong)" d="M20 40c-3 7-2 13 2 17 4-2 7-7 7-13Z"/>
-    <path fill="var(--tint)" d="M22 28c5 0 9 4 10 9-5 2-9-2-10-9Z"/>
-  </svg>
-}
-
 export function ChallengesPage({ occurrenceId, accountId, online, link, start, replay, openDay, openToday }: {
   occurrenceId?: string; accountId?: string; online: boolean; link: Link
   start: (day: ChallengeDayView, slot: ChallengeSlotView) => void
@@ -271,7 +259,7 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
         {past && <span>{t('The daily leaderboard is closed. Play the seed as a normal game.')}</span>}
       </div>
       {!past && day.slots.length > 0 && finishedSlots.length === day.slots.length && <div className="challenge-all-done" role="status">
-        <ChallengeParrot/>
+        <img className="challenge-parrot" src={dancingParrot} alt=""/>
         <div><h2>{t('All challenges completed!')}</h2><p>{t('Come back after the next reset for a new set.')}</p></div>
       </div>}
       <div className="challenge-slots">
