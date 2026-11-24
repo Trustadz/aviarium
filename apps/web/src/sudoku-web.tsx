@@ -58,7 +58,7 @@ function SudokuMenuOptions({ canPlay, online, profile, params, launch, perform }
   const sharedRevision = params.get('revision')
   return <>
     {sharedId && sharedRevision && <button className="secondary" disabled={!online} onClick={() => perform(async () => {
-      const level = await api<PublishedLevel>(`/sudoku/level/${encodeURIComponent(sharedId)}/${encodeURIComponent(sharedRevision)}`,
+      const level = await api<PublishedLevel>(`/games/sudoku/levels/${encodeURIComponent(sharedId)}/${encodeURIComponent(sharedRevision)}`,
         undefined, profile)
       await launch(level)
     })}>{t('Play shared puzzle')}</button>}

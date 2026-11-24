@@ -63,11 +63,11 @@ try {
 
   app = await makeApp()
   const headers = { cookie: 'aviarium=' + token, origin: process.env.PUBLIC_ORIGIN }
-  const packs = (await app.inject({ url: '/api/packs', headers })).json()
+  const packs = (await app.inject({ url: '/api/games/sudoku/packs', headers })).json()
   const recovered = packs.find(pack => pack.data.title === 'Recovered Sudoku puzzles')
   assert.deepEqual(packLevels(recovered).map(({ id, revision }) => [id, revision]), [[visibleId, 7]])
   assert.ok(!packs.some(pack => packLevels(pack).some(level => level.id === hiddenId)))
-  const drafts = (await app.inject({ url: '/api/pack-drafts', headers })).json()
+  const drafts = (await app.inject({ url: '/api/games/sudoku/pack-drafts', headers })).json()
   assert.ok(drafts.some(draft => !draft.visible && draft.data.puzzles[0].levelId === hiddenId))
   const progress = (await app.inject({ url: '/api/progress', headers })).json()
   assert.deepEqual(progress.completions, [{ level: visibleId, revision: 7 }])
@@ -77,8 +77,8 @@ try {
   assert.equal(retried.json().revision, 1)
   const sharedPacks = (await app.inject({ url: '/api/games/sudoku/packs', headers })).json()
   assert.deepEqual(sharedPacks, packs)
-  assert.equal((await app.inject({ url: '/api/sudoku/level/' + visibleId + '/6', headers })).statusCode, 200)
-  assert.equal((await app.inject({ url: '/api/sudoku/level/' + hiddenId + '/4', headers })).statusCode, 404)
+  assert.equal((await app.inject({ url: '/api/games/sudoku/levels/' + visibleId + '/6', headers })).statusCode, 200)
+  assert.equal((await app.inject({ url: '/api/games/sudoku/levels/' + hiddenId + '/4', headers })).statusCode, 404)
   const updated = await app.inject({ method: 'POST', url: '/api/progress', headers,
     payload: { sessionId, mutationId: randomUUID(), baseRevision: 1, archived: false, data: save } })
   assert.equal(updated.statusCode, 200, updated.body)

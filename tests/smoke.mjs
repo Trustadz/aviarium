@@ -146,10 +146,10 @@ if (adminToken && playerToken) {
   const appended = Array.from({ length: 10 }, (_, index) => item('appended-' + index, { rules: { hints: false } }))
   const form = { localId: packId, format: 1, game: 'sudoku', title: updatedTitle, description: '', theme: 'default',
     rules: { hints: true, autoNotes: true, inOrder: true, lives: null, timeTrial: false }, puzzles: original }
-  const create = () => request('/api/pack-drafts', { method: 'POST', headers: playerHeaders, body: form })
+  const create = () => request('/api/games/sudoku/pack-drafts', { method: 'POST', headers: playerHeaders, body: form })
   let owned = await create()
   assert.equal((await create()).id, owned.id)
-  const draftUrl = '/api/pack-drafts/' + owned.id
+  const draftUrl = '/api/games/sudoku/pack-drafts/' + owned.id
   const replace = (data, headers = playerHeaders, mode = '', expected = 200) =>
     request(draftUrl + mode, { method: 'PUT', headers, body: { data, version: owned.version }, expected })
   await replace(owned.data, adminHeaders, '', 409)
@@ -157,7 +157,7 @@ if (adminToken && playerToken) {
   owned = await replace({ ...owned.data, description: 'Edited explicitly' }, adminHeaders, '?mode=admin')
   assert.equal(owned.lastEditedBy, (await request('/api/me', { headers: adminHeaders })).user.id)
   const publish = () => request(draftUrl + '/publish', { method: 'POST', headers: playerHeaders, body: { version: owned.version } })
-  const fetchPack = revision => request('/api/packs/' + owned.id + '/' + revision, { headers: playerHeaders })
+  const fetchPack = revision => request('/api/games/sudoku/packs/' + owned.id + '/' + revision, { headers: playerHeaders })
   owned = await publish()
   const firstPack = await fetchPack(1)
   const firstLevels = packLevels(firstPack)
@@ -614,7 +614,7 @@ try {
     releaseSave()
     await adminPage.getByText('Draft saved online', { exact: true }).waitFor()
     assert.equal(await description.inputValue(), 'Newer draft edit')
-    const onlineDrafts = await adminPage.request.get(origin + '/api/pack-drafts').then(response => response.json())
+    const onlineDrafts = await adminPage.request.get(origin + '/api/games/sudoku/pack-drafts').then(response => response.json())
     assert.equal(onlineDrafts.find(pack => pack.data.title === 'Studio browser check').data.description, 'Newer draft edit')
     await adminPage.unroute('**/api/games/sudoku/pack-drafts/*')
     await adminPage.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
@@ -634,7 +634,7 @@ try {
     await adminPage.getByRole('button', { name: 'Publish to catalog', exact: true }).click()
     await adminPage.getByText('Published pack revision 1', { exact: true }).waitFor()
     if (process.env.AVIARIUM_SCREENSHOTS) await adminPage.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/studio-desktop.png', fullPage: true })
-    const published = (await adminPage.request.get(origin + '/api/packs').then(response => response.json()))
+    const published = (await adminPage.request.get(origin + '/api/games/sudoku/packs').then(response => response.json()))
       .find(pack => pack.data.title === 'Studio browser check')
     assert.ok(published)
     const themedPlayer = await desktop.newPage()
@@ -656,7 +656,7 @@ try {
     await themedPlayer.close()
     await adminPage.getByRole('button', { name: 'Unpublish', exact: true }).click()
     await adminPage.getByText('Pack unpublished', { exact: true }).waitFor()
-    const listed = async () => (await adminPage.request.get(origin + '/api/packs').then(response => response.json()))
+    const listed = async () => (await adminPage.request.get(origin + '/api/games/sudoku/packs').then(response => response.json()))
       .some(pack => pack.id === published.id)
     assert.equal(await listed(), false)
     const draftPath = '/api/games/sudoku/pack-drafts'
@@ -693,8 +693,8 @@ try {
     await deletePack.getByRole('button', { name: 'Delete pack', exact: true }).click()
     await adminPage.getByRole('heading', { name: 'My packs', exact: true }).waitFor()
     assert.equal(await listed(), false)
-    assert.equal((await adminPage.request.get(origin + '/api/packs/' + published.id + '/' + published.revision)).status(), 200)
-    const remainingDrafts = await adminPage.request.get(origin + '/api/pack-drafts').then(response => response.json())
+    assert.equal((await adminPage.request.get(origin + '/api/games/sudoku/packs/' + published.id + '/' + published.revision)).status(), 200)
+    const remainingDrafts = await adminPage.request.get(origin + '/api/games/sudoku/pack-drafts').then(response => response.json())
     assert.equal(remainingDrafts.some(pack => pack.id === published.id), false)
     await adminPage.getByRole('navigation', { name: 'Main navigation' }).waitFor()
     await openSettings(adminPage, 'Administration')
@@ -795,7 +795,7 @@ try {
   assert.equal(await packPage.evaluate(() => document.documentElement.scrollWidth), 320)
 
   const headers = playerToken ? playerHeaders : adminHeaders
-  const pack = (await request('/api/packs', { headers })).find(item => item.id === 'budgies')
+  const pack = (await request('/api/games/sudoku/packs', { headers })).find(item => item.id === 'budgies')
   const firstGrid = Array.from(pack.data.puzzles[0].grid, Number)
   const firstSolution = validate(firstGrid).solution
   assert.ok(firstSolution)
@@ -820,7 +820,7 @@ try {
   const quickPlayPage = await quickPlayContext.newPage()
   const serverGenerations = []
   quickPlayPage.on('request', request => {
-    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/sudoku/quick-play')
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/games/sudoku/quick-play')
       serverGenerations.push(request.url())
   })
   await quickPlayPage.goto(origin + '/games/sudoku')
@@ -862,7 +862,7 @@ try {
       progress.sessions.some(item => item.data.level === quickId && item.data.board.entries[blank] === solutionValues[blank])
   }, 'offline Quick Play progress and puzzle sync')
   assert.deepEqual(serverGenerations, [])
-  const legacyQuickPlay = await request('/api/sudoku/quick-play', { method: 'POST', headers: playbackHeaders, body: descriptor })
+  const legacyQuickPlay = await request('/api/games/sudoku/quick-play', { method: 'POST', headers: playbackHeaders, body: descriptor })
   assert.equal(legacyQuickPlay.id, quickId)
   assert.equal(legacyQuickPlay.grid, quickGrid)
   await quickPlayContext.close()

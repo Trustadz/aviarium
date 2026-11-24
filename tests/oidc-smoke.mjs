@@ -179,7 +179,7 @@ try {
   await publishedPost.getByRole('button', { name: 'Unlike announcement' }).waitFor()
   await page.getByRole('link', { name: 'Library', exact: true }).click()
 
-  const adminExport = await context.request.get(origin + '/api/packs/budgies/1/export')
+  const adminExport = await context.request.get(origin + '/api/games/sudoku/packs/budgies/1/export')
   assert.equal(adminExport.status(), 200)
   const packArchive = await adminExport.body()
   await openSettings(page, 'Device settings')
@@ -235,7 +235,7 @@ try {
   assert.deepEqual(me, { user: null, signIn: false, loginEnabled: false, testEnvironment: false })
   const catalog = await (await context.request.get(origin + '/api/catalog')).json()
   assert.ok(catalog.some(level => level.id === 'first-light'))
-  const packs = await (await context.request.get(origin + '/api/packs')).json()
+  const packs = await (await context.request.get(origin + '/api/games/sudoku/packs')).json()
   const level = packs.find(pack => pack.id === 'budgies')?.data.puzzles[0]
   assert.ok(level)
   assert.equal((await context.request.get(origin + '/api/auth/login')).status(), 404)
@@ -402,8 +402,8 @@ try {
   const get = path => context.request.get(origin + path)
   assert.equal((await get('/api/drafts')).status(), 403)
   assert.equal((await get('/api/admin/users')).status(), 403)
-  assert.equal((await get('/api/packs/budgies/1/export')).status(), 403)
-  const importPack = () => context.request.post(origin + '/api/pack-drafts/import', {
+  assert.equal((await get('/api/games/sudoku/packs/budgies/1/export')).status(), 403)
+  const importPack = () => context.request.post(origin + '/api/games/sudoku/pack-drafts/import', {
     headers: { Origin: origin }, data: { content: packArchive.toString('base64') },
   })
   assert.equal((await importPack()).status(), 403)
@@ -421,18 +421,18 @@ try {
   assert.equal((await get('/api/games/nonograms/pack-drafts')).status(), 200)
   assert.equal((await get('/api/drafts')).status(), 200)
   assert.equal((await get('/api/admin/users')).status(), 403)
-  assert.equal((await get('/api/packs/budgies/1/export')).status(), 403)
+  assert.equal((await get('/api/games/sudoku/packs/budgies/1/export')).status(), 403)
   const imported = await importPack()
   assert.equal(imported.status(), 200)
   const packDraft = await imported.json()
   assert.equal(packDraft.data.title, 'Budgies')
   assert.equal(packDraft.data.puzzles.length, 3)
   assert.equal(packDraft.published, null)
-  const publishedPack = await context.request.post(origin + '/api/pack-drafts/' + packDraft.id + '/publish', {
+  const publishedPack = await context.request.post(origin + '/api/games/sudoku/pack-drafts/' + packDraft.id + '/publish', {
     headers: { Origin: origin }, data: { version: packDraft.version },
   })
   assert.equal(publishedPack.status(), 200)
-  const ownedExport = '/api/packs/' + packDraft.id + '/1/export'
+  const ownedExport = '/api/games/sudoku/packs/' + packDraft.id + '/1/export'
   assert.equal((await get(ownedExport)).status(), 200)
   await page.getByRole('button', { name: 'Close', exact: true }).click()
   await page.getByRole('link', { name: 'Library', exact: true }).click()

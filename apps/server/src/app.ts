@@ -64,7 +64,6 @@ export async function makeApp() {
   for (const game of serverGames.values()) {
     game.routes?.(app)
     registerPacks(app, game, '/api/games/' + game.id)
-    if (game.id === 'sudoku') registerPacks(app, game, '/api')
   }
   registerProgress(app, serverGames)
   registerLeaderboards(app, serverGames)

@@ -105,8 +105,10 @@ branch. If one does, the contract is missing a hook.
   `ServerGame` adapter and the web `WebGame` remain for J4/J5.
 - Daily challenge inclusion is derived from `GameDefinition.generation` and
   `leaderboard`; there is no per-game challenge adapter.
-- Generic Quick Play/level endpoints and the legacy Sudoku route quarantine are
-  in place; removing the `/api/sudoku/*` and `/api` pack aliases is J4b.
+- The generic Quick Play/level endpoints are used by the web, tests and old-client
+  replacements. The legacy `/api/sudoku/quick-play`, `/api/sudoku/level/*` and
+  `/api` pack aliases are removed. The quarantined Sudoku Studio/catalog routes
+  remain in `legacy-sudoku-routes.ts` for the old level editor until J5.
 - The web platform still consumes `WebGame`; J5 shrinks it to the contract.
 - J6 turns the fixture into a package-backed proof and adds a source-scan test
   that no platform module names a game id.
