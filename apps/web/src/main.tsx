@@ -5,8 +5,9 @@ import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowLeft, BookOpen, LogIn, LogOut, Newspaper,
-  Pencil, Users, WifiOff } from 'lucide-react'
+  Pencil, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
+import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
 import { packProgress, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
@@ -16,6 +17,7 @@ import { ContinueGames } from './ContinueGames.js'
 import { LibraryHero } from './LibraryHero.js'
 import { GameCatalog } from './GameCatalog.js'
 import { GameHistory } from './GameHistory.js'
+import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import type { WebGame } from './game-web.js'
 import { GameMenu } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
@@ -193,6 +195,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [changingRole, setChangingRole] = useState(false)
   const [notice, setNotice] = useState('')
   const [networkNotice, setNetworkNotice] = useState('')
+  const [removalNotices, setRemovalNotices] = useState<LeaderboardRemovalNotice[]>([])
   const openGame = games.find(game => path === game.url || path.startsWith(game.url + '/'))
   const studioMatch = /^\/studio\/([a-z0-9-]+)(\/admin)?$/.exec(path)
   const studioGame = path === '/studio/packs' ? findGame('sudoku') : studioMatch && findGame(studioMatch[1])
@@ -317,6 +320,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   }, [path, openGame, findPack])
   useEffect(() => { void refreshLocal().catch(error => setNotice(errorMessage(error))) }, [refreshLocal, active])
   useEffect(() => {
+    if (!accountId || !online) return
+    let current = true
+    void api<{ notices: LeaderboardRemovalNotice[] }>('/leaderboards/notices', undefined, accountId).then(
+      value => { if (current) setRemovalNotices(value.notices) }, () => undefined)
+    return () => { current = false }
+  }, [accountId, online])
+  useEffect(() => {
     if (!accountId || !online || active) return
     let current = true
     const run = () => {
@@ -385,6 +395,21 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     await deleteSavedGame(profile, id)
   }
   function perform(task: () => Promise<unknown>) { void task().catch(error => setNotice(errorMessage(error))) }
+  function viewLeaderboard(href: string) {
+    perform(async () => {
+      await saves.current.catch(() => undefined)
+      if (accountId && online) await sync(profile, mutationExtras).catch(() => undefined)
+      go(href)
+    })
+  }
+  function acknowledgeRemoval() {
+    const removal = removalNotices[0]
+    if (!removal) return
+    perform(async () => {
+      await api(`/leaderboards/notices/${removal.id}/ack`, { method: 'POST' }, accountId)
+      setRemovalNotices(items => items.filter(item => item.id !== removal.id))
+    })
+  }
   function changePrefs(patch: Partial<ProfilePreferences>) {
     setPrefs(current => ({ ...current, ...patch }))
     perform(async () => {
@@ -443,6 +468,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
 
   const canEdit = canEditGames(account?.role)
   const inLibrary = path === '/'
+  const inLeaderboards = path === '/leaderboards'
   const inStudioCatalog = path === '/studio' && canEdit
   const catalogCategories = ['All games', ...new Set(games.flatMap(game => game.tags)), 'Favorites']
   const catalogPage = (game: (typeof games)[number]) => inStudioCatalog ? '/studio/' + game.id : game.url
@@ -451,6 +477,17 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const inAdmin = path === '/admin'
   const inAbout = path === '/about'
   const inGame = Boolean(openGame)
+  const leaderboardTail = openGame && path.startsWith(openGame.url + '/leaderboards')
+    ? path.slice((openGame.url + '/leaderboards').length) : undefined
+  let leaderboardBoardKey: string | undefined
+  let leaderboardPack: { id: string; revision: number } | undefined
+  if (leaderboardTail?.startsWith('/board/')) {
+    try { leaderboardBoardKey = decodeURIComponent(leaderboardTail.slice('/board/'.length)) } catch { leaderboardBoardKey = undefined }
+  } else if (leaderboardTail?.startsWith('/pack/')) {
+    const [id, revision] = leaderboardTail.slice('/pack/'.length).split('/')
+    if (id && Number.isInteger(Number(revision))) leaderboardPack = { id: decodeURIComponent(id), revision: Number(revision) }
+  }
+  const activeRemoval = removalNotices[0]
   const inShell = !inGame
   const playing = active && path === active.game.url ? active : undefined
   const playPack = playing?.pack
@@ -468,7 +505,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     {inShell && <>
       <header className="site-header"><div className="frame header-frame">
         <a className="brand" href="/" aria-label={t("Aviarium home")} onClick={event => link(event, '/')}><img src="/aviarium.svg" alt=""/>
-          <span>{studioGame ? t('{game} Studio', { game: studioGame.title }) : inStudio ? t("Studio") : inNews ? t("News") : inAdmin ? t("Administration") : inAbout ? t("About") : 'Aviarium'}</span>
+          <span>{studioGame ? t('{game} Studio', { game: studioGame.title }) : inStudio ? t("Studio") : inNews ? t("News") : inAdmin ? t("Administration") : inAbout ? t("About") : inLeaderboards ? t("Leaderboards") : 'Aviarium'}</span>
         </a>
         {!online && <span className="offline-tag"><WifiOff size={16}/>{" "}{t("Offline")}</span>}
       </div></header>
@@ -477,6 +514,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           <a href="/" aria-current={inLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
           {canEdit && <a href="/studio" aria-current={inStudio ? 'page' : undefined}
             onClick={event => link(event, '/studio')}><Pencil size={21}/><span>{t("Studio")}</span></a>}
+          {account && <a href="/leaderboards" aria-current={inLeaderboards ? 'page' : undefined}
+            onClick={event => link(event, '/leaderboards')}><Trophy size={21}/><span>{t("Leaderboards")}</span></a>}
           <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>{t("News")}</span></a>
         </nav>
         <AccountMenu account={account} open={showDialog} about={() => go('/about')}
@@ -500,8 +539,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           removeDownload: manageInstalls && installed.includes(game.id) ? () => perform(() => remove(game.id)) : undefined,
         }))} categories={catalogCategories} category={category} setCategory={setCategory} query={query} setQuery={setQuery} link={link}/>
       </>
+      : inLeaderboards ? <LeaderboardCatalog games={games} sessions={sessions} accountId={account?.id} online={online} link={link}/>
       : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
         preferences={prefs} reader={reader} bestMs={Number.isFinite(bestMs) ? bestMs : undefined} testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
+        leaderboard={playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
         openSettings={settings ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
@@ -512,6 +553,15 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           }
         })}
         reset={() => perform(async () => { await deleteAttempt(playing.head.id); await open(playing.game, playing.level, undefined, playing.pack) })}/>
+      : openGame?.leaderboards && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
+        accountId={account?.id} online={online} link={link} back={() => go(openGame.url)}/>
+      : openGame?.leaderboards && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
+        boardKey={leaderboardBoardKey} accountId={account?.id} online={online}
+        back={() => go(openGame.url + '/leaderboards')} play={level => perform(() => open(openGame, level))}
+        openGame={() => go(openGame.url)}/>
+      : openGame?.leaderboards && leaderboardPack ? <LeaderboardPackView game={openGame} packId={leaderboardPack.id}
+        revision={leaderboardPack.revision} accountId={account?.id} online={online}
+        back={() => go(openGame.url + '/leaderboards')} link={link}/>
       : openGame?.guide && path === openGame.url + '/how-to' ? <GameGuide game={openGame.title} menuUrl={openGame.url}
         sections={openGame.guide} leave={event => link(event, openGame.url)}/>
       : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
@@ -527,6 +577,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         : <section className="catalog"><button className="text-button" onClick={() => go(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
           <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
       : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => go('/')}
+        leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
+          open: event => link(event, openGame.url + '/leaderboards') } : undefined}
+        editor={canEdit ? { href: '/studio/' + openGame.id, open: event => link(event, '/studio/' + openGame.id) } : undefined}
         history={openGame.history ? () => go(openGame.url + '/history') : undefined}
         settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
         guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
@@ -557,6 +610,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : <section className="panel"><h1>{t("Access required")}</h1><p>{t("Sign in with an authorized account.")}</p><button className="secondary" onClick={() => go('/')}>{t("Return to library")}</button></section>}
       </Suspense>
     </main>
+    {activeRemoval && <LeaderboardNotice notice={activeRemoval} onAcknowledge={acknowledgeRemoval}/>}
     {dialog && <div className="settings-overlay" onClick={() => showDialog(undefined)}>
       <section className={'settings-panel' + (dialog === 'game' && openGame ? ' game-theme ' + openGame.theme +
         (playPack ? ` pack-palette pack-${playPack.data.theme}` : '') : '')}

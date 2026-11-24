@@ -60,11 +60,11 @@ try {
 
   const fixtures = new pg.Client({ connectionString: database })
   await fixtures.connect()
-  const tokens = { admin: randomUUID(), player: randomUUID() }
+  const tokens = { admin: randomUUID(), player: randomUUID(), player2: randomUUID() }
   try {
-    for (const [role, name, token] of [['admin', 'Test Admin', tokens.admin], ['user', 'Test Player', tokens.player]]) {
+    for (const [role, name, token] of [['admin', 'Test Admin', tokens.admin], ['user', 'Test Player', tokens.player], ['user', 'Test Player Two', tokens.player2]]) {
       const { rows: [user] } = await fixtures.query(
-        "INSERT INTO users(issuer,subject,name,role) VALUES ('browser-fixture',$1,$2,$3) RETURNING id", [role, name, role])
+        "INSERT INTO users(issuer,subject,name,role) VALUES ('browser-fixture',$1,$2,$3) RETURNING id", [token, name, role])
       await fixtures.query(
         "INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval '1 hour')", [digest(token), user.id])
     }
@@ -73,6 +73,11 @@ try {
   }
   await run('tests/smoke.mjs', {
     AVIARIUM_TEST_URL: origin, AVIARIUM_TEST_ADMIN: tokens.admin, AVIARIUM_TEST_PLAYER: tokens.player,
+  })
+  await run('tests/leaderboards-smoke.mjs', {
+    AVIARIUM_TEST_URL: origin, AVIARIUM_TEST_ADMIN: tokens.admin, AVIARIUM_TEST_PLAYER: tokens.player,
+    AVIARIUM_TEST_PLAYER2: tokens.player2, AVIARIUM_TEST_DATABASE_URL: database,
+    AVIARIUM_CHROMIUM: process.env.AVIARIUM_CHROMIUM,
   })
 } finally {
   await stopApp()

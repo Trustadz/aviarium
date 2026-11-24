@@ -4,6 +4,7 @@ import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { defaults, quickPlayVersion, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { sudokuBoardKey } from '../../../packages/sudoku/src/leaderboards.js'
 import { api } from './api.js'
 import type { GuideSection } from './GameGuide.js'
 import type { GamePlayerProps, WebGame } from './game-web.js'
@@ -40,8 +41,14 @@ const sudokuGuide: readonly GuideSection[] = [
 const SudokuPlayer = lazy(async () => {
   const { default: Player } = await import('./Player.js')
   return { default: function GamePlayer(props: GamePlayerProps) {
+    const preferences = { ...defaults, ...props.preferences }
     return <Player {...props} session={props.session as LocalSession<SudokuSave>} level={props.level as PublishedLevel}
-      pack={props.pack as PublishedPack | undefined} preferences={{ ...defaults, ...props.preferences }}/>
+      pack={props.pack as PublishedPack | undefined} preferences={preferences}
+      leaderboard={props.leaderboard}
+      persist={data => props.persist({ ...data, aids: {
+        hints: Boolean(preferences.hints), autoNotes: Boolean(preferences.autoNotes),
+        mistakes: Boolean(preferences.mistakes),
+      } })}/>
   } }
 })
 
@@ -96,4 +103,5 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
   ] },
   connectMessage: 'Connect to install Sudoku on this device.',
   history: true,
+  leaderboards: { boardHref: level => '/games/sudoku/leaderboards/board/' + encodeURIComponent(sudokuBoardKey(level).key) },
 }
