@@ -10,7 +10,9 @@ export function resultRows(top: readonly LeaderboardStanding[], you: Leaderboard
   const rows = top.slice(0, 3)
   if (!you) return rows
   const add = (row: LeaderboardStanding) => {
-    if (!rows.some(item => item.rank === row.rank && item.name === row.name)) rows.push(row)
+    const index = rows.findIndex(item => item.rank === row.rank && item.name === row.name)
+    if (index >= 0) rows[index] = row
+    else rows.push(row)
   }
   if (you.rank <= 3) {
     add(you)

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CalendarDays, ChevronRight, Clock3, Play, RotateCcw, Trophy } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Clock3, Play, RotateCcw, Trophy } from 'lucide-react'
 import { useIntl } from 'react-intl'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardStanding } from '../../../packages/game-sdk/src/leaderboards.js'
+import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { api, errorMessage } from './api.js'
 import { Avatar } from './Avatar.js'
@@ -107,79 +108,78 @@ function statusLabel(t: ReturnType<typeof useT>, slot: ChallengeSlotView, past: 
   }
 }
 
-function MiniTop({ rows, total }: { rows: LeaderboardStanding[]; total: number }) {
+function MiniTop({ rows, total, href, link }: { rows: LeaderboardStanding[]; total: number; href?: string; link: Link }) {
   const t = useT()
   if (!rows.length) return <p className="muted challenge-empty">{t('No posted times yet.')}</p>
+  const visible = rows.slice(0, 3)
   return <ol className="challenge-mini">
-    {rows.slice(0, 3).map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
+    {visible.map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
       <span className="challenge-rank">{row.rank}</span>
       <Avatar name={row.name} url={row.avatarUrl}/>
       <span className="challenge-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
       <strong>{formatLeaderboardValue(row.value, row.unit)}</strong>
     </li>)}
-    {total > rows.length && <li className="challenge-mini-more"><span>{t('and {count} more', { count: total - rows.length })}</span></li>}
+    {total > visible.length && href && <li className="challenge-mini-more">
+      <a href={href} onClick={event => link(event, href)}>{t('and {count} more', { count: total - visible.length })}</a>
+    </li>}
   </ol>
 }
 
-function SlotCard({ day, slot, past, accountId, link, start, board, replay }: {
-  day: ChallengeDayView; slot: ChallengeSlotView; past: boolean; accountId?: string
-  link: Link; start: () => void; board: () => void; replay: (replay: ChallengeReplayView) => void
+function SlotCard({ day, slot, past, start, replay, link, art }: {
+  day: ChallengeDayView; slot: ChallengeSlotView; past: boolean
+  start: () => void; replay: (replay: ChallengeReplayView) => void; link: Link; art?: string
 }) {
   const t = useT()
-  const intl = useIntl()
   const game = findGame(slot.game)
   const title = game ? knownMessage(t, game.title) : slot.game
   const size = typeof slot.options.size === 'number' ? slot.options.size : undefined
   const detail = [size ? size + ' × ' + size : '', slot.level?.difficulty ? t(slot.level.difficulty as Message) : ''].filter(Boolean).join(' · ')
   const result = slot.player.result
   const [starting, setStarting] = useState(false)
-  const miniRows = [...slot.standings.top]
-  if (slot.standings.you && !miniRows.some(row => row.you)) miniRows.push(slot.standings.you)
   const begin = async () => {
     if (starting) return
-    if (slot.player.status === 'available' && !window.confirm(t('Start the one timed run? The clock begins immediately.'))) return
     setStarting(true)
     try { await start() } finally { setStarting(false) }
   }
-  return <section className="challenge-slot panel" aria-label={title}>
-    <div className="challenge-slot-head">
-      <div>
-        <p className="eyebrow">{past ? t('Daily challenge · closed') : t('Daily challenge')}</p>
-        <h2>{title}{detail ? ' · ' + detail : ''}</h2>
+  const boardHref = '/challenges/' + day.occurrence!.id + '/' + slot.game
+  return <section className="challenge-slot panel challenge-row" aria-label={title}>
+    <div className={'challenge-art' + (game ? ' ' + game.theme : '')} aria-hidden="true"
+      style={art ? { backgroundImage: 'url("' + art.replaceAll('"', '%22') + '")' } : undefined}/>
+    <div className="challenge-row-body">
+      <div className="challenge-slot-head">
+        <div>
+          <p className="eyebrow">{past ? t('Daily challenge · closed') : t('Daily challenge')}</p>
+          <h2>{title}</h2>
+          {detail && <p className="challenge-detail">{detail}</p>}
+        </div>
+        <span className={'badge challenge-status status-' + slot.player.status}>{statusLabel(t, slot, past)}</span>
       </div>
-      <span className={'badge challenge-status status-' + slot.player.status}>{statusLabel(t, slot, past)}</span>
+      {slot.player.status === 'completed' && result && <p className="challenge-result">
+        <Trophy size={15}/> {formatLeaderboardValue(result.value, result.unit)}
+        {result.rank ? <span> · #{result.rank} / {result.total}</span> : null}
+      </p>}
+      <MiniTop rows={slot.standings.top} total={slot.standings.total} href={boardHref} link={link}/>
+      <div className="challenge-actions">
+        {!past && slot.player.status === 'available' && <button className="primary" onClick={begin} disabled={starting}
+          aria-label={t('Start {game} challenge', { game: title })}><Play size={16}/> {starting ? t('Starting…') : t('Start challenge')}</button>}
+        {!past && slot.player.status === 'started' && <button className="primary" onClick={begin} disabled={starting}
+          aria-label={t('Resume {game} challenge', { game: title })}><Play size={16}/> {starting ? t('Starting…') : t('Resume challenge')}</button>}
+        {past && slot.replay && <button className="secondary" onClick={() => replay({ ...slot.replay!,
+          occurrenceId: day.occurrence?.id, periodKey: day.occurrence?.periodKey, timeZone: day.occurrence?.timezone })}>
+          <RotateCcw size={16}/> {t('Play this seed')}</button>}
+      </div>
+      {slot.status === 'failed' && <p className="error" role="alert">{t('This challenge game is unavailable. Try again later.')}</p>}
     </div>
-    {game?.preview && slot.level && <div className="challenge-preview">{game.preview(slot.level)}</div>}
-    {slot.player.status === 'completed' && result && <p className="challenge-result">
-      <Trophy size={16}/> {formatLeaderboardValue(result.value, result.unit)}
-      {result.rank ? <span> · #{result.rank} / {result.total}</span> : null}
-    </p>}
-    <MiniTop rows={miniRows} total={slot.standings.total}/>
-    <div className="challenge-actions">
-      {!past && (slot.player.status === 'available') && <button className="primary" onClick={begin} disabled={starting}
-        aria-label={t('Start {game} challenge', { game: title })}><Play size={17}/> {starting ? t('Starting…') : t('Start challenge')}</button>}
-      {!past && slot.player.status === 'started' && <button className="primary" onClick={begin} disabled={starting}
-        aria-label={t('Resume {game} challenge', { game: title })}><Play size={17}/> {starting ? t('Starting…') : t('Resume challenge')}</button>}
-      {!past && slot.player.status === 'available' && <p className="muted challenge-start-note">{t('One timed run. The clock starts when you begin.')}</p>}
-      {slot.player.status === 'completed' && <button className="secondary" onClick={board}
-        aria-label={t('View {game} challenge board', { game: title })}>{t('View board')}</button>}
-      {past && slot.replay && <button className="secondary" onClick={() => replay({ ...slot.replay!,
-        occurrenceId: day.occurrence?.id, periodKey: day.occurrence?.periodKey, timeZone: day.occurrence?.timezone })}>
-        <RotateCcw size={16}/> {t('Play this seed')}</button>}
-      {slot.status !== 'failed' && slot.player.status !== 'completed' && <button className="text-button" onClick={board}
-        aria-label={t('View {game} challenge board', { game: title })}>{t('Challenge board')} <ChevronRight size={16}/></button>}
-    </div>
-    {slot.status === 'failed' && <p className="error" role="alert">{t('This challenge game is unavailable. Try again later.')}</p>}
   </section>
 }
 
-export function ChallengesPage({ occurrenceId, accountId, online, link, start, replay, board, openDay, openToday }: {
+export function ChallengesPage({ occurrenceId, accountId, online, link, start, replay, openDay, openToday, packs }: {
   occurrenceId?: string; accountId?: string; online: boolean; link: Link
   start: (day: ChallengeDayView, slot: ChallengeSlotView) => void
   replay: (replay: ChallengeReplayView) => void
-  board: (occurrenceId: string, game: string) => void
   openDay: (occurrenceId: string) => void
   openToday: () => void
+  packs: readonly PackRevision[]
 }) {
   const t = useT()
   const intl = useIntl()
@@ -233,13 +233,20 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
   const reset = day?.occurrence ? formatResetMinute(day.series?.resetMinute ?? 0) : ''
   const canPlay = day?.enabled && day.occurrence && !past
   const completedSlots = day?.slots.filter(slot => slot.player.status === 'completed').length ?? 0
+  const openSlots = day?.slots.filter(slot => slot.player.status !== 'completed') ?? []
+  const finishedSlots = day?.slots.filter(slot => slot.player.status === 'completed') ?? []
+  const artFor = (gameId: string) => {
+    const pack = packs.find(item => item.data.game === gameId && item.builtIn && (item.data.background || item.data.cover)) ??
+      packs.find(item => item.data.game === gameId && (item.data.background || item.data.cover))
+    return pack?.data.background ?? pack?.data.cover
+  }
   return <section className="catalog challenges-page">
     {occurrenceId && <div className="game-navigation"><button className="text-button back" onClick={openToday}>
-      <ArrowLeft size={17}/> {t('Daily Challenges')}</button></div>}
+      <ArrowLeft size={17}/> {t('Challenges')}</button></div>}
     <div className="section-heading">
       <div>
         <p className="eyebrow">{past ? t('Closed challenge') : t('A new puzzle every day')}</p>
-        <h1>{occurrenceId ? t('Daily challenge · {date}', { date }) : t('Daily Challenges')}</h1>
+        <h1>{occurrenceId ? t('Daily challenge · {date}', { date }) : t('Challenges')}</h1>
       </div>
       {day?.occurrence && <span className="challenge-clock"><Clock3 size={18}/> {past ? t('Closed') : remainingText(day.occurrence.endsAt, liveNow, t)}</span>}
     </div>
@@ -261,17 +268,21 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
         {past && <span>{t('The daily leaderboard is closed. Play the seed as a normal game.')}</span>}
       </div>
       <div className="challenge-slots">
-        {day.slots.map(slot => <SlotCard key={slot.id} day={day} slot={slot} past={Boolean(past)} accountId={accountId}
-          link={link} start={() => start(day, slot)}
-          board={() => board(day.occurrence!.id, slot.game)}
-          replay={replay}/>)}
+        {openSlots.map(slot => <SlotCard key={slot.id} day={day} slot={slot} past={Boolean(past)}
+          link={link} start={() => start(day, slot)} replay={replay} art={artFor(slot.game)}/>)}
       </div>
       {!day.slots.length && <p className="empty">{t('Today’s challenge is being prepared. Try again in a moment.')}</p>}
+      {finishedSlots.length > 0 && <section className="challenge-completed">
+        <div className="section-heading"><h2>{t('Completed')}</h2></div>
+        <div className="challenge-slots">
+          {finishedSlots.map(slot => <SlotCard key={slot.id} day={day} slot={slot} past={Boolean(past)}
+            link={link} start={() => start(day, slot)} replay={replay} art={artFor(slot.game)}/>)}
+        </div>
+      </section>}
     </>}
     {!occurrenceId && previous && <button className="text-button challenge-yesterday" onClick={() => openDay(previous.id)}>
       {t('Yesterday')} · {formatChallengeDate(intl, previous.startsAt, previous.timezone)}
     </button>}
-    {!occurrenceId && <p className="muted challenge-foot">{t('One attempt per game. Resetting the board does not reset the timer.')}</p>}
   </section>
 }
 
@@ -324,24 +335,13 @@ export function ChallengeBoard({ occurrenceId, gameId, accountId, online, back }
   </section>
 }
 
-export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, online, onPlayOther }: {
-  occurrenceId: string; gameId: string; accountId?: string; online: boolean; onPlayOther?: (game: string) => void
+export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, online }: {
+  occurrenceId: string; gameId: string; accountId?: string; online: boolean
 }) {
   const t = useT()
   const [data, setData] = useState<ChallengeBoardViewData>()
   const [problem, setProblem] = useState('')
   const [attempts, setAttempts] = useState(0)
-  const [other, setOther] = useState<ChallengeSlotView>()
-  useEffect(() => {
-    if (!online) return
-    let current = true
-    void api<ChallengeDayView>('/challenges', undefined, accountId).then(value => {
-      if (!current) return
-      setOther(value.slots.find(slot => slot.game !== gameId &&
-        (slot.player.status === 'available' || slot.player.status === 'started')))
-    }, () => undefined)
-    return () => { current = false }
-  }, [accountId, gameId, online])
   useEffect(() => {
     if (!online) return
     let current = true
@@ -364,7 +364,7 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
   const rows = resultRows(data.top, data.you, data.total)
   return <section className="challenge-panel" aria-label={t('Challenge standings')}>
     <div className="challenge-panel-head"><span className="eyebrow">{t('Challenge standings')}</span><span className="muted">{t('{count, plural, one {# player} other {# players}}', { count: data.total })}</span></div>
-    <ol className="challenge-mini">{rows.slice(0, 4).map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
+    <ol className="challenge-mini">{rows.map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
       <span className="challenge-rank">{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/><span className="challenge-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
       <strong>{formatLeaderboardValue(row.value, row.unit)}</strong>
     </li>)}</ol>
@@ -372,16 +372,7 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
       {data.you ? t('You’re first — no other times yet.')
         : attempts < 4 ? t('Syncing your result…') : t('No posted times yet.')}</p>}
     {!data.you && attempts < 4 && <p className="challenge-panel-note" role="status">{t('Syncing your result…')}</p>}
-    {!data.you && attempts >= 4 && <p className="challenge-panel-note">{t('This run did not post to the challenge board.')}</p>}
-    {other && onPlayOther && <>
-      <button className="secondary challenge-other" onClick={() => {
-        if (other.player.status === 'available' &&
-          !window.confirm(t('Start the one timed run? The clock begins immediately.'))) return
-        onPlayOther(other.game)
-      }}><Play size={16}/> {other.player.status === 'started' ? t('Resume the other challenge') : t('Play the other challenge')}</button>
-      {other.player.status === 'available' && <p className="muted challenge-start-note">
-        {t('One timed run. The clock starts when you begin.')}</p>}
-    </>}
+    {!data.you && attempts >= 4 && <p className="challenge-panel-note">{t('This run did not post to the leaderboard.')}</p>}
   </section>
 }
 

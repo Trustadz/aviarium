@@ -253,7 +253,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
     ...(trial || challengeMode ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: restart }]),
-    ...(leaderboard ? [{ kind: 'secondary' as const, label: t(challengeMode ? 'View the challenge board' : 'View leaderboard'), onClick: leaderboard.open }] : []),
+    ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
   return <div className={pack ? `play-page pack-play pack-${pack.data.theme}` : 'play-page'}>
@@ -266,7 +266,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
         {openSettings && <button className="icon-button" title={t("Sudoku settings")} aria-label={t("Sudoku settings")} onClick={openSettings}><Settings2 size={18}/></button>}
       </div>
     </div>
-    <div className="play-heading"><div><div className="eyebrow">{challengeMode ? t('Daily challenge · one attempt') : pack ? packTitle(t, pack) : 'Sudoku'}</div><h1>{levelTitle(t, level)}</h1></div>
+    <div className="play-heading"><div><div className="eyebrow">{challengeMode ? t('Daily challenge') : pack ? packTitle(t, pack) : 'Sudoku'}</div><h1>{levelTitle(t, level)}</h1></div>
       <div className="play-meta"><span className={'badge ' + level.difficulty.toLowerCase()}>{t(level.difficulty)}</span>
         {data.lives !== undefined && <span className="clock" aria-label={t('{count, plural, one {# life remaining} other {# lives remaining}}', { count: data.lives })}><Heart size={16}/>{data.lives}/{lifeLimit}</span>}
         {showTimer && <span className="clock"><Timer size={17}/>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}
@@ -291,7 +291,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
             </div>}
           <button className="primary" onClick={gameOver ? (challengeMode ? leave : restart) : leave}>{gameOver ? (challengeMode ? t('Back to challenges') : t('Retry puzzle')) : challengeMode ? t('Back to challenges') : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
           {!gameOver && <div className="button-bar">
-            {leaderboard && <button className="secondary" onClick={leaderboard.open}>{t(challengeMode ? 'View the challenge board' : 'View leaderboard')}</button>}
+            {leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
             <PuzzleShare level={level}/>
           </div>}
         </section>

@@ -10,7 +10,7 @@
 CREATE TABLE challenge_series (
   id text PRIMARY KEY,
   kind text NOT NULL CHECK (kind IN ('daily','weekly','monthly','seasonal','one_time')),
-  enabled boolean NOT NULL DEFAULT false,
+  enabled boolean NOT NULL DEFAULT true,
   game_limit smallint NOT NULL DEFAULT 1 CHECK (game_limit BETWEEN 1 AND 50),
   -- NULL means every registered challenge-capable game; '{}' means none.
   eligible_games text[],
@@ -27,7 +27,7 @@ CREATE TABLE challenge_series (
 );
 
 INSERT INTO challenge_series(id, kind, enabled, game_limit, eligible_games, game_options, timezone, reset_minute)
-VALUES ('daily', 'daily', false, 1, NULL,
+VALUES ('daily', 'daily', true, 1, NULL,
   '{"sudoku":{"difficulty":["Easy","Medium","Hard"]},"nonograms":{"size":[10],"difficulty":["Easy","Medium","Hard"]}}'::jsonb,
   'UTC', 0)
 ON CONFLICT (id) DO NOTHING;

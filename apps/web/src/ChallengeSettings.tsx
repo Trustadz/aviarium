@@ -120,7 +120,7 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
     {message && <p className="feedback" role="status">{message}</p>}
     {data && <>
-      <label className="setting-row">{t('Enable daily challenges')}<input type="checkbox" checked={enabled}
+      <label className="setting-row challenge-global-toggle">{t('Enable daily challenges')}<input type="checkbox" checked={enabled}
         disabled={busy} onChange={event => setEnabled(event.target.checked)}/></label>
       <div className="form-row">
         <label>{t('Games per day')}<select value={gameLimit} disabled={busy || games.length < 2}
@@ -138,8 +138,8 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
             </select>
           </span>
         </label>
-        <label>{t('Timezone')}<input value={data.timezone} readOnly aria-readonly="true"/>
-          <small className="muted">{t('Set by the server environment.')}</small></label>
+        <div className="challenge-static-setting"><span>{t('Timezone')}</span><strong>{data.timezone}</strong>
+          <small className="muted">{t('Set by the server environment.')}</small></div>
       </div>
       <fieldset className="challenge-settings-options challenge-settings-games">
         <legend>{t('Games in rotation')}</legend>

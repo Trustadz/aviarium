@@ -10,6 +10,8 @@ const row = (rank: number): LeaderboardStanding => ({
 test('after-game rows keep the top three and the viewer neighbourhood', () => {
   const top = Array.from({ length: 20 }, (_, index) => row(index + 1))
   assert.deepEqual(resultRows(top, top[0], 20).map(item => item.rank), [1, 2, 3])
-  assert.deepEqual(resultRows(top, row(10), 20).map(item => item.rank), [1, 2, 3, 9, 10, 11])
+  const mid = resultRows(top, { ...row(10), you: true }, 20)
+  assert.deepEqual(mid.map(item => item.rank), [1, 2, 3, 9, 10, 11])
+  assert.equal(mid.find(item => item.rank === 10)?.you, true)
   assert.deepEqual(resultRows(top, row(20), 20).map(item => item.rank), [1, 2, 3, 18, 19, 20])
 })

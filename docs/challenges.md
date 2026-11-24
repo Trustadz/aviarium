@@ -1,10 +1,11 @@
 # Daily challenges
 
-Daily challenges are a platform-owned, scheduled puzzle drop. Aviarium owns the
-date, reset time, game selection, exact level persistence, one-attempt claim,
-leaderboard closure, history and replay. A game supplies its normal level
-generation and result interpretation; no game needs a challenge endpoint,
-scheduler, board or UI.
+Challenges are a platform-owned, scheduled puzzle drop. **Challenges** is the
+menu and page; the daily challenge is the first (and currently only) challenge
+type. Aviarium owns the date, reset time, game selection, exact level
+persistence, one-attempt claim, leaderboard closure, history and replay. A game
+supplies its normal level generation and result interpretation; no game needs a
+challenge endpoint, scheduler, leaderboard or UI.
 
 The first release uses each game's **default rules** and a fixed challenge
 profile (Sudoku Medium). Enabled difficulty options can be narrowed in
@@ -15,8 +16,8 @@ extension.
 ## Entities
 
 - **Series** (`challenge_series`): the configured daily challenge. One row,
-  `daily`, with `enabled`, `game_limit`, `eligible_games`, `game_options`,
-  `timezone`, `reset_minute`, and a generation version.
+  `daily`, with `enabled` (default `true`), `game_limit`, `eligible_games`,
+  `game_options`, `timezone`, `reset_minute`, and a generation version.
 - **Occurrence** (`challenge_occurrences`): one local day, `period_key`
   (`YYYY-MM-DD`), absolute `starts_at`/`ends_at`, a timezone/reset snapshot, a
   random seed, and a `settings` snapshot so later admin changes cannot reshuffle
@@ -25,7 +26,9 @@ extension.
   game per day. It stores the chosen options/choices, the slot seed, and the
   exact `published_levels` revision (`source='Challenge'`,
   `catalog_visible=false`). With X=2 the current Sudoku and Nonograms slots
-  appear as separate cards and boards.
+  appear as compact rows. Each row uses the game's pack artwork that fades into
+  the background, then the game title and the top three times. Completed slots
+  move to a separate **Completed** section at the bottom of the overview.
 - **Attempt** (`challenge_attempts`): one player's claim. `session_id` is the
   server-issued save id; `(slot_id, owner_id)` is unique.
 - **Result** (`leaderboard_results`): one row per completed attempt,
@@ -61,14 +64,14 @@ extension.
   lives, aids, the attempt id and the level/pack revisions. The timer continues.
 - A completion posts only if the server verifies and receives it before
   `ends_at`. Late or offline completions are saved but not posted to the closed
-  challenge board; the client is told the run was not ranked.
+  challenge leaderboard; the client is told the run was not ranked.
 - Running out of lives (when a future rules variant enables them) or an invalid
   completion closes the attempt without a result.
 - Challenge levels are hidden from the catalog, Studio, published-puzzles list
   and general boards. The client refuses to open a `source='Challenge'` level as
   normal practice; the server rejects it with `challenge_required`.
 
-## Challenge boards and closure
+## Challenge leaderboards and closure
 
 - One board per occurrence + game. The board is open only during
   `[starts_at, ends_at)`; after reset it is read-only.
@@ -95,7 +98,7 @@ Write requests still require the configured origin. API responses are
 | `GET /api/challenges/summary` | Badge/nav payload: `enabled`, `open`, `serverNow`, current occurrence, series, `nextStart`. Cheap; no full hub. |
 | `GET /api/challenges` | Today's hub: occurrence, slots (exact level, options, player status, top 3/you), open count. |
 | `GET /api/challenges/:occurrenceId` | Day detail for the current or a past occurrence: slots, final standings, replay descriptors. Future occurrences 404. |
-| `GET /api/challenges/:occurrenceId/slots/:gameId/board?limit=20` | Dedicated challenge board. Returns `board`, `slot`, `top`, `you`, `total`, `serverNow`. No seed/All records/Play-this-board. |
+| `GET /api/challenges/:occurrenceId/slots/:gameId/board?limit=20` | Dedicated challenge leaderboard. Returns `board`, `slot`, `top`, `you`, `total`, `serverNow`. No seed/All records/Play-this-board. |
 | `GET /api/challenges/history?before=&limit=20` | Past occurrences, newest first; final top 3, viewer status, replay descriptors. Used by the "Yesterday" link, the Leaderboards **Challenges** tab and the past list. |
 | `POST /api/challenges/slots/:slotId/start` | Claim/resume while open. Returns `attemptId`, `sessionId`, `startedAt`, `resumed`, occurrence, slot level/options/rules and (on resume) the server save. Errors: `challenge_closed`, `challenge_disabled`, `challenge_already_completed`, `challenge_slot_unavailable`, `challenge_game_unsupported`. |
 | `POST /api/progress` | Existing save sync plus optional `challenge: { attemptId }`. Verifies the attempt, writes one challenge result, and returns `challenge: { attemptId, status, ranked, invalid? }`. A general mutation for a `source='Challenge'` level is rejected with `challenge_required`. |
@@ -128,7 +131,10 @@ limit are admin settings in the database.
 - games in rotation (enable/disable each eligible game; the limit follows the
   selected count);
 - reset time as 24-hour hour/minute selects;
-- read-only timezone from the environment;
+- read-only timezone from the environment, rendered as static text rather than
+  an input;
+- the global **Enable daily challenges** toggle at the top (default on); turning
+  it off removes the **Challenges** menu item;
 - per-game enabled generation options (Sudoku difficulties; Nonograms grid size
   and difficulties);
 - current/next occurrence status and **Prepare now**.
@@ -139,22 +145,31 @@ enabled options; an admin cannot pin or author a daily puzzle.
 ## First-release scope and deferred work
 
 Shipped in this slice: Sudoku and Nonograms daily challenges, X 1–2 with one
-slot per game, one attempt, input-only reset, closed-at-reset challenge boards,
-after-game challenge standings, nav/badge, minimal admin settings, replay seed
-to the general board, the Leaderboards **General | Challenges** tabs, a
-current-day and paginated past list, all-mode after-game standings on the played
-level's board with a secondary pack-leaderboard link, server-authoritative challenge times (the
-server start time is a floor and time away counts), a `Play the other challenge`
-CTA after a slot, English/Dutch, mobile and offline/error states.
+slot per game, one attempt, input-only reset, closed-at-reset challenge leaderboards,
+after-game challenge standings, nav/badge with the count over the calendar
+icon (including the sidebar), **Challenges** naming, compact daily rows with
+pack artwork and top-three times, a **Completed** section at the bottom, the
+first unresolved daily challenge as the first **Continue** card with a calendar
+badge, replay of a closed seed to the general leaderboard, the Leaderboards
+**General | Challenges** tabs, a current-day and paginated past list, all-mode
+after-game standings on the played level's board with a secondary
+pack-leaderboard link, server-authoritative challenge times (the server start
+time is a floor and time away counts), games-in-rotation admin controls,
+English/Dutch, mobile and offline/error states. Starting a run no longer shows a
+confirmation alert or one-attempt/timed-run copy; the server still enforces one
+attempt. Challenge rows have no separate leaderboard button: the top-three
+**and N more** link opens the leaderboard, and the after-game modal keeps a
+**View leaderboard** action. There is no **Play the other challenge** button.
+Every leaderboard view highlights the current player.
 
 Challenge results for time-based games use the server start time as a floor: a
 completion cannot post a faster time than the wall clock allowed, so leaving and
 resuming cannot reduce the recorded time.
 
-Deferred: the secondary pack aggregate panel; eligible-games/next-slate admin
-controls; pack-rule variants (hints/Auto notes/lives/timer/diagonal); admin
-recovery UI; per-game custom challenge profiles; rank-gap separators and tab
-keyboard/roving-focus polish.
+Deferred: the secondary pack aggregate panel; pack-rule variants
+(hints/Auto notes/lives/timer/diagonal); admin recovery UI; per-game custom
+challenge profiles; rank-gap separators and tab keyboard/roving-focus polish;
+offline sync retry.
 
 ## Verification
 
@@ -168,7 +183,7 @@ keyboard/roving-focus polish.
   start rejection, the server time floor, a late close, history, replay and the
   nav badge using the test clock.
 - Manual browser: nav/badge, today/day/closed/replay, start/resume, input-only reset,
-  challenge board, after-game panel, admin settings, en/nl, 360/393/200%,
-  offline/error states.
+  leaderboard, after-game panel, Continue daily card, Completed section,
+  admin settings, en/nl, 360/393/200%, offline/error states.
 - Existing suites: `npm run typecheck`, `npm test`, `npm run build`,
   `npm run test:browser` against disposable PostgreSQL.
