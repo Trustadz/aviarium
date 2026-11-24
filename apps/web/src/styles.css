@@ -1352,7 +1352,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .leaderboard-board-main { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .leaderboard-board-main strong { font-size: .92rem; }
 .leaderboard-board-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .78rem; color: var(--muted); text-align: right; }
-.you-badge { background: var(--accent); color: var(--surface); }
+.you-badge { margin-left: 6px; background: var(--accent); color: var(--surface); }
 .leaderboard-board-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .leaderboard-board-heading h1 { font-size: clamp(2rem, 4vw, 2.8rem); margin: 2px 0 0; }
 .leaderboard-board-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
@@ -1645,3 +1645,12 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
 .admin-challenges { grid-column: 1 / -1; }
 .challenge-settings-game { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
 .challenge-settings-game h3 { margin: 0 0 8px; }
+
+
+.challenge-start-note { margin: 0; font-size: .8rem; }
+.challenge-admin-note,
+.challenge-settings-help { margin: 4px 0 0; font-size: .82rem; }
+@media (max-width: 600px) {
+  .admin-challenges .form-row { grid-template-columns: 1fr; }
+  .challenge-time-selects { flex-wrap: wrap; }
+}

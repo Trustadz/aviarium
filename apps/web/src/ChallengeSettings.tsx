@@ -85,6 +85,8 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
   function prepare() {
     run(async () => {
       const value = await api<{ prepared: boolean; preparing: boolean }>('/admin/challenges/prepare', json('POST', {}), accountId)
+      const refreshed = await api<ChallengeSettingsData>('/admin/challenges/settings', undefined, accountId)
+      setData(refreshed)
       setMessage(value.prepared ? t('Challenge prepared.') : t('The challenge could not be prepared. Try again.'))
     })
   }
@@ -123,8 +125,11 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
             </select>
           </span>
         </label>
-        <label>{t('Timezone')}<input value={data.timezone} readOnly aria-readonly="true"/></label>
+        <label>{t('Timezone')}<input value={data.timezone} readOnly aria-readonly="true"/>
+          <small className="muted">{t('Set by the server environment.')}</small></label>
       </div>
+      <p className="muted challenge-settings-help">{t('The daily puzzle picks from the enabled values. Disable a value to keep it out of the rotation.')}</p>
+      {!valid && <p className="muted" role="status">{t('Enable at least one option for every challenge game.')}</p>}
       {games.map(game => <section className="challenge-settings-game" key={game.id} aria-label={game.label}>
         <h3>{game.label}</h3>
         {game.optionGroups.map(group => <fieldset className="challenge-settings-options" key={group.key}>
@@ -141,9 +146,12 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
           : <p><strong>{t('Today')}</strong> · {t('No current challenge')}</p>}
         <p className="muted">{t('Next: {time} ({zone})', { time: formatChallengeTime(t, intl, data.next.startsAt, data.timezone), zone: data.timezone })}</p>
       </div>
+      <p className="muted challenge-admin-note">{t('Changes apply from {time} ({zone}).', {
+        time: formatChallengeTime(t, intl, data.appliesFrom, data.timezone), zone: data.timezone })}</p>
       <div className="button-bar">
         <button className="primary" onClick={save} disabled={busy || !valid}><Save size={16}/> {t('Save challenge settings')}</button>
-        <button className="secondary" onClick={prepare} disabled={busy || !data.enabled}><WandSparkles size={16}/> {t('Prepare now')}</button>
+        <button className="secondary" onClick={prepare} disabled={busy || !data.enabled}
+          title={t('Recovers a missing or failed challenge for the current window.')}><WandSparkles size={16}/> {t('Prepare now')}</button>
       </div>
     </>}
   </section>

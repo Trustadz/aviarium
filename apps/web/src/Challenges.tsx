@@ -54,7 +54,7 @@ export interface ChallengeDayView {
 export interface ChallengeBoardViewData {
   board: {
     game: string; key: string; kind: 'challenge'; difficulty?: string; levelTitle?: string
-    challenge?: { occurrenceId: string; periodKey: string; slotId: string; timeZone: string }
+    challenge?: { occurrenceId: string; periodKey: string; slotId: string; timeZone: string; closed?: boolean }
   }
   slot: { id: string; game: string; options: Record<string, string | number | boolean | null>; rules: Record<string, string | number | boolean | null>; playerStatus: string }
   top: LeaderboardStanding[]
@@ -91,6 +91,7 @@ function remainingText(endsAt: string, serverNow: string, tick: number, t: Retur
 }
 
 function statusLabel(t: ReturnType<typeof useT>, slot: ChallengeSlotView, past: boolean) {
+  if (slot.status === 'failed') return t('Unavailable')
   if (slot.status !== 'ready') return t('Preparing challenge')
   switch (slot.player.status) {
     case 'available': return past ? t('Not played') : t('Ready')
@@ -110,7 +111,7 @@ function MiniTop({ rows, total }: { rows: LeaderboardStanding[]; total: number }
     {rows.slice(0, 3).map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
       <span className="challenge-rank">{row.rank}</span>
       <Avatar name={row.name} url={row.avatarUrl}/>
-      <span className="challenge-name">{row.name}</span>
+      <span className="challenge-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
       <strong>{formatLeaderboardValue(row.value, row.unit)}</strong>
     </li>)}
     {total > rows.length && <li className="challenge-mini-more"><span>{t('and {count} more', { count: total - rows.length })}</span></li>}
@@ -128,6 +129,15 @@ function SlotCard({ day, slot, past, accountId, link, start, board, replay }: {
   const size = typeof slot.options.size === 'number' ? slot.options.size : undefined
   const detail = [size ? size + ' × ' + size : '', slot.level?.difficulty ? t(slot.level.difficulty as Message) : ''].filter(Boolean).join(' · ')
   const result = slot.player.result
+  const [starting, setStarting] = useState(false)
+  const miniRows = [...slot.standings.top]
+  if (slot.standings.you && !miniRows.some(row => row.you)) miniRows.push(slot.standings.you)
+  const begin = async () => {
+    if (starting) return
+    if (slot.player.status === 'available' && !window.confirm(t('Start the one timed run? The clock begins immediately.'))) return
+    setStarting(true)
+    try { await start() } finally { setStarting(false) }
+  }
   return <section className="challenge-slot panel" aria-label={title}>
     <div className="challenge-slot-head">
       <div>
@@ -141,13 +151,18 @@ function SlotCard({ day, slot, past, accountId, link, start, board, replay }: {
       <Trophy size={16}/> {formatLeaderboardValue(result.value, result.unit)}
       {result.rank ? <span> · #{result.rank} / {result.total}</span> : null}
     </p>}
-    <MiniTop rows={slot.standings.top} total={slot.standings.total}/>
+    <MiniTop rows={miniRows} total={slot.standings.total}/>
     <div className="challenge-actions">
-      {!past && (slot.player.status === 'available') && <button className="primary" onClick={start}><Play size={17}/> {t('Start challenge')}</button>}
-      {!past && slot.player.status === 'started' && <button className="primary" onClick={start}><Play size={17}/> {t('Resume challenge')}</button>}
-      {slot.player.status === 'completed' && <button className="secondary" onClick={board}>{t('View board')}</button>}
+      {!past && (slot.player.status === 'available') && <button className="primary" onClick={begin} disabled={starting}
+        aria-label={t('Start {game} challenge', { game: title })}><Play size={17}/> {starting ? t('Starting…') : t('Start challenge')}</button>}
+      {!past && slot.player.status === 'started' && <button className="primary" onClick={begin} disabled={starting}
+        aria-label={t('Resume {game} challenge', { game: title })}><Play size={17}/> {starting ? t('Starting…') : t('Resume challenge')}</button>}
+      {!past && slot.player.status === 'available' && <p className="muted challenge-start-note">{t('One timed run. The clock starts when you begin.')}</p>}
+      {slot.player.status === 'completed' && <button className="secondary" onClick={board}
+        aria-label={t('View {game} challenge board', { game: title })}>{t('View board')}</button>}
       {past && slot.replay && <button className="secondary" onClick={() => replay(slot.replay!)}><RotateCcw size={16}/> {t('Play this seed')}</button>}
-      {slot.player.status !== 'completed' && <button className="text-button" onClick={board}>{t('Challenge board')} <ChevronRight size={16}/></button>}
+      {slot.status !== 'failed' && slot.player.status !== 'completed' && <button className="text-button" onClick={board}
+        aria-label={t('View {game} challenge board', { game: title })}>{t('Challenge board')} <ChevronRight size={16}/></button>}
     </div>
     {slot.status === 'failed' && <p className="error" role="alert">{t('This challenge game is unavailable. Try again later.')}</p>}
   </section>
@@ -168,6 +183,7 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
   const [loading, setLoading] = useState(false)
   const [previous, setPrevious] = useState<{ id: string; periodKey: string; startsAt: string; timezone: string }>()
   const [, setTick] = useState(0)
+  useEffect(() => { setDay(undefined); setProblem('') }, [occurrenceId, accountId])
   useEffect(() => {
     const timer = setInterval(() => setTick(value => value + 1), 60_000)
     return () => clearInterval(timer)
@@ -197,6 +213,7 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
   const date = day?.occurrence ? formatChallengeDate(intl, day.occurrence.startsAt, day.occurrence.timezone) : ''
   const reset = day?.occurrence ? formatResetMinute(day.series?.resetMinute ?? 0) : ''
   const canPlay = day?.enabled && day.occurrence && !past
+  const completedSlots = day?.slots.filter(slot => slot.player.status === 'completed').length ?? 0
   return <section className="catalog challenges-page">
     {occurrenceId && <div className="game-navigation"><button className="text-button back" onClick={openToday}>
       <ArrowLeft size={17}/> {t('Daily Challenges')}</button></div>}
@@ -218,7 +235,10 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
     {day?.occurrence && <>
       <div className="challenge-meta panel">
         <span><strong>{date}</strong></span>
-        <span>{t('Resets at {time} ({zone})', { time: reset, zone: day.occurrence.timezone })}</span>
+        {Boolean(day.slots.length) && <span>{t('{done} of {total} completed', { done: completedSlots, total: day.slots.length })}</span>}
+        <span>{past
+          ? t('Closed at {time} ({zone})', { time: formatChallengeTime(t, intl, day.occurrence.endsAt, day.occurrence.timezone), zone: day.occurrence.timezone })
+          : t('Resets at {time} ({zone})', { time: reset, zone: day.occurrence.timezone })}</span>
         {past && <span>{t('The daily leaderboard is closed. Play the seed as a normal game.')}</span>}
       </div>
       <div className="challenge-slots">
@@ -247,6 +267,7 @@ export function ChallengeBoard({ occurrenceId, gameId, accountId, online, back }
     if (!online) { setData(undefined); return }
     let current = true
     setProblem('')
+    setData(undefined)
     void api<ChallengeBoardViewData>('/challenges/' + encodeURIComponent(occurrenceId) + '/slots/' + encodeURIComponent(gameId) + '/board',
       undefined, accountId).then(value => { if (current) setData(value) },
     error => { if (current) setProblem(errorMessage(error)) })
@@ -263,7 +284,7 @@ export function ChallengeBoard({ occurrenceId, gameId, accountId, online, back }
     return rows
   }, [data])
   return <section className="catalog challenge-board">
-    <div className="game-navigation"><button className="text-button back" onClick={back}><ArrowLeft size={17}/> {t('Daily Challenges')}</button></div>
+    <div className="game-navigation"><button className="text-button back" onClick={back}><ArrowLeft size={17}/> {t('Back')}</button></div>
     <div className="section-heading"><div><p className="eyebrow">{t('Daily challenge')}</p><h1>{date} · {title}</h1></div>
       <span className="badge">{t('{count, plural, one {# player} other {# players}}', { count: data?.total ?? 0 })}</span></div>
     {!online && <p className="notice">{t('Connect to view leaderboards.')}</p>}
@@ -278,7 +299,9 @@ export function ChallengeBoard({ occurrenceId, gameId, accountId, online, back }
         <td className="leaderboard-time">{formatLeaderboardValue(row.value, row.unit)}</td>
       </tr>)}</tbody>
     </table></div> : <div className="empty challenge-empty-state"><Trophy size={28}/><h2>{t('No posted times yet.')}</h2></div>)}
-    <p className="muted challenge-foot">{t('The daily leaderboard closes when the next challenge starts.')}</p>
+    <p className="muted challenge-foot">{data?.board.challenge?.closed
+      ? t('This daily leaderboard is closed.')
+      : t('The daily leaderboard closes when the next challenge starts.')}</p>
   </section>
 }
 
@@ -298,7 +321,7 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
         undefined, accountId).then(value => {
         if (!current) return
         setData(value)
-        if (!value.you && attempt < 2) timer = setTimeout(() => load(attempt + 1), 700 * (attempt + 1))
+        if (!value.you && attempt < 4) timer = setTimeout(() => load(attempt + 1), 900 * (attempt + 1))
         else setAttempts(attempt)
       }, error => { if (current) { setProblem(errorMessage(error)); setAttempts(commentAttempt(attempt)) } })
     }
@@ -308,16 +331,19 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
   if (!online) return <p className="challenge-panel-note">{t('Standings will appear when you’re online.')}</p>
   if (problem) return <p className="challenge-panel-note" role="alert">{t('Standings unavailable.')}</p>
   if (!data) return <p className="challenge-panel-note" role="status">{t('Posting your result…')}</p>
-  const rows = [...data.top]
+  const rows = data.top.slice(0, 3)
   if (data.you && !rows.some(row => row.you)) rows.push(data.you)
   return <section className="challenge-panel" aria-label={t('Challenge standings')}>
     <div className="challenge-panel-head"><span className="eyebrow">{t('Challenge standings')}</span><span className="muted">{t('{count, plural, one {# player} other {# players}}', { count: data.total })}</span></div>
     <ol className="challenge-mini">{rows.slice(0, 4).map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
-      <span className="challenge-rank">{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/><span className="challenge-name">{row.name}</span>
+      <span className="challenge-rank">{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/><span className="challenge-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
       <strong>{formatLeaderboardValue(row.value, row.unit)}</strong>
     </li>)}</ol>
-    {!rows.length && <p className="challenge-panel-note">{t('You’re first — no other times yet.')}</p>}
-    {!data.you && attempts >= 2 && <p className="challenge-panel-note">{t('This run did not post to the challenge board.')}</p>}
+    {!rows.length && <p className="challenge-panel-note">
+      {data.you ? t('You’re first — no other times yet.')
+        : attempts < 4 ? t('Syncing your result…') : t('No posted times yet.')}</p>}
+    {!data.you && attempts < 4 && <p className="challenge-panel-note" role="status">{t('Syncing your result…')}</p>}
+    {!data.you && attempts >= 4 && <p className="challenge-panel-note">{t('This run did not post to the challenge board.')}</p>}
   </section>
 }
 

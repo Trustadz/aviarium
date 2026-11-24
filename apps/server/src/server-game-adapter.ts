@@ -54,7 +54,15 @@ export function serverGameFromDefinition(
     packs: {
       readManifest: input => definition.packs.schemas.manifest.parse(input),
       readDraft: input => definition.packs.schemas.draft.parse(input),
-      verify: (input, prior) => definition.packs.verify(input, prior as readonly StoredLevel[]),
+      async verify(input, prior) {
+        try {
+          return await definition.packs.verify(input, prior as readonly StoredLevel[])
+        } catch (error) {
+          if (error instanceof GameRuleError)
+            throw new HttpError(422, error.code as never, error.values as never)
+          throw error
+        }
+      },
       levels: pack => definition.packs.materialize(pack),
       sameLevel: (entry, rules, previous, previousRules) =>
         definition.packs.sameContent

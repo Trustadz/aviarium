@@ -8,6 +8,7 @@ import { sudokuGame } from '../../../packages/sudoku/src/game.js'
 import { nonogramsGame } from '../../../packages/nonograms/src/game.js'
 import { createGameRegistry } from './game-registry.js'
 import { serverGameFromDefinition } from './server-game-adapter.js'
+import { challengeGameFromDefinition } from './challenges/definition.js'
 
 const packSchema = z.object({
   format: z.literal(1), game: z.literal('fixture'), title: z.string(), description: z.string(),
@@ -88,4 +89,26 @@ test('the definition-backed server adapter preserves a challenge claim', () => {
     challenge: { attemptId },
   })
   assert.equal(mutation.challenge?.attemptId, attemptId)
+})
+
+
+test('the server adapter maps pack rule errors to the API envelope', async () => {
+  const game = serverGameFromDefinition(sudokuGame)
+  const empty = { ...sudokuGame.packs.builtIn[0]!.data, puzzles: [] }
+  await assert.rejects(async () => { await game.packs.verify(empty, []) }, (error: unknown) => {
+    const failure = error as { statusCode?: number; code?: string }
+    return failure.statusCode === 422 && failure.code === 'pack_empty'
+  })
+})
+
+test('challenge capability requires generation and a leaderboard, and the fixture reaches the runtime', () => {
+  const generationOnly = {
+    ...fixture, id: 'generation-only', meta: { ...fixture.meta, id: 'generation-only' }, leaderboard: undefined,
+  } as unknown as typeof fixture
+  const registry = createGameRegistry([sudokuGame, generationOnly])
+  assert.deepEqual(registry.challengeCapable().map(game => game.definition.id), ['sudoku'])
+  assert.equal(challengeGameFromDefinition(generationOnly), undefined)
+  const runtime = challengeGameFromDefinition(fixture)
+  assert.equal(runtime?.id, 'fixture')
+  assert.ok(runtime?.optionGroups.length)
 })

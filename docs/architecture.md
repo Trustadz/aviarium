@@ -174,7 +174,9 @@ persists the exact level once; claims one attempt per player per game; closes th
 challenge board at the next reset; and exposes the current day, a closed day and
 a seed replay. A game supplies its normal generation, attempt validation and
 result interpretation; it does not implement scheduling, boards, attempts or
-challenge UI. The current release uses each game's default rules; Sudoku and Nonograms are
+challenge UI. Challenge-capable games are derived from the shared `GameRegistry`: a
+`GameDefinition` with `generation` and `leaderboard` is automatically eligible,
+and its `challenge.optionGroups` drive the admin and scheduler. The current release uses each game's default rules; Sudoku and Nonograms are
 eligible, X can be 1 or 2, and each enabled game contributes at most one slot.
 Pack-rule variants are a future option-group extension.
 
@@ -196,10 +198,12 @@ product rules are documented in [daily challenges](challenges.md).
 The shared game contract is documented in [game contract](game-contract.md). A
 game supplies its level/attempt codecs, generation, pack materialization and
 result interpretation; the platform owns routing, packs, leaderboards, saves and
-daily challenges. The Sudoku and Nonograms `GameDefinition` adapters, the runtime registry and a
-fake-game fixture are in place. The server compatibility map is built from the definitions and injected into
-the platform registrations; the legacy `ServerGame` adapter and the web contract
-remain for the next slices.
+daily challenges. The Sudoku and Nonograms `GameDefinition` adapters, the runtime
+registry and a fake-game fixture are in place. The server compatibility map is
+built from the definitions and injected into the platform registrations. Daily
+challenges now derive their registry from the same definitions, so a new game
+with `generation` and `leaderboard` is eligible without a challenge adapter. The
+legacy `ServerGame` adapter and the web contract remain for J4/J5.
 
 ## Current scope
 

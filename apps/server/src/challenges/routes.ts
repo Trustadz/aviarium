@@ -293,7 +293,7 @@ export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMa
         levelId: slot.level_id ?? undefined, levelRevision: slot.level_revision ?? undefined,
         levelTitle: level?.title,
         challenge: { occurrenceId: occurrence.id, periodKey: occurrence.period_key, slotId: slot.id,
-          timeZone: occurrence.timezone },
+          timeZone: occurrence.timezone, closed: now >= Date.parse(iso(occurrence.ends_at)) },
       },
       slot: { id: slot.id, game: slot.game_id, options: slot.options, rules: slot.rules,
         playerStatus: playerStatus(occurrence, slot, await loadAttempt(slot.id, user.id), now, Boolean(serverGame)) },

@@ -18,7 +18,7 @@ export function createGameRegistry(definitions: readonly GameDefinition<any, any
   return {
     all: () => games,
     get: id => byId.get(id),
-    challengeCapable: () => games.filter(game => Boolean(game.definition.generation)),
+    challengeCapable: () => games.filter(game => Boolean(game.definition.generation && game.definition.leaderboard)),
   }
 }
 
