@@ -1,6 +1,6 @@
 # Verification
 
-Run `npm run typecheck`, `npm test`, and `npm run build`. Core tests cover the solver outcomes, difficulty, generated puzzle reproducibility, move rules, leaderboard board grouping and cooldowns, and backup settings.
+Run `npm run typecheck`, `npm test`, and `npm run build`. Core tests cover the solver outcomes, difficulty, generated puzzle reproducibility, move rules, leaderboard board grouping and cooldowns, and backup settings. `npm test` also runs the changelog compiler and pull-request diff-rule tests in `scripts/*.test.mjs`; `npm run changelog:check` validates the actual fragments. The separate **Changelog** workflow runs on pull requests and pushes to `main` without the browser suite.
 
 For a local Compose smoke test, install Chromium or run `npx playwright install chromium`. Set `AVIARIUM_CHROMIUM` if using a system Chromium executable. Set `AVIARIUM_TEST_URL` to the local running app. The script defaults to `http://localhost:4183`. Point it at a disposable deployment. It creates draft, job, save, and publication records when administrator and player fixtures are supplied.
 
