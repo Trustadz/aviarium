@@ -26,15 +26,15 @@ extension.
   game per day. It stores the chosen options/choices, the slot seed, and the
   exact `published_levels` revision (`source='Challenge'`,
   `catalog_visible=false`). With X=2 the current Sudoku and Nonograms slots
-  appear as compact rows. Each row uses the game's pack artwork that fades into
-  the background, then the game title and the top three times. Completed slots
-  move to a separate **Completed** section at the bottom of the overview.
+  appear as compact rows. Each row uses the same game-preview component as the
+  library cards, on the theme gradient, then the game title and top three
+  times. Completed slots move to a separate **Completed** section at the bottom.
 - **Attempt** (`challenge_attempts`): one player's claim. `session_id` is the
   server-issued save id; `(slot_id, owner_id)` is unique.
 - **Result** (`leaderboard_results`): one row per completed attempt,
   `board_kind='challenge'`, `board_key='challenge:<slotId>'`, and
-  `challenge_slot_id`/`challenge_attempt_id`. Challenge results never use the
-  general 30-day cooldown.
+  `challenge_slot_id`/`challenge_attempt_id`. The challenge row never uses the
+  general 30-day cooldown; a matching normal game row is written alongside it.
 
 ## Time and reset
 
@@ -67,22 +67,30 @@ extension.
   challenge leaderboard; the client is told the run was not ranked.
 - Running out of lives (when a future rules variant enables them) or an invalid
   completion closes the attempt without a result.
-- Challenge levels are hidden from the catalog, Studio, published-puzzles list
-  and general boards. The client refuses to open a `source='Challenge'` level as
-  normal practice; the server rejects it with `challenge_required`.
+- Challenge levels are hidden from the catalog, Studio and published-puzzles
+  list. The client refuses to open a `source='Challenge'` level as normal
+  practice; the server rejects it with `challenge_required`. A completed
+  challenge still writes a normal game result on the matching Quick Play
+  difficulty/size board, using the challenge's actual rules.
 
 ## Challenge leaderboards and closure
 
-- One board per occurrence + game. The board is open only during
+- One challenge leaderboard per occurrence + game. It is open only during
   `[starts_at, ends_at)`; after reset it is read-only.
+- A verified completion writes **two** result rows for the same save: the
+  challenge row (`board_kind='challenge'`) and the normal game row on the
+  matching Quick Play difficulty/size board. The game row carries the same
+  authoritative time, aids, rules version and board metadata; the challenge
+  row remains excluded from general summaries.
 - Standings show the best active result per account (one result per account in a
   challenge), tie ranks, avatars for the top three and the viewer, and the
-  viewer's own row when it falls outside the visible list.
+  viewer's own row when it falls outside the visible list. The current player
+  is highlighted in every leaderboard table and mini list.
 - The challenge summary/hub returns a **replay descriptor** for past slots:
-  `{ game, seed, options, rules, generatorVersion }`. "Play this seed" launches
+  `{ game, seed, options, rules, generatorVersion }`. **Play this game** launches
   a normal Quick Play/generated game, not a new challenge attempt. Its result
-  posts to the normal general board under the existing rules (including the
-  30-day exact-puzzle cooldown), not to the closed daily board.
+  posts to the normal general board under the existing rules, not to the closed
+  daily board.
 - The daily board closes when the next one starts. Replaying a seed opens a normal
 game with a replay banner and a Back to challenge path. There is no ranked replay of
   a past daily board.
@@ -101,7 +109,7 @@ Write requests still require the configured origin. API responses are
 | `GET /api/challenges/:occurrenceId/slots/:gameId/board?limit=20` | Dedicated challenge leaderboard. Returns `board`, `slot`, `top`, `you`, `total`, `serverNow`. No seed/All records/Play-this-board. |
 | `GET /api/challenges/history?before=&limit=20` | Past occurrences, newest first; final top 3, viewer status, replay descriptors. Used by the "Yesterday" link, the Leaderboards **Challenges** tab and the past list. |
 | `POST /api/challenges/slots/:slotId/start` | Claim/resume while open. Returns `attemptId`, `sessionId`, `startedAt`, `resumed`, occurrence, slot level/options/rules and (on resume) the server save. Errors: `challenge_closed`, `challenge_disabled`, `challenge_already_completed`, `challenge_slot_unavailable`, `challenge_game_unsupported`. |
-| `POST /api/progress` | Existing save sync plus optional `challenge: { attemptId }`. Verifies the attempt, writes one challenge result, and returns `challenge: { attemptId, status, ranked, invalid? }`. A general mutation for a `source='Challenge'` level is rejected with `challenge_required`. |
+| `POST /api/progress` | Existing save sync plus optional `challenge: { attemptId }`. Verifies the attempt, writes the challenge result and the matching normal game result, and returns `challenge: { attemptId, status, ranked, invalid? }`. A general mutation for a `source='Challenge'` level is rejected with `challenge_required`. |
 | `GET /api/challenges/games` | Registered challenge-capable games and their option groups. Used by admin/discovery; not required by the player UI. |
 | `GET /api/admin/challenges/settings` | Series settings, registered games/options, current/next occurrence, `appliesFrom`, minimum window. |
 | `PATCH /api/admin/challenges/settings` | Enable/disable, reset minute, game limit, eligible games, and per-game option values. `expectedUpdatedAt` guards two-admin edits. Changes apply to the next occurrence. |
@@ -146,12 +154,16 @@ enabled options; an admin cannot pin or author a daily puzzle.
 
 Shipped in this slice: Sudoku and Nonograms daily challenges, X 1–2 with one
 slot per game, one attempt, input-only reset, closed-at-reset challenge leaderboards,
-after-game challenge standings, nav/badge with the count over the calendar
-icon (including the sidebar), **Challenges** naming, compact daily rows with
-pack artwork and top-three times, a **Completed** section at the bottom, the
+after-game challenge standings, nav/badge with the count on the top-right of
+the calendar icon (including the sidebar), **Challenges** naming, compact daily
+rows using the library game-preview component with the theme gradient and
+top-three times, a **Completed** section at the bottom, an all-completed
+message with a flat parrot that works in light, dark and e-reader modes, the
 first unresolved daily challenge as the first **Continue** card with a calendar
-badge, replay of a closed seed to the general leaderboard, the Leaderboards
-**General | Challenges** tabs, a current-day and paginated past list, all-mode
+badge, **Play this game** replay of a closed seed to the general leaderboard,
+the Leaderboards **General | Challenges** tabs with the search below the tabs
+and tab-style underline controls, a meta countdown in place of the reset label,
+both challenge and normal-game leaderboard results, the Leaderboards a current-day and paginated past list, all-mode
 after-game standings on the played level's board with a secondary
 pack-leaderboard link, server-authoritative challenge times (the server start
 time is a floor and time away counts), games-in-rotation admin controls,
@@ -162,9 +174,10 @@ attempt. Challenge rows have no separate leaderboard button: the top-three
 **View leaderboard** action. There is no **Play the other challenge** button.
 Every leaderboard view highlights the current player.
 
-Challenge results for time-based games use the server start time as a floor: a
-completion cannot post a faster time than the wall clock allowed, so leaving and
-resuming cannot reduce the recorded time.
+Challenge results for time-based games use the server start time as a floor for
+both the challenge row and the matching game row: a completion cannot post a
+faster time than the wall clock allowed, so leaving and resuming cannot reduce
+the recorded time.
 
 Deferred: the secondary pack aggregate panel; pack-rule variants
 (hints/Auto notes/lives/timer/diagonal); admin recovery UI; per-game custom
@@ -178,7 +191,8 @@ offline sync retry.
   one attempt; a second start after completion is rejected; late completion is
   saved but not posted; duplicate sync is idempotent; the challenge level is
   rejected by a normal progress mutation; challenge rows do not affect general
-  cooldowns, player summaries or the busiest board. The browser suite now runs
+  cooldowns, player summaries or the busiest board; a challenge completion also
+  appears on the matching Quick Play board with the right difficulty/size. The browser suite now runs
   `tests/challenges-smoke.mjs`, which covers two slots, one claim, the second
   start rejection, the server time floor, a late close, history, replay and the
   nav badge using the test clock.

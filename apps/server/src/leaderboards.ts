@@ -281,7 +281,7 @@ export async function recordLeaderboardResult(db: PoolClient, user: User, game: 
     level_id,level_revision,pack_id,pack_revision,pack_stop,level_title,pack_title,seed_code,puzzle_key,
     score_value,value_unit,lower_is_better,aids,rules_version,completed_at,recorded_at,status)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,COALESCE($22::timestamptz,now()),$23)
-    ON CONFLICT (save_id) DO NOTHING`,
+    ON CONFLICT (save_id, board_key) DO NOTHING`,
   [saved.id, user.id, game.id, record.boardKey, record.boardKind, JSON.stringify(record.boardMeta),
     level.id, level.revision, level.pack?.id ?? null, level.pack?.revision ?? null, level.pack?.stop ?? null,
     level.title, record.packTitle ?? null, record.seedCode ?? null, puzzleKey,
@@ -302,9 +302,10 @@ export interface ChallengeResultContext {
 }
 
 /**
- * Write the one challenge result for a completed, verified attempt. Challenge
- * results never use the general cooldown: they are always active on the
- * challenge board and are isolated from the general boards.
+ * Write the challenge result and the matching normal game result for a
+ * completed, verified attempt. The challenge row is always active on the
+ * challenge board. The normal row uses the challenge's real difficulty/size and
+ * rules, shares the same save, and is excluded from the challenge summaries.
  */
 export async function recordChallengeResult(db: PoolClient, user: User, game: ServerGame, level: LevelRecord,
   saved: SavedAttempt, context: ChallengeResultContext, record: ChallengeResult, now: Date) {
@@ -322,11 +323,33 @@ export async function recordChallengeResult(db: PoolClient, user: User, game: Se
       score_value,value_unit,lower_is_better,aids,rules_version,completed_at,recorded_at,status,
       challenge_slot_id,challenge_attempt_id)
     VALUES($1,$2,$3,$4,'challenge',$5,$6,$7,NULL,NULL,NULL,$8,NULL,NULL,$9,$10,$11,$12,$13,$14,$15,now(),'active',$16,$17)
-    ON CONFLICT (save_id) DO NOTHING`,
+    ON CONFLICT (save_id, board_key) DO NOTHING`,
   [saved.id, user.id, game.id, boardKey, JSON.stringify(boardMeta), level.id, level.revision, level.title,
     puzzleKey, record.value, record.unit, record.lowerIsBetter,
     record.aids === undefined || record.aids === null ? null : JSON.stringify(record.aids),
     record.rulesVersion, now, context.slotId, context.attemptId ?? null])
+
+  const leaderboards = game.leaderboards
+  if (!leaderboards) return
+  // The challenge level behaves like a normal generated level for the game
+  // leaderboard, so the result lands on the Quick Play difficulty/size board
+  // with the challenge's actual settings rather than a hidden level board.
+  const generalRecord = leaderboards.record({ ...level, source: 'Generated' }, saved.data, undefined,
+    context.rules as ProgressionRules)
+  const general = { ...generalRecord, value: record.value, unit: record.unit,
+    lowerIsBetter: record.lowerIsBetter, aids: record.aids, rulesVersion: record.rulesVersion }
+  const generalPuzzleKey = digest(game.id + '|' + general.puzzleContent)
+  await db.query(`INSERT INTO leaderboard_results(save_id,owner_id,game_id,board_key,board_kind,board_meta,
+      level_id,level_revision,pack_id,pack_revision,pack_stop,level_title,pack_title,seed_code,puzzle_key,
+      score_value,value_unit,lower_is_better,aids,rules_version,completed_at,recorded_at,status)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now(),'active')
+    ON CONFLICT (save_id, board_key) DO NOTHING`,
+  [saved.id, user.id, game.id, general.boardKey, general.boardKind, JSON.stringify(general.boardMeta),
+    level.id, level.revision, level.pack?.id ?? null, level.pack?.revision ?? null, level.pack?.stop ?? null,
+    general.levelTitle, general.packTitle ?? null, general.seedCode ?? null, generalPuzzleKey,
+    general.value, general.unit, general.lowerIsBetter,
+    general.aids === undefined || general.aids === null ? null : JSON.stringify(general.aids),
+    general.rulesVersion, now])
 }
 
 function boardFromResult(row: { game: string; boardKey: string; boardKind: string; boardMeta: unknown;

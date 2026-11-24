@@ -3,7 +3,6 @@ import { ArrowLeft, CalendarDays, Clock3, Play, RotateCcw, Trophy } from 'lucide
 import { useIntl } from 'react-intl'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardStanding } from '../../../packages/game-sdk/src/leaderboards.js'
-import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { api, errorMessage } from './api.js'
 import { Avatar } from './Avatar.js'
@@ -125,9 +124,9 @@ function MiniTop({ rows, total, href, link }: { rows: LeaderboardStanding[]; tot
   </ol>
 }
 
-function SlotCard({ day, slot, past, start, replay, link, art }: {
+function SlotCard({ day, slot, past, start, replay, link }: {
   day: ChallengeDayView; slot: ChallengeSlotView; past: boolean
-  start: () => void; replay: (replay: ChallengeReplayView) => void; link: Link; art?: string
+  start: () => void; replay: (replay: ChallengeReplayView) => void; link: Link
 }) {
   const t = useT()
   const game = findGame(slot.game)
@@ -143,8 +142,6 @@ function SlotCard({ day, slot, past, start, replay, link, art }: {
   }
   const boardHref = '/challenges/' + day.occurrence!.id + '/' + slot.game
   return <section className="challenge-slot panel challenge-row" aria-label={title}>
-    <div className={'challenge-art' + (game ? ' ' + game.theme : '')} aria-hidden="true"
-      style={art ? { backgroundImage: 'url("' + art.replaceAll('"', '%22') + '")' } : undefined}/>
     <div className="challenge-row-body">
       <div className="challenge-slot-head">
         <div>
@@ -166,20 +163,33 @@ function SlotCard({ day, slot, past, start, replay, link, art }: {
           aria-label={t('Resume {game} challenge', { game: title })}><Play size={16}/> {starting ? t('Starting…') : t('Resume challenge')}</button>}
         {past && slot.replay && <button className="secondary" onClick={() => replay({ ...slot.replay!,
           occurrenceId: day.occurrence?.id, periodKey: day.occurrence?.periodKey, timeZone: day.occurrence?.timezone })}>
-          <RotateCcw size={16}/> {t('Play this seed')}</button>}
+          <RotateCcw size={16}/> {t('Play this game')}</button>}
       </div>
       {slot.status === 'failed' && <p className="error" role="alert">{t('This challenge game is unavailable. Try again later.')}</p>}
     </div>
+    <div className={'challenge-preview' + (game ? ' ' + game.theme : '')}>{game?.preview && slot.level ? game.preview(slot.level) : null}</div>
   </section>
 }
 
-export function ChallengesPage({ occurrenceId, accountId, online, link, start, replay, openDay, openToday, packs }: {
+function ChallengeParrot() {
+  return <svg className="challenge-parrot" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <path fill="var(--accent-strong)" d="M27 18c-2-5-6-9-11-10 2 5 5 8 9 11ZM34 16c0-6 3-10 8-12-1 6-3 10-6 13Z"/>
+    <circle cx="32" cy="33" r="16" fill="var(--accent)"/>
+    <circle cx="40" cy="35" r="10" fill="#f7f2e7"/>
+    <circle cx="43" cy="31" r="2.2" fill="var(--text)"/>
+    <circle cx="43.7" cy="30.3" r=".7" fill="#fff"/>
+    <path fill="#d99a32" d="M48 33c5 1 8 4 8 7s-4 5-8 3l-1-5Z"/>
+    <path fill="var(--accent-strong)" d="M20 40c-3 7-2 13 2 17 4-2 7-7 7-13Z"/>
+    <path fill="var(--tint)" d="M22 28c5 0 9 4 10 9-5 2-9-2-10-9Z"/>
+  </svg>
+}
+
+export function ChallengesPage({ occurrenceId, accountId, online, link, start, replay, openDay, openToday }: {
   occurrenceId?: string; accountId?: string; online: boolean; link: Link
   start: (day: ChallengeDayView, slot: ChallengeSlotView) => void
   replay: (replay: ChallengeReplayView) => void
   openDay: (occurrenceId: string) => void
   openToday: () => void
-  packs: readonly PackRevision[]
 }) {
   const t = useT()
   const intl = useIntl()
@@ -230,25 +240,18 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
   const liveNow = day?.serverNow ? Date.parse(day.serverNow) + (Date.now() - fetchedAt) : Date.now()
   const past = Boolean(day?.occurrence && liveNow >= Date.parse(day.occurrence.endsAt))
   const date = day?.occurrence ? formatChallengeDate(intl, day.occurrence.startsAt, day.occurrence.timezone) : ''
-  const reset = day?.occurrence ? formatResetMinute(day.series?.resetMinute ?? 0) : ''
   const canPlay = day?.enabled && day.occurrence && !past
   const completedSlots = day?.slots.filter(slot => slot.player.status === 'completed').length ?? 0
   const openSlots = day?.slots.filter(slot => slot.player.status !== 'completed') ?? []
   const finishedSlots = day?.slots.filter(slot => slot.player.status === 'completed') ?? []
-  const artFor = (gameId: string) => {
-    const pack = packs.find(item => item.data.game === gameId && item.builtIn && (item.data.background || item.data.cover)) ??
-      packs.find(item => item.data.game === gameId && (item.data.background || item.data.cover))
-    return pack?.data.background ?? pack?.data.cover
-  }
   return <section className="catalog challenges-page">
     {occurrenceId && <div className="game-navigation"><button className="text-button back" onClick={openToday}>
       <ArrowLeft size={17}/> {t('Challenges')}</button></div>}
     <div className="section-heading">
       <div>
-        <p className="eyebrow">{past ? t('Closed challenge') : t('A new puzzle every day')}</p>
+        {past && <p className="eyebrow">{t('Closed challenge')}</p>}
         <h1>{occurrenceId ? t('Daily challenge · {date}', { date }) : t('Challenges')}</h1>
       </div>
-      {day?.occurrence && <span className="challenge-clock"><Clock3 size={18}/> {past ? t('Closed') : remainingText(day.occurrence.endsAt, liveNow, t)}</span>}
     </div>
     {!online && <p className="notice">{t('Connect to view daily challenges.')}</p>}
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
@@ -262,21 +265,25 @@ export function ChallengesPage({ occurrenceId, accountId, online, link, start, r
       <div className="challenge-meta panel">
         <span><strong>{date}</strong></span>
         {!past && Boolean(day.slots.length) && <span>{t('{done} of {total} completed', { done: completedSlots, total: day.slots.length })}</span>}
-        <span>{past
+        <span className="challenge-clock"><Clock3 size={16}/> {past
           ? t('Closed at {time} ({zone})', { time: formatChallengeTime(t, intl, day.occurrence.endsAt, day.occurrence.timezone), zone: day.occurrence.timezone })
-          : t('Resets at {time} ({zone})', { time: reset, zone: day.occurrence.timezone })}</span>
+          : remainingText(day.occurrence.endsAt, liveNow, t)}</span>
         {past && <span>{t('The daily leaderboard is closed. Play the seed as a normal game.')}</span>}
       </div>
+      {!past && day.slots.length > 0 && finishedSlots.length === day.slots.length && <div className="challenge-all-done" role="status">
+        <ChallengeParrot/>
+        <div><h2>{t('All challenges completed!')}</h2><p>{t('Come back after the next reset for a new set.')}</p></div>
+      </div>}
       <div className="challenge-slots">
         {openSlots.map(slot => <SlotCard key={slot.id} day={day} slot={slot} past={Boolean(past)}
-          link={link} start={() => start(day, slot)} replay={replay} art={artFor(slot.game)}/>)}
+          link={link} start={() => start(day, slot)} replay={replay}/>)}
       </div>
       {!day.slots.length && <p className="empty">{t('Today’s challenge is being prepared. Try again in a moment.')}</p>}
       {finishedSlots.length > 0 && <section className="challenge-completed">
         <div className="section-heading"><h2>{t('Completed')}</h2></div>
         <div className="challenge-slots">
           {finishedSlots.map(slot => <SlotCard key={slot.id} day={day} slot={slot} past={Boolean(past)}
-            link={link} start={() => start(day, slot)} replay={replay} art={artFor(slot.game)}/>)}
+            link={link} start={() => start(day, slot)} replay={replay}/>)}
         </div>
       </section>}
     </>}
@@ -329,9 +336,7 @@ export function ChallengeBoard({ occurrenceId, gameId, accountId, online, back }
         <td className="leaderboard-time">{formatLeaderboardValue(row.value, row.unit)}</td>
       </tr>)}</tbody>
     </table></div> : <div className="empty challenge-empty-state"><Trophy size={28}/><h2>{t('No posted times yet.')}</h2></div>)}
-    <p className="muted challenge-foot">{data?.board.challenge?.closed
-      ? t('This daily leaderboard is closed.')
-      : t('The daily leaderboard closes when the next challenge starts.')}</p>
+    {data?.board.challenge?.closed && <p className="muted challenge-foot">{t('This daily leaderboard is closed.')}</p>}
   </section>
 }
 

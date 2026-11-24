@@ -765,7 +765,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : inChallenges && challengeBoard ? <ChallengeBoard occurrenceId={challengeOccurrence!} gameId={challengeGame!}
         accountId={account?.id} online={online} back={() => go('/challenges/' + challengeOccurrence)}/>
       : inChallenges ? <ChallengesPage occurrenceId={challengeOccurrence} accountId={account?.id} online={online} link={link}
-        packs={packs}
         start={(day, slot) => perform(() => startChallenge(day, slot))}
         replay={replay => perform(() => playReplay(replay))}
         openDay={occurrenceId => go('/challenges/' + occurrenceId)}

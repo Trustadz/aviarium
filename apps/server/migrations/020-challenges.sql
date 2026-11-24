@@ -1,6 +1,6 @@
 -- Daily challenges are orchestration: a series schedules occurrences, an
 -- occurrence has one slot per game, a player claims one attempt per slot, and
--- a completed attempt posts one challenge result. Results reuse
+-- a completed attempt posts a challenge result and a normal game result. Results reuse
 -- leaderboard_results so standings, avatars and moderation stay in one place.
 --
 -- Challenge levels are real published_levels rows with source='Challenge' and

@@ -189,8 +189,6 @@ export function LeaderboardCatalog({ games, sessions, accountId, online, link }:
   return <section className="catalog leaderboard-catalog">
     <div className="section-heading">
       <h1>{t('Leaderboards')}</h1>
-      {tab === 'general' && <label className="search"><Search size={18}/><input value={query} onChange={event => setQuery(event.target.value)}
-        placeholder={t('Search games')} aria-label={t('Search games')}/></label>}
     </div>
     <div className="leaderboard-tabs" role="tablist" aria-label={t('Leaderboard views')}>
       <button id="leaderboard-tab-general" role="tab" aria-controls="leaderboard-panel-general"
@@ -200,6 +198,9 @@ export function LeaderboardCatalog({ games, sessions, accountId, online, link }:
         aria-selected={tab === 'challenges'} className={tab === 'challenges' ? 'active' : ''}
         onClick={() => chooseTab('challenges')}>{t('Challenges')}</button>
     </div>
+    {tab === 'general' && <div className="leaderboard-search-row"><label className="search"><Search size={18}/>
+      <input value={query} onChange={event => setQuery(event.target.value)}
+        placeholder={t('Search games')} aria-label={t('Search games')}/></label></div>}
     {tab === 'challenges' ? <div id="leaderboard-panel-challenges" role="tabpanel"
       aria-labelledby="leaderboard-tab-challenges"><LeaderboardChallenges accountId={accountId} online={online} link={link}/></div> : <div
       id="leaderboard-panel-general" role="tabpanel" aria-labelledby="leaderboard-tab-general">

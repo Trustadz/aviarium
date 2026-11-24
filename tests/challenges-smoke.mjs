@@ -113,6 +113,14 @@ try {
     assert.equal(board.you.rank, 1)
     assert.ok(board.you.value >= 10000, 'the server time is a floor')
 
+    const general = await request('/api/leaderboards/games/sudoku/boards/' + encodeURIComponent('quick:Medium'),
+      { headers: headers1, now: clock.day })
+    assert.equal(general.board.kind, 'quick')
+    assert.equal(general.board.difficulty, 'Medium')
+    assert.equal(general.total, 1, 'the challenge also posts to the game board')
+    assert.equal(general.you.rank, 1)
+    assert.ok(general.you.value >= 10000, 'the game result uses the same authoritative time')
+
     const lateStart = await request('/api/challenges/slots/' + sudoku.id + '/start',
       { method: 'POST', headers: headers2, body: {}, now: clock.late })
     const lateSolution = solve(lateStart.slot.level)
@@ -125,6 +133,9 @@ try {
     const lateBoard = await request('/api/challenges/' + day.occurrence.id + '/slots/sudoku/board',
       { headers: headers1, now: clock.after })
     assert.equal(lateBoard.total, 1, 'a late completion is saved but not posted')
+    const lateGeneral = await request('/api/leaderboards/games/sudoku/boards/' + encodeURIComponent('quick:Medium'),
+      { headers: headers1, now: clock.after })
+    assert.equal(lateGeneral.total, 1, 'a late completion does not post to the game board either')
 
     const history = await request('/api/challenges/history', { headers: headers1, now: clock.after })
     const closed = history.occurrences.find(item => item.occurrence.id === day.occurrence.id)
@@ -146,7 +157,7 @@ try {
     const replayPage = await replayContext.context.newPage()
     await replayPage.goto(origin + '/challenges/' + day.occurrence.id, { waitUntil: 'networkidle' })
     const sudokuSlot = replayPage.locator('.challenge-slot').filter({ hasText: 'Sudoku' })
-    await sudokuSlot.getByRole('button', { name: /Play this seed/ }).click()
+    await sudokuSlot.getByRole('button', { name: /Play this game/ }).click()
     await replayPage.waitForURL(/\/games\/sudoku/, { timeout: 10000 })
     await replayPage.locator('.replay-notice').waitFor()
     assert.match(await replayPage.locator('.replay-notice').innerText(), /Replay/)
