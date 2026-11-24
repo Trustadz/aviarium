@@ -59,10 +59,12 @@ export interface PackStudioProps {
   theme: 'light' | 'dark'
   packs: PublishedPack[]
   leave: () => void
+  /** Where the exit returns to: the Studio hub, or the game menu it was opened from. */
+  leaveLabel: string
   onPublish: () => void
 }
 
-export default function PackStudio({ game, account, online, admin = false, reader, theme, packs, leave, onPublish }:
+export default function PackStudio({ game, account, online, admin = false, reader, theme, packs, leave, leaveLabel, onPublish }:
   PackStudioProps & { game: StudioGame }) {
   const t = useT()
   const samplePacks = !admin && account.testRole ? packs.filter(pack => pack.builtIn) : []
@@ -395,7 +397,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
   const feedback = problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>
   if (!selected) return <section className="pack-workspace">
     <div className="section-heading"><div>
-      <button className="text-button" onClick={leave}><ArrowLeft size={17}/> {t(admin ? 'Administration' : 'Studio games')}</button>
+      <button className="text-button" onClick={leave}><ArrowLeft size={17}/> {admin ? t('Administration') : leaveLabel}</button>
       <h1>{admin ? t('Edit as admin') : t('My packs')}</h1>
       <p>{admin ? t('Choose a creator’s pack to open its shared draft.') : t('Create a pack and build its trail one puzzle at a time.')}</p></div>
       {!admin && online && <label className="secondary file-label"><Upload size={16}/> {t('Import pack')}

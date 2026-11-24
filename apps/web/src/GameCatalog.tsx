@@ -13,8 +13,9 @@ interface CatalogCard extends Pick<GameMetadata, 'id' | 'title' | 'tags' | 'eRea
   removeDownload?: () => void
 }
 
-export function GameCatalog({ studio, games, categories, query, setQuery, category, setCategory, link }: {
-  studio: boolean
+export function GameCatalog({ studio = false, action, games, categories, query, setQuery, category, setCategory, link }: {
+  studio?: boolean
+  action?: ReactNode
   games: readonly CatalogCard[]
   categories: readonly string[]
   query: string
@@ -30,10 +31,11 @@ export function GameCatalog({ studio, games, categories, query, setQuery, catego
     (category === 'All games' || (category === 'Favorites' ? game.favorite : game.tags.includes(category))) &&
     (game.title + ' ' + game.tags.map(tag => knownMessage(t, tag)).join(' ')).toLowerCase().includes(term))
   return <section className={'library' + (studio ? ' studio-catalog' : '')}>
-    <div className="section-heading"><div><Heading>{t(studio ? 'Studio' : 'Game library')}</Heading>
-      <p>{t('Browse by category or open your favorites.')}</p></div>
+    <div className="section-heading catalog-heading">
+      <div className="catalog-title"><Heading>{t(studio ? 'Studio' : 'Game library')}</Heading></div>
       <label className="search"><Search size={18}/><input value={query} onChange={event => setQuery(event.target.value)}
         placeholder={t('Search games')} aria-label={t('Search games')}/></label>
+      {action && <div className="catalog-action">{action}</div>}
     </div>
     <div className="tabs" aria-label={t('Game categories')}>{categories.map(name =>
       <button key={name} aria-pressed={name === category} onClick={() => setCategory(name)}>{knownMessage(t, name)}</button>)}</div>
