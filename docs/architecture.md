@@ -34,8 +34,9 @@ an origin.
 - **Back follows the visible screen hierarchy.** Gameplay, Studio pack
   editing, and Studio test play are history layers. Browser, hardware, and
   in-app back move a game to its level selector (or game menu), a selector to
-  the game menu, a game menu to the library, test play to the pack editor, and
-  the pack editor to **My packs**. In-app back actions pop the current layer
+  the game menu, a game menu to the library, test play to the pack editor,
+  the pack editor to **My packs**, and My packs to Studio or to the game menu
+  it was opened from. In-app back actions pop the current layer
   rather than pushing a duplicate. Opening a game from a shortcut such as
   Continue, History, or a shared puzzle lays down the missing menu and
   level-selector layers first. A directly opened deep link is seeded with its
@@ -92,7 +93,8 @@ an origin.
   the sum of their best active time on every level, ranked only when every
   level is present, with avatars in the pack table, mini top-three lists, and
   each level's best row. On phones the profile sits in the upper-right header
-  so the bottom destinations, including Studio for editors, keep their labels.
+  so the remaining bottom destinations keep their labels. Studio is not a
+  destination: editors reach it from the library heading or a game menu.
 - **The server owns permissions.** Pocket ID supplies identity in the normal
   login flow. PostgreSQL stores Aviarium sessions and roles. Use
   `requireUser` or `requireEditor` as appropriate and enforce resource
@@ -138,7 +140,7 @@ New Sudoku publications use a deterministic, easiest-first logical solver. Easy 
 
 ## Packs and Studio
 
-Open Studio and choose a game to work in **My packs**. Authored levels belong to a pack. The shared workspace provides pack navigation, level ordering, appearance, rule controls, and trail preview. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
+Open Studio from the library heading (editors and admins only) or from a game menu, choose a game, then work in **My packs**. Authored levels belong to a pack. The shared workspace provides pack navigation, level ordering, appearance, rule controls, and trail preview. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
 
 Owners manage their packs. Admins use **Administration → Packs → Edit as admin** to enter another creator’s workspace. Server permissions and draft version checks apply to both modes. The package records the last editor and logs admin publications. Publish verifies the exact draft in a server worker and atomically replaces the visible pack revision. Legacy standalone publications appear in recovered packs without changing their existing level or save keys.
 

@@ -12,6 +12,13 @@ const database = process.env.AVIARIUM_OIDC_TEST_DATABASE_URL
 if (!database) throw new Error('Set AVIARIUM_OIDC_TEST_DATABASE_URL to a disposable PostgreSQL database.')
 const port = process.env.AVIARIUM_OIDC_TEST_PORT || '4192'
 const origin = 'http://127.0.0.1:' + port
+async function until(check, label) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (await check()) return
+    await delay(200)
+  }
+  throw new Error('Timed out waiting for ' + label)
+}
 const directory = await mkdtemp(join(tmpdir(), 'aviarium-oidc-'))
 const cert = join(directory, 'tls.pem')
 const key = join(directory, 'tls.key')
@@ -406,7 +413,7 @@ try {
   assert.equal(await testRole.inputValue(), 'user')
   await testRole.selectOption('editor')
   const studio = page.getByRole('link', { name: 'Studio', exact: true })
-  await studio.waitFor()
+  await until(async () => (await who()).role === 'editor', 'editor role from Device settings')
   const testEditor = await who()
   assert.equal(testEditor.id, testUser.id)
   assert.equal(testEditor.role, 'editor')
@@ -428,12 +435,15 @@ try {
   const ownedExport = '/api/packs/' + packDraft.id + '/1/export'
   assert.equal((await get(ownedExport)).status(), 200)
   await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('link', { name: 'Library', exact: true }).click()
+  await page.getByRole('heading', { name: 'Game library' }).waitFor()
+  await studio.waitFor()
   await studio.click()
   await page.getByRole('heading', { name: 'Studio', exact: true }).waitFor()
   await page.getByRole('link', { name: 'Create for Sudoku', exact: true }).click()
   await page.getByRole('heading', { name: 'My packs', exact: true }).waitFor()
   await page.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
-  await page.getByRole('button', { name: 'Studio games' }).click()
+  await page.getByRole('button', { name: 'Studio', exact: true }).click()
   await page.getByRole('heading', { name: 'Studio', exact: true }).waitFor()
   await page.getByRole('link', { name: 'Library', exact: true }).click()
   await openSettings(page, 'Device settings')
@@ -447,7 +457,11 @@ try {
   assert.equal((await who()).id, testUser.id)
   await openSettings(page, 'Device settings')
   await testRole.selectOption('user')
-  await studio.waitFor({ state: 'hidden' })
+  await until(async () => (await who()).role === 'user', 'user role from Device settings')
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('link', { name: 'Library', exact: true }).click()
+  await page.getByRole('heading', { name: 'Game library' }).waitFor()
+  assert.equal(await studio.count(), 0)
   assert.equal((await get('/api/drafts')).status(), 403)
   assert.equal((await get(ownedExport)).status(), 403)
   const testCookie = (await context.cookies()).find(cookie => cookie.name === 'aviarium-test')

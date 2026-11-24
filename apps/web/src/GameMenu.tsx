@@ -24,8 +24,6 @@ export function GameMenu({ title, leave, guide, history, settings, leaderboard, 
             aria-label={t('Leaderboard')} title={t('Leaderboard')}><Trophy size={18}/></a>}
           {history && <button className="icon-button" aria-label={t('History')} title={t('History')}
             onClick={history}><History size={18}/></button>}
-          {editor && <a className="icon-button" href={editor.href} onClick={editor.open}
-            aria-label={t('Editor')} title={t('Editor')}><Pencil size={18}/></a>}
           {settings && <button className="icon-button" aria-label={settings.label} title={settings.label}
             onClick={settings.open}><Settings2 size={18}/></button>}
         </div>
@@ -34,6 +32,12 @@ export function GameMenu({ title, leave, guide, history, settings, leaderboard, 
         <h1 id="game-menu-title">{title}</h1>
         {guide && <a className="text-button" href={guide.href} onClick={guide.open}><BookOpen size={17}/> {t('How to play')}</a>}
       </div>
+      {editor && <div className="game-menu-action">
+        <a className="secondary" href={editor.href} onClick={editor.open}
+          aria-label={t('My packs for {game}', { game: title })}>
+          <Pencil size={16} aria-hidden="true"/> {t('My packs')}
+        </a>
+      </div>}
     </div>
     {children}
   </section>

@@ -5,12 +5,15 @@
  * all move up the same hierarchy: game → level selector → game menu → library.
  */
 export type StudioLayer = 'pack' | 'trial'
+/** Where a Studio game screen was opened from, so its exit can name the way back. */
+export type StudioOrigin = 'game'
 
 export interface NavigationLayer {
   depth: number
   player?: boolean
   studio?: StudioLayer
   studioPack?: string
+  studioOrigin?: StudioOrigin
 }
 
 interface StoredNavigation {
@@ -21,6 +24,7 @@ interface LayerOptions {
   player?: boolean
   studio?: StudioLayer
   studioPack?: string
+  studioOrigin?: StudioOrigin
 }
 
 function normalizePath(pathname: string) {
@@ -53,15 +57,18 @@ export function navigationLayer(state: unknown): NavigationLayer | undefined {
     ...(layer.player === true ? { player: true } : {}),
     ...(studio ? { studio } : {}),
     ...(studio && typeof layer.studioPack === 'string' ? { studioPack: layer.studioPack } : {}),
+    ...(layer.studioOrigin === 'game' ? { studioOrigin: 'game' as const } : {}),
   }
 }
 
 function layerState(options: LayerOptions): NavigationLayer {
+  const origin = options.studioOrigin ?? (options.studio ? navigationLayer(history.state)?.studioOrigin : undefined)
   return {
     depth: currentDepth() + 1,
     ...(options.player ? { player: true } : {}),
     ...(options.studio ? { studio: options.studio } : {}),
     ...(options.studio && options.studioPack ? { studioPack: options.studioPack } : {}),
+    ...(origin ? { studioOrigin: origin } : {}),
   }
 }
 
@@ -81,12 +88,14 @@ export function pushLayer(url: string, options: LayerOptions = {}): void {
 /** Replace the current screen without adding another back step. */
 export function replaceLayer(url: string, options: LayerOptions = {}): void {
   const layer = navigationLayer(history.state)
+  const origin = options.studioOrigin ?? layer?.studioOrigin
   history.replaceState({
     aviarium: {
       depth: layer?.depth ?? 0,
       ...(options.player ? { player: true } : {}),
       ...(options.studio ? { studio: options.studio } : {}),
       ...(options.studio && options.studioPack ? { studioPack: options.studioPack } : {}),
+      ...(origin ? { studioOrigin: origin } : {}),
     },
   }, '', url)
 }

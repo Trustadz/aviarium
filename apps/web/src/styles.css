@@ -124,6 +124,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 }
 .game-frame > .notice, .catalog { max-width: 960px; margin-inline: auto; }
 .game-menu-heading { display: grid; gap: 9px; margin-bottom: 18px; }
+.game-menu-action { display: flex; flex-wrap: wrap; gap: 8px; }
 .catalog.game-guide { display: grid; justify-items: start; gap: 14px; max-width: 660px; }
 .game-guide-section { width: 100%; padding: clamp(14px, 4vw, 22px); }
 .game-guide-section p { margin-top: 8px; }
@@ -232,6 +233,17 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .section-heading { display: flex; justify-content: space-between; gap: 16px; align-items: end; }
 .section-heading p { margin-top: 7px; }
 .library { margin-top: 32px; }
+.catalog-heading { align-items: center; justify-content: flex-start; }
+.catalog-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.catalog-title h1, .catalog-title h2 { margin: 0; }
+.catalog-action { margin-left: auto; }
+.studio-door { min-height: 44px; }
+@media (max-width: 640px) {
+  .library .catalog-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 12px; }
+  .library .catalog-heading .catalog-title { grid-area: 1 / 1; }
+  .library .catalog-heading .catalog-action { grid-area: 1 / 2; margin-left: 0; }
+  .library .catalog-heading .search { grid-area: 2 / 1 / auto / -1; }
+}
 .search { display: flex; align-items: center; gap: 9px; padding: 0 11px; border: 1px solid var(--border); border-radius: 11px;
   background: var(--surface); color: var(--muted); }
 .search input:not([type]) { border: 0; padding-inline: 0; width: 165px; }

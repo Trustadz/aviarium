@@ -34,5 +34,7 @@ test('history markers only accept a valid layer depth', () => {
     { depth: 4, studio: 'pack', studioPack: 'draft-1' })
   assert.deepEqual(navigationLayer({ aviarium: { depth: 5, studio: 'trial' } }), { depth: 5, studio: 'trial' })
   assert.deepEqual(navigationLayer({ aviarium: { depth: 6, studio: 'other', studioPack: 'draft-1' } }), { depth: 6 })
+  assert.deepEqual(navigationLayer({ aviarium: { depth: 7, studioOrigin: 'game' } }), { depth: 7, studioOrigin: 'game' })
+  assert.deepEqual(navigationLayer({ aviarium: { depth: 8, studioOrigin: 'admin' } }), { depth: 8 })
   assert.deepEqual(navigationLayer({ other: true }), undefined)
 })

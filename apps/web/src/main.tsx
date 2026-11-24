@@ -27,7 +27,7 @@ import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
 import { PackCards, PackRoadmap, packApi, packPath } from './GamePacks.js'
-import { canGoBack, pushLayer, replaceLayer, seedHistory } from './navigation.js'
+import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
   sync, syncPreferences, updatePreferences, writeAttempt, type LocalSession, type MutationExtras, type ProfilePreferences } from './storage.js'
 import './styles.css'
@@ -361,6 +361,15 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault(); go(next)
   }
+  /** Open a game's Studio from its menu, remembering the way back. */
+  function openStudio(event: MouseEvent<HTMLAnchorElement>, gameId: string) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    setActive(undefined)
+    pushLayer('/studio/' + gameId, { studioOrigin: 'game' })
+    setPath('/studio/' + gameId)
+    window.scrollTo(0, 0)
+  }
   function back(fallback: string) {
     if (canGoBack()) history.back()
     else go(fallback)
@@ -509,6 +518,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const catalogPage = (game: (typeof games)[number]) => inStudioCatalog ? '/studio/' + game.id : game.url
   const inNews = path === '/news'
   const inStudio = path === '/studio' || Boolean(studioGame)
+  const studioOrigin = navigationLayer(history.state)?.studioOrigin
+  const studioLeaveLabel = studioOrigin === 'game' && studioGame ? t('{game} menu', { game: studioGame.title }) : t('Studio')
   const inAdmin = path === '/admin'
   const inAbout = path === '/about'
   const inGame = Boolean(openGame)
@@ -547,8 +558,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       <div className="app-rail">
         <nav aria-label={t("Main navigation")} className="app-destinations">
           <a href="/" aria-current={inLibrary ? 'page' : undefined} onClick={event => link(event, '/')}><BookOpen size={21}/><span>{t("Library")}</span></a>
-          {canEdit && <a href="/studio" aria-current={inStudio ? 'page' : undefined}
-            onClick={event => link(event, '/studio')}><Pencil size={21}/><span>{t("Studio")}</span></a>}
           {account && <a href="/leaderboards" aria-current={inLeaderboards ? 'page' : undefined}
             onClick={event => link(event, '/leaderboards')}><Trophy size={21}/><span>{t("Leaderboards")}</span></a>}
           <a href="/news" aria-current={inNews ? 'page' : undefined} onClick={event => link(event, '/news')}><Newspaper size={21}/><span>{t("News")}</span></a>
@@ -566,13 +575,16 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       {inLibrary || inStudioCatalog ? <>
         {inLibrary && continueRow()}
         {inLibrary && <LibraryHero catalog={catalog} packs={packs} reader={reader} open={game => go(game.url)}/>}
-        <GameCatalog studio={inStudioCatalog} games={games.filter(game => !reader || game.eReader).map(game => ({
-          ...game, description: t(inStudioCatalog ? game.studioDescription ?? game.description : game.description), href: catalogPage(game),
-          artClass: game.theme, art: game.preview(game.sample?.(catalog)),
-          favorite: Boolean(game.favorite && prefs[game.favorite]),
-          toggleFavorite: game.favorite ? () => changePrefs({ [game.favorite!]: !prefs[game.favorite!] }) : undefined,
-          removeDownload: manageInstalls && installed.includes(game.id) ? () => perform(() => remove(game.id)) : undefined,
-        }))} categories={catalogCategories} category={category} setCategory={setCategory} query={query} setQuery={setQuery} link={link}/>
+        <GameCatalog studio={inStudioCatalog}
+          action={inLibrary && canEdit && <a className="secondary studio-door" href="/studio"
+            onClick={event => link(event, '/studio')}><Pencil size={16} aria-hidden="true"/> {t('Studio')}</a>}
+          games={games.filter(game => !reader || game.eReader).map(game => ({
+            ...game, description: t(inStudioCatalog ? game.studioDescription ?? game.description : game.description), href: catalogPage(game),
+            artClass: game.theme, art: game.preview(game.sample?.(catalog)),
+            favorite: Boolean(game.favorite && prefs[game.favorite]),
+            toggleFavorite: game.favorite ? () => changePrefs({ [game.favorite!]: !prefs[game.favorite!] }) : undefined,
+            removeDownload: manageInstalls && installed.includes(game.id) ? () => perform(() => remove(game.id)) : undefined,
+          }))} categories={catalogCategories} category={category} setCategory={setCategory} query={query} setQuery={setQuery} link={link}/>
       </>
       : inLeaderboards ? <LeaderboardCatalog games={games} sessions={sessions} accountId={account?.id} online={online} link={link}/>
       : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
@@ -614,7 +626,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
         leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
           open: event => link(event, openGame.url + '/leaderboards') } : undefined}
-        editor={canEdit ? { href: '/studio/' + openGame.id, open: event => link(event, '/studio/' + openGame.id) } : undefined}
+        editor={canEdit ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
         history={openGame.history ? () => go(openGame.url + '/history') : undefined}
         settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
         guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
@@ -635,10 +647,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : studioGame && account && canEdit && (!adminPackStudio || (online && account.role === 'admin')) ? <>
         <studioGame.Studio key={account.id + ':' + studioGame.id + (adminPackStudio ? ':admin' : '')} account={account} online={online}
           admin={adminPackStudio} reader={reader} theme={theme} packs={packs.filter(pack => pack.data.game === studioGame.id)}
+          leaveLabel={studioLeaveLabel}
           leave={() => back(adminPackStudio ? '/admin' : '/studio')} onPublish={() => perform(() => refreshPacks())}/>
       </>
       : studioGame && canEdit ? <section className="panel"><h1>{t('Access required')}</h1>
-        <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio games')}</a></section>
+        <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio')}</a></section>
       : inAdmin && online && account?.role === 'admin' ? <>
         <Admin key={account.id} account={account} openPackStudio={game => go('/studio/' + game + '/admin')} onCatalogChange={() => { void refreshCatalog() }}/>
       </>
