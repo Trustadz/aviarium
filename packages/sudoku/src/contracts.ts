@@ -11,6 +11,8 @@ export interface PublishedLevel extends GameLevel {
 export const gridSchema = z.string().regex(/^[0-9]{81}$/)
 export const difficultySchema = z.enum(difficulties)
 export const quickPlayVersion = 2
+/** A new hint can be requested again after this many milliseconds. */
+export const hintCooldownMs = 10_000
 export const quickPlayDescriptorSchema = z.object({
   seed: z.string().trim().min(1).max(100), difficulty: difficultySchema, version: z.literal(quickPlayVersion),
 })
@@ -29,9 +31,22 @@ export const saveSchema = z.object({
   ...attemptOutcome,
   lives: z.number().int().min(0).max(9).optional(),
   aids: z.object({ hints: z.boolean(), autoNotes: z.boolean(), mistakes: z.boolean() }).optional(),
+  /**
+   * How many distinct hints this attempt has requested. The counter is
+   * informational only: it is reported to the leaderboard but never changes
+   * rank. Older saves and clients omit it, so it stays optional.
+   */
+  hintsUsed: z.number().int().min(0).max(100_000).optional(),
+  /** Wall-clock time when the next new hint becomes available. */
+  hintCooldownUntil: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   packRevision: packRevisionField,
 })
 export type SudokuSave = z.infer<typeof saveSchema>
+
+/** Remaining cooldown before another new hint can be requested. */
+export function hintCooldownRemaining(save: Pick<SudokuSave, 'hintCooldownUntil'>, now = Date.now()) {
+  return Math.max(0, (save.hintCooldownUntil ?? 0) - now)
+}
 
 /**
  * Clear the player's board input while keeping the attempt intact: the givens

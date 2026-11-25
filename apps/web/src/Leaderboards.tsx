@@ -383,26 +383,33 @@ function StandingsTable({ rows, total, board, game, play, title, label = 'top' }
         <caption className="visually-hidden">{t('Standings for {board}', { board: title })}</caption>
         <thead><tr><th scope="col">{t('Rank')}</th><th scope="col">{t('Player')}</th>
           <th scope="col">{t('Time')}</th>{showBoard && <th scope="col">{t('Board')}</th>}</tr></thead>
-        <tbody>{visible.map(row => <tr key={row.rank + ':' + row.name + ':' + row.recordedAt}
-          data-you={row.you || undefined} data-tie={tiedRanks.has(row.rank) || undefined}>
-          <td className="leaderboard-rank">
-            <span className={'leaderboard-rank-value' + (row.rank <= 3 ? ' leaderboard-rank-medal medal-' + row.rank : '')}
-              aria-label={tiedRanks.has(row.rank) ? t('Rank {rank}, tied', { rank: row.rank }) : t('Rank {rank}', { rank: row.rank })}>
-              {row.rank}
-            </span>
-          </td>
-          <td className="leaderboard-player-cell"><div className="leaderboard-player-inner">
-            <Avatar name={row.name} url={row.avatarUrl}/>
-            <span className="leaderboard-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
-            <span className="leaderboard-when" title={fullDate(intl, row.recordedAt)}>{relativeDate(t, intl, row.recordedAt)}</span>
-          </div></td>
-          <td className="leaderboard-time">{formatLeaderboardValue(row.value, row.unit)}</td>
-          {showBoard && <td className="leaderboard-board-cell"><div className="leaderboard-board-inner">
-            {row.seedCode && <SeedChip code={row.seedCode}/>}
-            {row.level && <button className="text-button leaderboard-play" aria-label={t('Play this board')}
-              onClick={() => play(row.level!)}>{t('Play')}</button>}
-          </div></td>}
-        </tr>)}</tbody>
+        <tbody>{visible.map(row => {
+          const tags = game.leaderboards?.tags?.(t, row) ?? []
+          return <tr key={row.rank + ':' + row.name + ':' + row.recordedAt}
+            data-you={row.you || undefined} data-tie={tiedRanks.has(row.rank) || undefined}>
+            <td className="leaderboard-rank">
+              <span className={'leaderboard-rank-value' + (row.rank <= 3 ? ' leaderboard-rank-medal medal-' + row.rank : '')}
+                aria-label={tiedRanks.has(row.rank) ? t('Rank {rank}, tied', { rank: row.rank }) : t('Rank {rank}', { rank: row.rank })}>
+                {row.rank}
+              </span>
+            </td>
+            <td className="leaderboard-player-cell"><div className="leaderboard-player-inner">
+              <Avatar name={row.name} url={row.avatarUrl}/>
+              <span className="leaderboard-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span>
+              <span className="leaderboard-when" title={fullDate(intl, row.recordedAt)}>
+                {relativeDate(t, intl, row.recordedAt)}
+                {tags.map((tag, index) => <span key={index} title={tag.title}
+                  className={'badge leaderboard-tag' + (tag.tone ? ' leaderboard-tag-' + tag.tone : '')}>{tag.label}</span>)}
+              </span>
+            </div></td>
+            <td className="leaderboard-time">{formatLeaderboardValue(row.value, row.unit)}</td>
+            {showBoard && <td className="leaderboard-board-cell"><div className="leaderboard-board-inner">
+              {row.seedCode && <SeedChip code={row.seedCode}/>}
+              {row.level && <button className="text-button leaderboard-play" aria-label={t('Play this board')}
+                onClick={() => play(row.level!)}>{t('Play')}</button>}
+            </div></td>}
+          </tr>
+        })}</tbody>
       </table>
     </div>
     <div className="leaderboard-table-foot">

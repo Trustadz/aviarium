@@ -129,7 +129,8 @@ export const sudokuGame: GameDefinition<PublishedLevel, SudokuSave, PackRules, Q
     result: (level, attempt) => {
       const save = saveSchema.parse(attempt)
       return {
-        value: save.elapsedMs, unit: 'ms', lowerIsBetter: true, aids: save.aids,
+        value: save.elapsedMs, unit: 'ms', lowerIsBetter: true,
+        aids: save.hintsUsed === undefined ? save.aids : { ...save.aids, hintsUsed: save.hintsUsed },
         rulesVersion: sudokuLeaderboardRulesVersion, puzzleContent: sudokuPuzzleContent(level),
         seedCode: sudokuSeedCode(level),
       }

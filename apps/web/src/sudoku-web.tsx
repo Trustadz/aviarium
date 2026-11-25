@@ -2,12 +2,12 @@ import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
 import { lazy } from 'react'
 import { defaults, quickPlayVersion, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
-import { packLevels, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { effectivePackRules, packLevels, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { sudokuBoardKey } from '../../../packages/sudoku/src/leaderboards.js'
 import type { GuideSection } from './GameGuide.js'
 import type { GamePlayerProps, WebGame } from './game-web.js'
 import { SudokuPreview } from './Grid.js'
-import { levelTitle } from './sudoku-copy.js'
+import { levelTitle, sudokuResultTags } from './sudoku-copy.js'
 import { displayTime, PuzzleShare, QuickPlay, sudokuPackPresentation } from './SudokuMenu.js'
 import type { LocalSession } from './storage.js'
 
@@ -30,7 +30,7 @@ const sudokuGuide: readonly GuideSection[] = [
     paragraphs: [
       'Select an empty square, then tap a number to enter it. Press and hold a number to keep it selected while you fill multiple squares.',
       'Turn on Notes to pencil in possible digits. Auto notes fills candidates based on the numbers already on the board. You can enable automatic note deletion in Sudoku settings.',
-      'Hint first suggests a solving technique, then highlights the relevant squares on the second press. Press it a third time to reveal what to enter or which candidate to remove. Some packs limit which aids you can use.',
+      'Hint opens a panel that suggests a solving technique. Ask it to highlight the relevant squares, then reveal what to enter or which candidate to remove. Hints cool down for 10 seconds between uses. Some packs limit which aids you can use.',
     ],
   },
 ]
@@ -42,10 +42,15 @@ const SudokuPlayer = lazy(async () => {
     return <Player {...props} session={props.session as LocalSession<SudokuSave>} level={props.level as PublishedLevel}
       pack={props.pack as PublishedPack | undefined} preferences={preferences}
       leaderboard={props.leaderboard}
-      persist={data => props.persist({ ...data, aids: {
-        hints: Boolean(preferences.hints), autoNotes: Boolean(preferences.autoNotes),
-        mistakes: Boolean(preferences.mistakes),
-      } })}/>
+      persist={data => {
+        const pack = props.pack as PublishedPack | undefined
+        const rules = pack && props.level.pack ? effectivePackRules(pack, props.level.pack.stop) : undefined
+        const save: SudokuSave = { ...data, aids: {
+          hints: Boolean(preferences.hints && rules?.hints !== false),
+          autoNotes: Boolean(preferences.autoNotes), mistakes: Boolean(preferences.mistakes),
+        } }
+        return props.persist(save)
+      }}/>
   } }
 })
 
@@ -93,5 +98,8 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
   ] },
   connectMessage: 'Connect to install Sudoku on this device.',
   history: true,
-  leaderboards: { boardHref: level => '/games/sudoku/leaderboards/board/' + encodeURIComponent(sudokuBoardKey(level).key) },
+  leaderboards: {
+    boardHref: level => '/games/sudoku/leaderboards/board/' + encodeURIComponent(sudokuBoardKey(level).key),
+    tags: (t, row) => sudokuResultTags(t, row.aids),
+  },
 }

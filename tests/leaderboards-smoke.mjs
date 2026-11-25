@@ -34,14 +34,14 @@ async function request(path, { method = 'GET', body, headers = {}, expected = 20
 
 const boardUrl = (game, key) => `/api/leaderboards/games/${game}/boards/${encodeURIComponent(key)}`
 
-async function sudokuCompletion(headers, level, elapsedMs, quickPlay) {
+async function sudokuCompletion(headers, level, elapsedMs, quickPlay, extra = {}) {
   const solved = validate(Array.from(level.grid, Number))
   assert.equal(solved.kind, 'unique', 'fixture Sudoku is solvable')
   await request('/api/progress', { method: 'POST', headers, body: {
     sessionId: randomUUID(), mutationId: randomUUID(), baseRevision: 0, archived: false,
     data: { game: 'sudoku', level: level.id, levelRevision: level.revision, ruleset: level.ruleset, format: 1,
       board: { entries: solved.solution, notes: Array(81).fill(0) }, undo: [], redo: [],
-      elapsedMs, completed: true, completedAt: Date.now() },
+      elapsedMs, completed: true, completedAt: Date.now(), ...extra },
     ...(quickPlay ? { quickPlay } : {}),
   } })
 }
@@ -109,13 +109,15 @@ const quickA = await request('/api/games/sudoku/quick-play', { method: 'POST', h
 const quickB = await request('/api/games/sudoku/quick-play', { method: 'POST', headers: player2Headers,
   body: { difficulty: 'Hard', seed: 'leaderboard-hard-b' } })
 await sudokuCompletion(playerHeaders, quickA, 120_000,
-  { seed: 'leaderboard-hard-a', difficulty: 'Hard', version: quickPlayVersion })
+  { seed: 'leaderboard-hard-a', difficulty: 'Hard', version: quickPlayVersion },
+  { hintsUsed: 2, aids: { hints: true, autoNotes: true, mistakes: true } })
 await sudokuCompletion(player2Headers, quickB, 180_000,
   { seed: 'leaderboard-hard-b', difficulty: 'Hard', version: quickPlayVersion })
 board = await request(boardUrl('sudoku', 'quick:Hard'), { headers: playerHeaders })
 playerRow = board.top.find(row => row.you)
 assert.equal(playerRow.value, 120_000)
 assert.equal(playerRow.seedCode, 'AV2-H-leaderboard-hard-a')
+assert.equal(playerRow.aids.hintsUsed, 2)
 assert.equal(playerRow.level.id, quickA.id)
 assert.ok(board.top.some(row => !row.you && row.value === 180_000))
 console.log('Quick Play difficulty board passed')
@@ -187,6 +189,7 @@ try {
   await page.goto(origin + '/games/sudoku/leaderboards/board/' + encodeURIComponent('quick:Hard'))
   await page.locator('.leaderboard-table').waitFor()
   const quickRow = page.locator('.leaderboard-table tbody tr[data-you="true"]')
+  assert.equal(await quickRow.locator('.leaderboard-tag').innerText(), '2 hints')
   await quickRow.getByRole('button', { name: 'Play this board' }).click()
   await page.locator('.play-page').waitFor()
   assert.equal(await page.locator('.play-page .board button').count(), 81)
