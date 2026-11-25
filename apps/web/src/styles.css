@@ -1931,6 +1931,9 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
 .challenge-add-group h4 { margin: 0; color: var(--muted); font-size: .78rem; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; }
 .challenge-add-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 26px; }
 .challenge-add-choices .setting-row { justify-content: flex-start; gap: 9px; padding-block: 5px; }
+.challenge-add-boolean { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding-block: 7px; font-weight: 650; cursor: pointer; }
+.challenge-add-boolean .switch-control { flex: 0 0 34px; }
 .challenge-add-actions { position: sticky; bottom: 0; margin-top: 18px; padding-top: 12px; background: var(--surface); justify-content: flex-end; }
 @media (max-width: 560px) {
   .challenge-add-overlay { padding: 10px; align-items: end; }

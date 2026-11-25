@@ -170,6 +170,17 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
     setDraft({ game: gameId, options: defaultsFor(game) })
   }
 
+  function isBooleanGroup(group: OptionGroup) {
+    return group.kind === 'rule' && group.choices.some(choice => choice.value === true) &&
+      group.choices.some(choice => choice.value === false)
+  }
+
+  function setDraftBoolean(group: OptionGroup, on: boolean) {
+    const choice = group.choices.find(item => item.value === on)
+    if (!choice) return
+    setDraft(current => current ? { ...current, options: { ...current.options, [group.key]: [choice.id] } } : current)
+  }
+
   function toggleDraft(groupKey: string, choiceId: string, checked: boolean) {
     setDraft(current => {
       if (!current) return current
@@ -292,16 +303,28 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
             {games.map(game => <option key={game.id} value={game.id}>{game.label}</option>)}
           </select></label>
           <div className="challenge-add-options">
-            {draftGame.optionGroups.map(group => <div className="challenge-add-group" key={group.key}>
-              <h4>{t(group.label as never)}</h4>
-              <div className="challenge-add-choices">
-                {group.choices.map(choice => <label key={choice.id} className="setting-row">
-                  {knownMessage(t, choice.label)}
-                  <input type="checkbox" checked={(draft.options[group.key] ?? []).includes(choice.id)}
-                    disabled={busy} onChange={event => toggleDraft(group.key, choice.id, event.target.checked)}/>
-                </label>)}
+            {draftGame.optionGroups.map(group => {
+              const label = t(group.label as never)
+              if (isBooleanGroup(group)) {
+                const on = group.choices.find(choice => choice.value === true)!
+                return <label className="challenge-add-boolean" key={group.key}>
+                  <span>{label}</span>
+                  <input className="switch-control" type="checkbox" role="switch" aria-label={label}
+                    checked={(draft.options[group.key] ?? []).includes(on.id)} disabled={busy}
+                    onChange={event => setDraftBoolean(group, event.target.checked)}/>
+                </label>
+              }
+              return <div className="challenge-add-group" key={group.key}>
+                <h4>{label}</h4>
+                <div className="challenge-add-choices">
+                  {group.choices.map(choice => <label key={choice.id} className="setting-row">
+                    {knownMessage(t, choice.label)}
+                    <input type="checkbox" checked={(draft.options[group.key] ?? []).includes(choice.id)}
+                      disabled={busy} onChange={event => toggleDraft(group.key, choice.id, event.target.checked)}/>
+                  </label>)}
+                </div>
               </div>
-            </div>)}
+            })}
           </div>
           <div className="button-bar challenge-add-actions">
             <button className="secondary" type="button" onClick={() => setAdding(false)}>{t('Cancel')}</button>
