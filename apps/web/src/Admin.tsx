@@ -34,6 +34,7 @@ export default function Admin({ account, openPackStudio }: {account: Account; op
   const [leaderboardGame, setLeaderboardGame] = useState('')
   const [leaderboardVisible, setLeaderboardVisible] = useState(20)
   const [removing, setRemoving] = useState<{ id: string; reason: string }>()
+  const [tab, setTab] = useState<'backups' | 'users' | 'leaderboards' | 'packs' | 'challenge'>('backups')
   useEffect(() => {
     let active = true
     const fetchBackup = (initial = false) => void api<Backup>('/admin/backup', undefined, account.id).then(value => {
@@ -83,11 +84,18 @@ export default function Admin({ account, openPackStudio }: {account: Account; op
   useEffect(() => { loadLeaderboards() }, [account.id])
   const visibleLeaderboardResults = leaderboardResults.slice(0, leaderboardVisible)
   return <section className="admin">
-    <div className="section-heading"><div><h1>{t("Administration")}</h1><p>{t("Manage Aviarium accounts and scheduled database backups.")}</p></div></div>
+    <div className="section-heading"><div><h1>{t("Administration")}</h1><p>{t("Manage Aviarium accounts, content and scheduled database backups.")}</p></div></div>
     {message && <p className="feedback" role="status">{message}</p>}
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
+    <div className="admin-tabs" role="tablist" aria-label={t('Administration sections')}>
+      {([['backups', t('Backups')], ['users', t('Users')], ['leaderboards', t('Leaderboards')],
+        ['packs', t('Packs')], ['challenge', t('Daily Challenge')]] as const).map(([value, label]) =>
+        <button key={value} id={'admin-tab-' + value} role="tab" aria-controls={'admin-panel-' + value}
+          aria-selected={tab === value} className={tab === value ? 'active' : ''}
+          onClick={() => setTab(value)}>{label}</button>)}
+    </div>
     <div className="admin-layout">
-      <section className="panel padded"><h2><Archive size={21}/>{" "}{t("Backups")}</h2>
+      {tab === 'backups' && <section className="panel padded" role="tabpanel" id="admin-panel-backups" aria-labelledby="admin-tab-backups"><h2><Archive size={21}/>{" "}{t("Backups")}</h2>
         <form onSubmit={event => { event.preventDefault(); run(async () => {
           await api('/admin/backup', json('PUT', { folder: form.folder, schedule: form.schedule, retention: form.retention }), account.id)
           setMessage(t("Backup settings saved."))
@@ -110,8 +118,8 @@ export default function Admin({ account, openPackStudio }: {account: Account; op
         {config?.error && <p className="error" role="alert">{knownMessage(t, config.error)}</p>}
         <h3>{t("Retained archives")}</h3>
         {config?.archives.length ? <ul className="archive-list">{config.archives.map(name => <li key={name}>{name}</li>)}</ul> : <p>{t("No successful backups yet.")}</p>}
-      </section>
-      <section className="panel padded"><h2>{t("Users")}</h2>
+      </section>}
+      {tab === 'users' && <section className="panel padded" role="tabpanel" id="admin-panel-users" aria-labelledby="admin-tab-users"><h2>{t("Users")}</h2>
         <p>{t("Users can play every game and manage their settings. Editors can also create and publish puzzles for all games. Admins also manage Aviarium.")}</p>
         {accounts.map(user => <section className="user-permissions" key={user.id} aria-label={user.name}>
           <label className="setting-row"><strong>{user.name}</strong><select aria-label={t('Role for {name}', { name: user.name })}
@@ -123,13 +131,13 @@ export default function Admin({ account, openPackStudio }: {account: Account; op
             <option value="user">{t("User")}</option><option value="editor">{t("Editor")}</option><option value="admin">{t("Admin")}</option>
           </select></label>
         </section>)}
-      </section>
-      <section className="panel padded"><h2>{t("Packs")}</h2>
+      </section>}
+      {tab === 'packs' && <section className="panel padded" role="tabpanel" id="admin-panel-packs" aria-labelledby="admin-tab-packs"><h2>{t("Packs")}</h2>
         {games.map(game => <button key={game.id} className="secondary" onClick={() => openPackStudio(game.id)}>
           {games.length === 1 ? t('Edit as admin') : t('Edit {game} as admin', { game: game.title })}
         </button>)}
-      </section>
-      <section className="panel padded admin-leaderboards">
+      </section>}
+      {tab === 'leaderboards' && <section className="panel padded admin-leaderboards" role="tabpanel" id="admin-panel-leaderboards" aria-labelledby="admin-tab-leaderboards">
         <div className="section-heading"><h2><Trophy size={21}/>{" "}{t('Leaderboards')}</h2>
           <span className="badge">{leaderboardResults.length}</span></div>
         <form className="leaderboard-search" onSubmit={event => { event.preventDefault(); loadLeaderboards() }}>
@@ -192,9 +200,9 @@ export default function Admin({ account, openPackStudio }: {account: Account; op
             </li>)}
           </ul>}
         </details>
-      </section>
+      </section>}
 
-      <ChallengeSettings accountId={account.id}/>
+      {tab === 'challenge' && <div className="admin-challenge-stack" role="tabpanel" id="admin-panel-challenge" aria-labelledby="admin-tab-challenge"><ChallengeSettings accountId={account.id}/></div>}
     </div>
   </section>
 }

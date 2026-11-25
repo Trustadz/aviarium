@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { Pool, PoolClient } from 'pg'
 import type {
-  ChallengeGeneratedLevel, ChallengeOptionGroup, ChallengeOptionValue, ChallengeSelection,
-  ChallengeSeriesView, ChallengeSlotRecipe, ChallengeSlotStatus,
+  ChallengeGeneratedLevel, ChallengeGameSelection, ChallengeOptionChoice, ChallengeOptionGroup, ChallengeOptionValue,
+  ChallengeSelection, ChallengeSeriesView, ChallengeSlotRecipe, ChallengeSlotStatus,
 } from '../../../../packages/game-sdk/src/challenges.js'
 import type { ChallengeGameRuntime } from './types.js'
 import { occurrenceFor } from './time.js'
@@ -16,6 +16,7 @@ export interface SeriesRow {
   game_limit: number
   eligible_games: string[] | null
   game_options: Record<string, Record<string, string[]>>
+  game_selections: ChallengeGameSelection[]
   timezone: string
   reset_minute: number
   generation_version: number
@@ -37,6 +38,7 @@ export interface OccurrenceRow {
     gameLimit?: number
     eligibleGames?: string[] | null
     gameOptions?: Record<string, Record<string, string[]>>
+    gameSelections?: ChallengeGameSelection[]
   }
   seed: string
   preparing_at: Date | string | null
@@ -83,6 +85,7 @@ export function seriesView(row: SeriesRow): ChallengeSeriesView {
     gameLimit: row.game_limit,
     eligibleGames: row.eligible_games,
     gameOptions: row.game_options ?? {},
+    gameSelections: normalizeSelections(row.game_selections),
     timezone: row.timezone,
     resetMinute: row.reset_minute,
     generationVersion: row.generation_version,
@@ -104,7 +107,7 @@ export function occurrenceView(row: OccurrenceRow) {
 }
 
 export async function readSeries(db: Db, id = 'daily'): Promise<SeriesRow | undefined> {
-  const { rows: [row] } = await db.query<SeriesRow>(`SELECT id,kind,enabled,game_limit,eligible_games,game_options,
+  const { rows: [row] } = await db.query<SeriesRow>(`SELECT id,kind,enabled,game_limit,eligible_games,game_options,game_selections,
     timezone,reset_minute,generation_version,label,metadata,updated_at
     FROM challenge_series WHERE id=$1`, [id])
   return row
@@ -144,6 +147,7 @@ export async function ensureOccurrence(db: Db, series: SeriesRow, now: number): 
     gameLimit: series.game_limit,
     eligibleGames: series.eligible_games,
     gameOptions: series.game_options,
+    gameSelections: series.game_selections,
   }
   const { rows: [inserted] } = await db.query<OccurrenceRow>(`INSERT INTO challenge_occurrences(
       series_id,period_key,starts_at,ends_at,timezone,reset_minute,generation_version,settings,seed
@@ -160,19 +164,51 @@ export async function ensureOccurrence(db: Db, series: SeriesRow, now: number): 
   return { occurrence: existing, nextStart: null }
 }
 
-function enabledChoices(series: SeriesRow, game: ChallengeGameRuntime, group: ChallengeOptionGroup) {
-  const configured = series.game_options?.[game.id]?.[group.key]
-  const ids = Array.isArray(configured) ? configured : group.defaultEnabled
-  const known = new Map(group.choices.map(choice => [choice.id, choice]))
-  return ids.flatMap(id => known.get(id) ?? [])
+function normalizeIds(ids: readonly (string | number)[] | undefined): string[] {
+  return (ids ?? []).map(String)
 }
 
-/** A game is eligible only when every required option group has an enabled value. */
+/** Normalize persisted selections, which may contain numeric option ids. */
+export function normalizeSelections(selections: readonly ChallengeGameSelection[] | undefined): ChallengeGameSelection[] {
+  return (selections ?? []).map(selection => ({
+    game: selection.game,
+    options: Object.fromEntries(Object.entries(selection.options ?? {}).map(([key, ids]) => [key, normalizeIds(ids)])),
+  }))
+}
+
+function legacySelections(series: SeriesRow, games: readonly ChallengeGameRuntime[]): ChallengeGameSelection[] {
+  const ids = series.eligible_games ?? games.map(game => game.id)
+  return ids.map(game => ({ game, options: series.game_options?.[game] ?? {} }))
+}
+
+/** Selections for a series/occurrence, falling back to the legacy rotation shape. */
+function selectionsFor(series: SeriesRow, games: readonly ChallengeGameRuntime[], occurrence?: OccurrenceRow) {
+  const raw = occurrence?.settings?.gameSelections ?? series.game_selections
+  const selections = normalizeSelections(raw && raw.length ? raw : legacySelections(series, games))
+  const grouped = new Map<string, ChallengeGameSelection[]>()
+  for (const selection of selections) {
+    const game = games.find(item => item.id === selection.game)
+    if (!game) continue
+    const items = grouped.get(selection.game) ?? []
+    items.push(selection)
+    grouped.set(selection.game, items)
+  }
+  return grouped
+}
+
+function choicesFor(game: ChallengeGameRuntime, selection: ChallengeGameSelection, group: ChallengeOptionGroup): ChallengeOptionChoice[] {
+  const ids = new Set(normalizeIds(selection.options[group.key] ?? group.defaultEnabled))
+  return group.choices.filter(choice => ids.has(choice.id))
+}
+
+function selectionIsUsable(game: ChallengeGameRuntime, selection: ChallengeGameSelection): boolean {
+  return game.optionGroups.every(group => choicesFor(game, selection, group).length > 0)
+}
+
+/** A game is eligible when at least one of its selections defines every group. */
 export function eligibleGames(series: SeriesRow, games: readonly ChallengeGameRuntime[]): ChallengeGameRuntime[] {
-  return games.filter(game => {
-    if (series.eligible_games && !series.eligible_games.includes(game.id)) return false
-    return game.optionGroups.every(group => enabledChoices(series, game, group).length > 0)
-  })
+  const grouped = selectionsFor(series, games)
+  return games.filter(game => (grouped.get(game.id) ?? []).some(selection => selectionIsUsable(game, selection)))
 }
 
 function pick<T>(items: readonly T[], seed: string): T {
@@ -181,8 +217,9 @@ function pick<T>(items: readonly T[], seed: string): T {
 }
 
 /**
- * Deterministic slate selection: the same occurrence seed and settings give
- * the same distinct games for every player and every retry.
+ * Deterministic slate selection: distinct games first, then one configured
+ * selection (profile) for that game, then one enabled choice per option group.
+ * The same occurrence seed and settings give the same slate for every player.
  */
 export function selectSlate(series: SeriesRow, occurrence: OccurrenceRow, games: readonly ChallengeGameRuntime[]): SlateGame[] {
   const snapshot: SeriesRow = {
@@ -191,18 +228,23 @@ export function selectSlate(series: SeriesRow, occurrence: OccurrenceRow, games:
     eligible_games: occurrence.settings?.eligibleGames === undefined
       ? series.eligible_games : occurrence.settings.eligibleGames,
     game_options: occurrence.settings?.gameOptions ?? series.game_options,
+    game_selections: normalizeSelections(occurrence.settings?.gameSelections ?? series.game_selections),
   }
-  const eligible = eligibleGames(snapshot, games)
+  const grouped = selectionsFor(snapshot, games, occurrence)
+  const eligible = games.filter(game => (grouped.get(game.id) ?? []).some(selection => selectionIsUsable(game, selection)))
   const ordered = [...eligible].sort((a, b) =>
     digest(occurrence.seed + '|slate|' + a.id).localeCompare(digest(occurrence.seed + '|slate|' + b.id)) || a.id.localeCompare(b.id))
   const count = Math.min(snapshot.game_limit, ordered.length)
   return ordered.slice(0, count).map((game, position) => {
+    const profiles = (grouped.get(game.id) ?? []).filter(selection => selectionIsUsable(game, selection))
+    const profile = pick(profiles, occurrence.seed + '|selection|' + game.id)
     const groups: Record<string, string> = {}
     const options: Record<string, ChallengeOptionValue> = {}
     const rules: Record<string, ChallengeOptionValue> = {}
     for (const group of game.optionGroups) {
-      const choices = enabledChoices(snapshot, game, group)
-      const choice = pick(choices, occurrence.seed + '|slot|' + game.id + '|' + group.key)
+      const choices = choicesFor(game, profile, group)
+      const choice = pick(choices, occurrence.seed + '|slot|' + game.id + '|' + group.key + '|' +
+        JSON.stringify(normalizeIds(profile.options[group.key] ?? group.defaultEnabled)))
       groups[group.key] = choice.id
       ;(group.kind === 'rule' ? rules : options)[group.key] = choice.value
     }

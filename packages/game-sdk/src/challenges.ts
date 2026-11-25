@@ -40,6 +40,14 @@ export interface ChallengeOptionGroup {
   defaultEnabled: readonly string[]
 }
 
+/** One admin-configured candidate for a daily game slot. */
+export interface ChallengeGameSelection {
+  /** Game id. The same game may appear in multiple selections. */
+  game: string
+  /** Option-group key -> enabled choice ids for this candidate. */
+  options: Record<string, string[]>
+}
+
 /** The deterministic selection for one slot. */
 export interface ChallengeSelection {
   /** Option-group key -> chosen choice id. */
@@ -116,6 +124,7 @@ export interface ChallengeSeriesView {
   gameLimit: number
   eligibleGames: string[] | null
   gameOptions: Record<string, Record<string, string[]>>
+  gameSelections: ChallengeGameSelection[]
   timezone: string
   resetMinute: number
   generationVersion: number

@@ -192,7 +192,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [active, setActive] = useState<{ session: LocalSession; level: GameLevel; game: WebGame; head: LocalSession; pack?: PackRevision
     parent: string; from?: ScreenRef; persisted: boolean; playerPath?: string
     replay?: { label: string; backLabel?: string }
-    challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string } }>()
+    challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string
+      rules?: Record<string, string | number | boolean | null> } }>()
   const [challengeSummary, setChallengeSummary] = useState<{ enabled: boolean; open: number }>()
   const featureChallenges = Boolean(accountId && online && challengeSummary?.enabled)
   const [challengeDay, setChallengeDay] = useState<ChallengeDayView>()
@@ -451,7 +452,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     const dayPath = '/challenges/' + occurrenceId
     const playerPath = dayPath + '/' + game.id + '/play'
     const challenge = { attemptId: claim.attemptId, status: claim.status, ranked: claim.ranked, invalid: claim.invalid,
-      slotId, occurrenceId, endsAt, game: game.id }
+      slotId, occurrenceId, endsAt, game: game.id, rules: claim.rules }
     if (path !== dayPath) {
       if (path.startsWith('/challenges/')) replaceLayer(dayPath)
       else pushLayer(dayPath)
@@ -494,6 +495,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       occurrenceId: day.occurrence.id,
       endsAt: response.occurrence.endsAt,
       game: slot.game,
+      rules: response.slot.rules as Record<string, string | number | boolean | null>,
     }
     const existing = await db.sessions.get(response.sessionId)
     const session: LocalSession = existing
@@ -787,14 +789,15 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         preferences={prefs} reader={reader} bestMs={playing.challenge ? undefined : Number.isFinite(bestMs) ? bestMs : undefined}
         testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
         challenge={playing.challenge ? { occurrenceId: playing.challenge.occurrenceId, slotId: playing.challenge.slotId,
-          game: playing.challenge.game, attemptId: playing.challenge.attemptId, endsAt: playing.challenge.endsAt } : undefined}
+          game: playing.challenge.game, attemptId: playing.challenge.attemptId, endsAt: playing.challenge.endsAt,
+          rules: playing.challenge.rules } : undefined}
         standingsPanel={playing.challenge ? <ChallengeStandingsPanel occurrenceId={playing.challenge.occurrenceId}
           gameId={playing.challenge.game} accountId={account?.id} online={online}/> : undefined}
         replay={playing.replay}
         leaderboard={playing.challenge
           ? { open: () => viewLeaderboard('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
           : playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
-        openSettings={settings ? () => showDialog('game') : undefined}
+        openSettings={settings && !playing.challenge ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
           try { await refreshLocal() }

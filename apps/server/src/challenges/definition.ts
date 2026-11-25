@@ -16,19 +16,20 @@ export function challengeGameFromDefinition(
 ): ChallengeGameRuntime | undefined {
   if (!definition.generation || !definition.leaderboard) return undefined
   const generation = definition.generation
-  const optionGroups: ChallengeOptionGroup[] = definition.challenge?.optionGroups
-    ? definition.challenge.optionGroups.map(group => ({
-        key: group.key, label: group.label, kind: group.kind,
-        choices: group.choices.map(choice => ({ id: choice.id, label: choice.label, value: choice.value })),
-        defaultEnabled: group.defaultEnabled,
-      }))
-    : generation.options.fields.map(field => ({
-        key: field.key, label: field.label, kind: 'generation' as const,
-        choices: field.choices.map(choice => ({
-          id: String(choice.value), label: choice.label, value: choice.value,
-        })),
-        defaultEnabled: field.choices.map(choice => String(choice.value)),
-      }))
+  const generationGroups: ChallengeOptionGroup[] = generation.options.fields.map(field => ({
+    key: field.key, label: field.label, kind: 'generation' as const,
+    choices: field.choices.map(choice => ({
+      id: String(choice.value), label: choice.label, value: choice.value,
+    })),
+    defaultEnabled: field.choices.map(choice => String(choice.value)),
+  }))
+  const extraGroups: ChallengeOptionGroup[] = (definition.challenge?.optionGroups ?? []).map(group => ({
+    key: group.key, label: group.label, kind: group.kind,
+    choices: group.choices.map(choice => ({ id: choice.id, label: choice.label, value: choice.value })),
+    defaultEnabled: group.defaultEnabled,
+  }))
+  const optionGroups = [...generationGroups,
+    ...extraGroups.filter(group => !generationGroups.some(existing => existing.key === group.key))]
   return {
     id: definition.id,
     label: definition.meta.title,

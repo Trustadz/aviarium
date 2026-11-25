@@ -3,7 +3,7 @@ import { GameRuleError, gameContractVersion, type GameDefinition, type StoredLev
 import type { Difficulty } from '../../game-sdk/src/index.js'
 import { difficulties } from '../../game-sdk/src/index.js'
 import { builtInPacks } from './built-in-packs.js'
-import { difficultySchema, preferenceSchema, quickPlayDescriptorSchema, saveSchema, quickPlayVersion, type PublishedLevel, type SudokuSave } from './contracts.js'
+import { defaults, difficultySchema, preferenceSchema, quickPlayDescriptorSchema, saveSchema, quickPlayVersion, type PublishedLevel, type SudokuSave } from './contracts.js'
 import { effectiveChapterRules, upgradePackDocument, type PackDocument } from '../../game-sdk/src/packs.js'
 import { gradePuzzle } from './logic.js'
 import { sudoku } from './metadata.js'
@@ -23,6 +23,18 @@ import {
 const defaultRules: PackRules = {
   inOrder: false, hints: true, autoNotes: true, lives: null, timeTrial: false, diagonal: false,
 }
+const settingGroup = (key: string, label: string, on: boolean) => ({
+  key, label, kind: 'rule' as const,
+  choices: [{ id: 'on', label: 'On', value: true }, { id: 'off', label: 'Off', value: false }],
+  defaultEnabled: [on ? 'on' : 'off'],
+})
+const challengeSettingGroups = [
+  settingGroup('hints', 'Enable hints', defaults.hints),
+  settingGroup('autoNotes', 'Show Auto notes button', defaults.autoNotes),
+  settingGroup('autoNoteDeletion', 'Automatically remove conflicting notes', defaults.autoNoteDeletion),
+  settingGroup('mistakes', 'Highlight conflicts', defaults.mistakes),
+  settingGroup('timer', 'Show timer', defaults.timer),
+]
 const difficultyGroup = {
   key: 'difficulty',
   label: 'Difficulty',
@@ -143,6 +155,6 @@ export const sudokuGame: GameDefinition<PublishedLevel, SudokuSave, PackRules, Q
   challenge: {
     options: { difficulty: 'Medium' },
     rules: defaultRules,
-    optionGroups: [difficultyGroup],
+    optionGroups: [difficultyGroup, ...challengeSettingGroups],
   },
 }
