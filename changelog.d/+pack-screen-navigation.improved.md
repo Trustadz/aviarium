@@ -1,1 +1,1 @@
-**Pack screens match game navigation.** The pack overview and chapter trail now use the app shell, the same Back action and game tools as the game menu, and a compact pack or chapter header. A chapter trail shows its header before the level list.
+**Pack screens match game navigation.** The pack overview and chapter trail now use the app shell, the same Back action and game tools as the game menu, and a compact pack or chapter header. A chapter trail shows its header before the level list, and the pack toolbar now sits cleanly below the app header with clear spacing.
