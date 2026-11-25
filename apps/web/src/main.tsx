@@ -399,7 +399,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       }
       attempt.head = await writeAttempt(attempt.head, data)
       if (attempt.head.id !== attempt.session.id) setNotice('This attempt changed in another tab or device. Your moves are saved in a separate copy.')
-      if (data.completed && attempt.challenge) setChallengeRefresh(value => value + 1)
+      if (data.completed && attempt.challenge) {
+        setChallengeRefresh(value => value + 1)
+        // A challenge closes at a fixed time, so post the verified completion
+        // now instead of waiting for navigation. This also lets the after-game
+        // standings and View leaderboard show the result immediately.
+        await sync(profile, mutationExtras).catch(() => undefined)
+      }
     })
     saves.current = result
     return result
@@ -550,6 +556,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     await deleteSavedGame(profile, id)
   }
   function perform(task: () => Promise<unknown>) { void task().catch(error => setNotice(errorMessage(error))) }
+  /** Flush the pending attempt and post it before opening a leaderboard. */
   function viewLeaderboard(href: string) {
     perform(async () => {
       await saves.current.catch(() => undefined)
@@ -767,7 +774,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           gameId={playing.challenge.game} accountId={account?.id} online={online}/> : undefined}
         replay={playing.replay}
         leaderboard={playing.challenge
-          ? { open: () => go('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
+          ? { open: () => viewLeaderboard('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
           : playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
         openSettings={settings ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {

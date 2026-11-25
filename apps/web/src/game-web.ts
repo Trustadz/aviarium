@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react'
 import type { GameLevel, GameMetadata } from '../../../packages/game-sdk/src/index.js'
+import type { LeaderboardStanding } from '../../../packages/game-sdk/src/leaderboards.js'
 import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
 import type { GameGuide } from './GameGuide.js'
@@ -41,6 +42,14 @@ export interface GameMenuContext {
   perform(run: () => Promise<unknown>): void
 }
 
+/** A short, non-ranking annotation shown beside a leaderboard player name. */
+export interface LeaderboardTag {
+  label: string
+  tone?: 'praise' | 'muted' | 'unknown'
+  /** Longer explanation for a tooltip; never required to understand the label. */
+  title?: string
+}
+
 export interface WebGame extends GameMetadata {
   description: Message
   studioDescription?: Message
@@ -63,5 +72,9 @@ export interface WebGame extends GameMetadata {
   settings?: { title: Message; toggles: readonly { key: string; label: Message; default: boolean }[] }
   connectMessage: Message
   history: boolean
-  leaderboards?: { boardHref(level: GameLevel): string }
+  leaderboards?: {
+    boardHref(level: GameLevel): string
+    /** Game-owned annotations for a stored result, such as hints used. */
+    tags?(t: Translate, row: LeaderboardStanding): readonly LeaderboardTag[]
+  }
 }
