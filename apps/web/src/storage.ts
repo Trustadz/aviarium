@@ -21,6 +21,7 @@ export interface LocalChallenge {
   status?: 'started' | 'completed' | 'closed'
   ranked?: boolean
   invalid?: boolean
+  rules?: Record<string, string | number | boolean | null>
 }
 
 export type LocalSession<Attempt extends GameAttempt = GameAttempt> = SavedAttempt<Attempt> & {

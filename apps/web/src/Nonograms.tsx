@@ -10,10 +10,13 @@ import { packStopAt, packTheme, type PackChapter } from '../../../packages/game-
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences, leave, finish, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel, replay }:
+export default function Nonograms({ level, pack, session, preferences: profilePreferences, leave, finish, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel, replay }:
 GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const challengeMode = Boolean(challenge)
+  const timerRule = challenge?.rules?.nonogramTimer
+  const preferences = typeof timerRule === 'boolean'
+    ? { ...profilePreferences, nonogramTimer: timerRule } : profilePreferences
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
   const started = useRef(Date.now())
   const [problem, setProblem] = useState('')
@@ -24,7 +27,7 @@ GamePlayerProps & { trial?: boolean }) {
   const persistRef = useRef(persist)
   persistRef.current = persist
   const [display, setDisplay] = useState(saved.elapsedMs)
-  const showTimer = challengeMode || (preferences.nonogramTimer !== false && !reader)
+  const showTimer = preferences.nonogramTimer !== false && !reader
   const title = pack?.builtIn || level.source === 'Generated' ? knownMessage(t, level.title) : level.title
   const packLocation = pack && level.pack ? packStopAt(pack as NonogramPack, level.pack.stop) : undefined
   const chapter = packLocation?.chapter

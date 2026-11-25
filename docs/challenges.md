@@ -148,10 +148,11 @@ settings.
 
 - enable/disable;
 - games per day;
-- repeatable **game selections**: choose a game and its option choices, and add
-  the same game again for a different option set (for example Nonograms 5 × 5
-  with Easy/Medium/Hard and Nonograms 10 × 10 with Easy/Medium). The same game
-  is still used at most once per day;
+- repeatable **game selections**: choose a game, its generation choices and its
+  game-setting choices, and add the same game again for a different option set
+  (for example Nonograms 5 × 5 with Easy/Medium/Hard and Nonograms 10 × 10 with
+  Easy/Medium, or Sudoku Medium with Auto notes off and Easy with Auto notes on).
+  The same game is still used at most once per day;
 - reset time as 24-hour hour/minute selects;
 - read-only timezone from the environment, rendered as static text rather than
   an input;
