@@ -756,10 +756,11 @@ button.chapter-card:focus-visible { outline: 3px solid var(--accent); outline-of
   margin-inline: calc(var(--frame-gutter, 32px) * -1);
   margin-block-start: calc(var(--main-top-padding, 34px) * -1);
 }
-.main-frame.game-content > .catalog.pack-roadmap > .game-navigation {
+.main-frame.game-content > .catalog.pack-roadmap > :is(.game-navigation, .game-menu-heading) {
   position: sticky;
   top: 0;
   z-index: 3;
+  margin-block-end: 14px;
   padding: 10px var(--frame-gutter, 32px);
   background: var(--game-page, var(--surface));
   border-bottom: 1px solid var(--border);
