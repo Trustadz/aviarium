@@ -1,0 +1,1 @@
+**Pack screens match game navigation.** The pack overview and chapter trail reuse the game menu header—Back, the title block, My packs, and the game tools—inside the app shell. How to play stays on the game menu. The Back/tools row stays pinned while long chapter trails scroll, while the title scrolls with the page.

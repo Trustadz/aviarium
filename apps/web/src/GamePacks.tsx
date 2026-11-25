@@ -1,4 +1,5 @@
 import { ArrowLeft, ArrowRight, Check, Download, LockKeyhole } from 'lucide-react'
+import type { ReactNode } from 'react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { chapterProgress, packCover, packLevelCount, packProgress, packTheme,
   type PackChapter, type PackCompletion, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
@@ -66,10 +67,10 @@ export function PackCards({ game, presentation, packs, completed, status, retry,
 }
 
 export function PackChapters({ presentation, pack, completed, sessions, canExport, leave, open, preview = false,
-  previewCompletions }: {
+  previewCompletions, tools, header, navigation }: {
   presentation: PackPresentation; pack: PackRevision; completed: ReadonlySet<string>; sessions: readonly SavedAttempt[]
   canExport: boolean; leave: () => void; open?: (chapterId: string) => void; preview?: boolean
-  previewCompletions?: readonly PackCompletion[]
+  previewCompletions?: readonly PackCompletion[]; tools?: ReactNode; header?: ReactNode; navigation?: ReactNode
 }) {
   const t = useT()
   const completions = previewCompletions ?? packCompletionEvents(completed, sessions)
@@ -78,13 +79,18 @@ export function PackChapters({ presentation, pack, completed, sessions, canExpor
   const art = packCover(pack)
   const description = presentation.description(t, pack)
   return <section className={`catalog pack-roadmap pack-chapters pack-${packTheme(pack)}`}>
-    <div className="game-navigation">
-      {!preview && <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(presentation.menuLabel)}</button>}
-      {canExport && <a className="text-button" href={packExportUrl(pack)} download><Download size={17}/> {t('Export pack')}</a>}
-    </div>
-    <header className="pack-banner">
+    {navigation ? <div className="pack-screen-navigation">{navigation}</div> : <div className="game-navigation">
+      {!preview && <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t('Back')}</button>}
+      <div className="game-nav-tools">
+        {tools}
+        {canExport && <a className="icon-button" href={packExportUrl(pack)} download
+          aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a>}
+      </div>
+    </div>}
+    {header}
+    <header className="pack-banner pack-screen-summary">
       {art && <img className="pack-backdrop" src={art} alt=""/>}
-      <div className="pack-intro"><h1>{presentation.title(t, pack)}</h1>
+      <div className="pack-intro">{!header && <h1>{presentation.title(t, pack)}</h1>}
         {description && <p>{description}</p>}
         <p>{[presentation.details(t, pack),
           t('{count, plural, one {# chapter} other {# chapters}}', { count: pack.data.chapters.length }),
@@ -95,7 +101,8 @@ export function PackChapters({ presentation, pack, completed, sessions, canExpor
       const progress = chapterProgress(pack, completions, chapter.id)
       const chapterArt = chapter.cover ?? chapter.background
       const locked = !progress.unlocked
-      return <button className={`chapter-card pack-${chapter.theme}` + (locked ? ' is-locked' : '')} key={chapter.id}
+      return <button className={`chapter-card pack-${chapter.theme}` + (locked ? ' is-locked' : '') +
+        (chapterArt ? '' : ' no-art')} key={chapter.id}
         onClick={open && !locked ? () => open(chapter.id) : undefined} disabled={!open || locked}
         aria-label={!open ? undefined : locked
           ? t('Chapter {title} is locked', { title: presentation.chapterTitle(t, pack, chapter) })
@@ -124,10 +131,11 @@ export function PackChapters({ presentation, pack, completed, sessions, canExpor
 }
 
 export function PackRoadmap({ game, presentation, pack, chapterId, completed, sessions, canPlay, canExport, leave, play, preview = false,
-  previewDetails, previewCompletions }: {
+  previewDetails, previewCompletions, tools, header, navigation }: {
   game: string; presentation: PackPresentation; pack: PackRevision; chapterId: string; completed: ReadonlySet<string>
   sessions: readonly SavedAttempt[]; canPlay: boolean; canExport: boolean; leave: () => void; play: (level: GameLevel) => void
   preview?: boolean; previewDetails?: ReadonlyMap<string, string | undefined>; previewCompletions?: readonly PackCompletion[]
+  tools?: ReactNode; header?: ReactNode; navigation?: ReactNode
 }) {
   const t = useT()
   const chapter = pack.data.chapters.find(item => item.id === chapterId) ?? pack.data.chapters[0]
@@ -154,14 +162,19 @@ export function PackRoadmap({ game, presentation, pack, chapterId, completed, se
       bestTime: chapter && presentation.bestTime?.(t, pack, chapter, index + 1,
         matching.filter(item => item.data.completed).map(item => item.data)) }
   })
-  return <section className={`catalog pack-roadmap pack-${chapter?.theme ?? packTheme(pack)}`}>
-    <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(preview ? 'Back to editor' : 'Chapters')}</button>
-      {canExport && <a className="text-button" href={packExportUrl(pack)} download><Download size={17}/> {t('Export pack')}</a>}
-    </div>
-    {chapter && <header className="pack-banner">
+  return <section className={`catalog pack-roadmap pack-trail-screen pack-${chapter?.theme ?? packTheme(pack)}`}>
+    {navigation ? <div className="pack-screen-navigation">{navigation}</div> : <div className="game-navigation">
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(preview ? 'Back to editor' : 'Back')}</button>
+      <div className="game-nav-tools">
+        {tools}
+        {canExport && <a className="icon-button" href={packExportUrl(pack)} download
+          aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a>}
+      </div>
+    </div>}
+    {header}
+    {chapter && <header className="pack-banner pack-screen-summary">
       {art && <img className="pack-backdrop" src={art} alt=""/>}
-      <div className="pack-intro"><h1>{presentation.chapterTitle(t, pack, chapter)}</h1>
+      <div className="pack-intro">{!header && <h1>{presentation.chapterTitle(t, pack, chapter)}</h1>}
         {description && <p>{description}</p>}
         <p>{levels.length
           ? [previewDetails && [...previewDetails.values()].some(detail => !detail) ? t('Ungraded') : presentation.chapterDetails?.(t, pack, chapter),
