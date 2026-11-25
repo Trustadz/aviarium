@@ -1,1 +1,1 @@
-**Chapters in packs.** Packs now group ordered chapters, each with its own image, description, theme, rules, and level trail. A new chapter overview sits between a pack and its levels, and Studio separates **Pack settings** from **Chapter settings**.
+**Chapters in packs.** Packs now group ordered chapters, each with its own image, description, theme, rules, and level trail. A new chapter overview sits between a pack and its levels, chapters unlock in order, and Studio separates **Pack settings** from **Chapter settings**.

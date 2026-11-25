@@ -857,19 +857,50 @@ try {
   assert.equal(await packPage.getByRole('button', { name: 'Replay Garden Perch', exact: true }).isEnabled(), true)
 
   assert.ok(multiChapterPack)
-  await packPage.goto(origin + '/games/sudoku/packs/' + multiChapterPack.id + '/' + multiChapterPack.revision)
+  const chapterLevels = packLevels(multiChapterPack)
+  const firstChapterLevel = chapterLevels.find(level => level.pack?.chapter === 'first-chapter')
+  const secondChapterLevel = chapterLevels.find(level => level.pack?.chapter === 'second-chapter')
+  assert.ok(firstChapterLevel && secondChapterLevel)
+  const chapterHeaders = playerToken ? playerHeaders : adminHeaders
+  const chapterBoard = level => {
+    const board = rules.create(Array.from(level.grid, Number))
+    board.entries = validate(board.entries).solution
+    return board
+  }
+  const completeChapterLevel = (level, expected = 200) => request('/api/progress', {
+    method: 'POST', headers: chapterHeaders, expected,
+    body: { mutationId: crypto.randomUUID(), sessionId: crypto.randomUUID(), baseRevision: 0, archived: false,
+      data: { game: 'sudoku', format: 1, ruleset: 1, level: level.id, levelRevision: level.revision,
+        packRevision: multiChapterPack.revision, board: chapterBoard(level), undo: [], redo: [],
+        elapsedMs: 50, completed: true } },
+  })
+  assert.equal((await completeChapterLevel(secondChapterLevel, 422)).code, 'pack_chapter_locked')
+
+  const overview = origin + '/games/sudoku/packs/' + multiChapterPack.id + '/' + multiChapterPack.revision
+  await packPage.goto(overview)
   await packPage.locator('.chapter-card').first().waitFor()
   assert.equal(await packPage.locator('.chapter-card').count(), 2)
-  assert.match(await packPage.locator('.chapter-card').nth(1).innerText(), /Second chapter/)
-  await packPage.locator('.chapter-card').nth(1).click()
-  const secondChapterLevel = packPage.getByRole('button', { name: 'Play Second chapter level', exact: true })
-  await secondChapterLevel.waitFor()
-  assert.equal(await secondChapterLevel.isEnabled(), true)
+  assert.equal(await packPage.locator('.chapter-card').first().isEnabled(), true)
+  assert.equal(await packPage.locator('.chapter-card').nth(1).isDisabled(), true)
+  assert.match(await packPage.locator('.chapter-card').nth(1).innerText(), /Complete the previous chapter to unlock/)
+
+  await packPage.goto(overview + '/chapters/second-chapter')
+  await packPage.getByText('Complete the previous chapter to unlock this chapter.', { exact: true }).waitFor()
+
+  await completeChapterLevel(firstChapterLevel)
+  await packPage.goto(overview)
+  const secondChapterCard = packPage.getByRole('button', { name: 'Open chapter Second chapter', exact: true })
+  await secondChapterCard.waitFor()
+  assert.equal(await secondChapterCard.isDisabled(), false)
+  await secondChapterCard.click()
+  const secondChapterLevelButton = packPage.getByRole('button', { name: 'Play Second chapter level', exact: true })
+  await secondChapterLevelButton.waitFor()
+  assert.equal(await secondChapterLevelButton.isEnabled(), true)
   await packPage.getByRole('button', { name: 'Chapters', exact: true }).click()
   await packPage.locator('.chapter-card').first().click()
-  await packPage.getByRole('button', { name: 'Play First chapter level', exact: true }).waitFor()
+  await packPage.getByRole('button', { name: 'Replay First chapter level', exact: true }).waitFor()
   await packContext.close()
-  console.info('Chapter overview checks passed: two chapter cards, independent first stops, and back to the overview.')
+  console.info('Chapter overview checks passed: ordered unlock, locked direct link, server rejection, and back to the overview.')
   console.info('Pack trail checks passed: bottom-to-top pins, visible next stop, and unlocking the next stop.')
 
   const quickPlayContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })

@@ -12,23 +12,26 @@ const pack = (revision: number, chapters: PackChapter[], history?: PackRevision[
   id: 'pack-1', revision, builtIn: false, data: { format: 2, game: 'fixture', title: 'Pack', description: '', chapters }, history,
 })
 
-test('chapters start independently and keep ordered access within their own trail', () => {
+test('chapters unlock in order and keep ordered access within their own trail', () => {
   const current = pack(1, [chapter('one', true, [entry('a1'), entry('a2')]),
     chapter('two', true, [entry('b1'), entry('b2')])])
   const empty = packProgress(current, [])
   assert.deepEqual(empty.solved, [false, false, false, false])
-  assert.deepEqual(empty.playable, [true, false, true, false])
+  assert.deepEqual(empty.playable, [true, false, false, false])
   assert.equal(empty.next, 0)
   assert.deepEqual(chapterProgress(current, [], 'two'), {
-    id: 'two', title: 'two', solved: [false, false], playable: [true, false], next: 0,
-    completed: 0, total: 2, complete: false,
+    id: 'two', title: 'two', solved: [false, false], playable: [false, false], next: 0,
+    completed: 0, total: 2, complete: false, unlocked: false,
   })
   const completions = [
     { level: 'a1', revision: 1, packRevision: 1 },
     { level: 'a2', revision: 1, packRevision: 1 },
   ]
   assert.equal(chapterProgress(current, completions, 'one').complete, true)
-  assert.deepEqual(packProgress(current, completions, 'two').playable, [true, false])
+  assert.deepEqual(chapterProgress(current, completions, 'two'), {
+    id: 'two', title: 'two', solved: [false, false], playable: [true, false], next: 0,
+    completed: 0, total: 2, complete: false, unlocked: true,
+  })
   assert.equal(packStopAt(current, 3)?.chapter.id, 'two')
   assert.equal(packStopAt(current, 3)?.chapterStop, 1)
 })

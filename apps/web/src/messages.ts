@@ -942,6 +942,10 @@ export const dutch = {
   "Pack settings": "Pakketinstellingen",
   "Chapter settings": "Hoofdstukinstellingen",
   "These settings describe the whole pack. Chapters have their own settings.": "Deze instellingen gelden voor het hele pakket. Hoofdstukken hebben eigen instellingen.",
+  "Chapter {title} is locked": "Hoofdstuk {title} is vergrendeld",
+  "Locked": "Vergrendeld",
+  "Complete the previous chapter to unlock": "Voltooi het vorige hoofdstuk om dit te ontgrendelen",
+  "Complete the previous chapter to unlock this chapter.": "Voltooi het vorige hoofdstuk om dit hoofdstuk te ontgrendelen.",
 } as const satisfies Record<typeof apiMessages[keyof typeof apiMessages], string> & Record<string, string>
 
 export type Message = keyof typeof dutch

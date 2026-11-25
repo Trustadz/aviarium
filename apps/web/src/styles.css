@@ -644,6 +644,11 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 button.chapter-card { cursor: pointer; }
 button.chapter-card:hover:not(:disabled) { border-color: var(--pack-text); }
 button.chapter-card:disabled { opacity: 1; cursor: default; }
+button.chapter-card.is-locked { opacity: .7; border-style: dashed; }
+.chapter-card-locked { display: flex; align-items: center; gap: 5px; font-size: .76rem; font-weight: 650; }
+.chapter-locked-notice { display: flex; align-items: center; gap: 9px; margin-top: 18px; padding: 18px;
+  border: 1px dashed var(--pack-border); border-radius: var(--radius); color: var(--pack-text);
+  background: color-mix(in srgb, var(--pack-surface) 75%, var(--surface)); font-weight: 650; }
 button.chapter-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .chapter-card-art { position: relative; display: block; background: color-mix(in srgb, var(--pack-surface) 70%, var(--surface)); }
 .chapter-cover { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: center 34%; }

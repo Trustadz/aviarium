@@ -92,6 +92,8 @@ export interface ChapterProgress extends PackProgress {
   completed: number
   total: number
   complete: boolean
+  /** Chapters unlock in order: every earlier chapter must be complete. */
+  unlocked: boolean
 }
 
 const image = z.string().max(Math.ceil(packImageBytes / 3) * 4 + 32)
@@ -316,22 +318,37 @@ export function packProgress(pack: PackRevision, completions: readonly PackCompl
   const playable: boolean[] = []
   let next = -1
   let offset = 0
+  let earlierComplete = true
   for (const chapter of pack.data.chapters) {
     const progress = progressForChapter(pack, completions, chapter.id)
+    const chapterComplete = progress.solved.length > 0 && progress.solved.every(Boolean)
     solved.push(...progress.solved)
-    playable.push(...progress.playable)
-    if (next < 0 && progress.next >= 0) next = offset + progress.next
+    playable.push(...progress.playable.map(open => open && earlierComplete))
+    if (next < 0 && earlierComplete && progress.next >= 0) next = offset + progress.next
+    earlierComplete = earlierComplete && chapterComplete
     offset += chapter.puzzles.length
   }
   return { solved, playable, next }
 }
 
-export function chapterProgress(pack: PackRevision, completions: readonly PackCompletion[], chapterId: string): ChapterProgress {
-  const chapter = pack.data.chapters.find(item => item.id === chapterId)
-  const progress = packProgress(pack, completions, chapterId)
+function chapterProgressAt(pack: PackRevision, completions: readonly PackCompletion[], chapterIndex: number): ChapterProgress {
+  const chapter = pack.data.chapters[chapterIndex]
+  const progress = packProgress(pack, completions, chapter.id)
   const completed = progress.solved.filter(Boolean).length
+  const unlocked = chapterIndex === 0 ||
+    pack.data.chapters.slice(0, chapterIndex).every((_, index) => chapterProgressAt(pack, completions, index).complete)
   return {
-    id: chapterId, title: chapter?.title ?? '', ...progress,
-    completed, total: chapter?.puzzles.length ?? 0, complete: Boolean(chapter?.puzzles.length) && completed === chapter?.puzzles.length,
+    id: chapter.id, title: chapter.title, ...progress,
+    playable: progress.playable.map(open => open && unlocked),
+    completed, total: chapter.puzzles.length, complete: chapter.puzzles.length > 0 && completed === chapter.puzzles.length,
+    unlocked,
   }
+}
+
+export function chapterProgress(pack: PackRevision, completions: readonly PackCompletion[], chapterId: string): ChapterProgress {
+  const chapterIndex = pack.data.chapters.findIndex(item => item.id === chapterId)
+  if (chapterIndex < 0) {
+    return { id: chapterId, title: '', solved: [], playable: [], next: -1, completed: 0, total: 0, complete: false, unlocked: false }
+  }
+  return chapterProgressAt(pack, completions, chapterIndex)
 }

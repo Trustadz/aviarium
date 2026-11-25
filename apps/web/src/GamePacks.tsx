@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Download } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Download, LockKeyhole } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { chapterProgress, packCover, packLevelCount, packProgress, packTheme,
   type PackChapter, type PackCompletion, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
@@ -94,9 +94,12 @@ export function PackChapters({ presentation, pack, completed, sessions, canExpor
     <div className="chapter-cards">{pack.data.chapters.map((chapter, index) => {
       const progress = chapterProgress(pack, completions, chapter.id)
       const chapterArt = chapter.cover ?? chapter.background
-      return <button className={`chapter-card pack-${chapter.theme}`} key={chapter.id}
-        onClick={open ? () => open(chapter.id) : undefined} disabled={!open}
-        aria-label={open ? t('Open chapter {title}', { title: presentation.chapterTitle(t, pack, chapter) }) : undefined}>
+      const locked = !progress.unlocked
+      return <button className={`chapter-card pack-${chapter.theme}` + (locked ? ' is-locked' : '')} key={chapter.id}
+        onClick={open && !locked ? () => open(chapter.id) : undefined} disabled={!open || locked}
+        aria-label={!open ? undefined : locked
+          ? t('Chapter {title} is locked', { title: presentation.chapterTitle(t, pack, chapter) })
+          : t('Open chapter {title}', { title: presentation.chapterTitle(t, pack, chapter) })}>
         <span className="chapter-card-art">
           {chapterArt ? <img className="chapter-cover" src={chapterArt} alt=""/> : <span className="chapter-cover chapter-cover-empty"/>}
           <span className="chapter-number">{index + 1}</span>
@@ -104,13 +107,15 @@ export function PackChapters({ presentation, pack, completed, sessions, canExpor
         <span className="chapter-card-body">
           <span className="eyebrow">{t('Chapter {number}', { number: index + 1 })}</span>
           <span className="chapter-card-title">{presentation.chapterTitle(t, pack, chapter)}
-            {progress.complete ? <Check size={18} aria-label={t('Completed')}/> : <ArrowRight size={18} aria-hidden="true"/>}</span>
+            {locked ? <LockKeyhole size={18} aria-label={t('Locked')}/> : progress.complete
+              ? <Check size={18} aria-label={t('Completed')}/> : <ArrowRight size={18} aria-hidden="true"/>}</span>
           {presentation.chapterDescription(t, pack, chapter) &&
             <span className="chapter-card-description">{presentation.chapterDescription(t, pack, chapter)}</span>}
           <span className="chapter-card-progress">
             <span className="chapter-progress-track" aria-hidden="true"><span style={{ width: progress.total ? progress.completed / progress.total * 100 + '%' : '0%' }}/></span>
             <span>{t('{solved} of {total} solved', { solved: progress.completed, total: progress.total })}</span>
           </span>
+          {locked && <span className="chapter-card-locked"><LockKeyhole size={14} aria-hidden="true"/> {t('Complete the previous chapter to unlock')}</span>}
         </span>
       </button>
     })}</div>
@@ -128,6 +133,8 @@ export function PackRoadmap({ game, presentation, pack, chapterId, completed, se
   const chapter = pack.data.chapters.find(item => item.id === chapterId) ?? pack.data.chapters[0]
   const levels = chapter ? packLevels(game, pack).filter(level => level.pack?.chapter === chapter.id) : []
   const completions = previewCompletions ?? packCompletionEvents(completed, sessions)
+  const chapterState = chapter ? chapterProgress(pack, completions, chapter.id) : undefined
+  const locked = !preview && chapterState ? !chapterState.unlocked : false
   const { solved, playable, next } = packProgress(pack, completions, chapter?.id)
   const art = chapter?.cover ?? chapter?.background
   const description = chapter ? presentation.chapterDescription(t, pack, chapter) : ''
@@ -163,6 +170,8 @@ export function PackRoadmap({ game, presentation, pack, chapterId, completed, se
         <ul className="pack-tags">{presentation.ruleLabels(t, pack, chapter).map(rule => <li className="badge" key={rule}>{rule}</li>)}</ul>
       </div>
     </header>}
-    {stops.length > 0 && <PackTrail key={chapterPath(pack, chapter?.id ?? chapterId)} stops={stops} canPlay={canPlay} scrollToStop={!preview}/>}
+    {locked ? <p className="chapter-locked-notice" role="status">
+      <LockKeyhole size={20} aria-hidden="true"/> {t('Complete the previous chapter to unlock this chapter.')}
+    </p> : stops.length > 0 && <PackTrail key={chapterPath(pack, chapter?.id ?? chapterId)} stops={stops} canPlay={canPlay} scrollToStop={!preview}/>}
   </section>
 }

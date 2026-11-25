@@ -30,6 +30,7 @@ export const apiMessages = {
   mutation_conflict: "This mutation ID was already used.",
   level_version_unavailable: "That level version is unavailable.",
   pack_stop_locked: "Solve the previous stop in this chapter first.",
+  pack_chapter_locked: "Complete the previous chapter to unlock this chapter.",
   lives_rule_mismatch: "The number of lives does not match this puzzle’s rules.",
   fixed_digits_changed: "The save modifies fixed givens.",
   saved_solution_invalid: "This save does not contain a valid solution.",

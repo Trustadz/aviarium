@@ -3,7 +3,7 @@ import type { PoolClient } from 'pg'
 import { z } from 'zod'
 import { locales } from '../../../packages/game-sdk/src/locales.js'
 import { isResumable, mutationHeader, savedGameLimit, type AttemptMutation, type SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
-import { effectiveChapterRules, packProgress, packProgressPath, type PackCompletion, type PackDocument, type PackRevision, type ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
+import { chapterProgress, effectiveChapterRules, packProgress, packProgressPath, type PackCompletion, type PackDocument, type PackRevision, type ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
 import type { LevelRecord, ServerGame } from './game-runtime.js'
 import { accountRoleSchema, digest, HttpError, requireUser, userFields, withLegacyEditorGames, type User } from './auth.js'
 import { pool, transaction } from './config.js'
@@ -191,20 +191,27 @@ export function registerProgress(app: FastifyInstance, serverGames: ReadonlyMap<
         const index = stops.findIndex(item => item.id === mutation.data.level && item.revision === mutation.data.levelRevision)
         if (index < 0) throw new HttpError(422, 'level_version_unavailable')
         const stop = stops[index]
-        const chapter = pack.data.chapters.find(item => item.id === stop.chapter)
+        const chapterIndex = pack.data.chapters.findIndex(item => item.id === stop.chapter)
+        const chapter = pack.data.chapters[chapterIndex]
         if (!chapter) throw new HttpError(422, 'level_version_unavailable')
         packRules = effectiveChapterRules(chapter, stop.chapterStop)
-        if (packRules.inOrder && stop.chapterStop > 1) {
+        let completions: PackCompletion[] = []
+        if (chapterIndex > 0 || (packRules.inOrder && stop.chapterStop > 1)) {
           pack.history = (await packHistory(db, [pack])).get(pack.id)
-          const { rows } = await db.query<PackCompletion>(`SELECT c.level_id AS level,c.level_revision AS revision,
+          completions = (await db.query<PackCompletion>(`SELECT c.level_id AS level,c.level_revision AS revision,
             (s.data->>'packRevision')::int AS "packRevision"
             FROM completions c LEFT JOIN saves s ON s.owner_id=c.owner_id AND s.data->>'level'=c.level_id
               AND (s.data->>'levelRevision')::int=c.level_revision AND s.data->>'completed'='true'
             JOIN published_levels l ON l.id=c.level_id AND l.revision=c.level_revision
-            WHERE c.owner_id=$1 AND l.pack IS NOT NULL AND l.pack->>'id'=$2`, [user.id, pack.id])
-          const chapterIndex = stops.filter(item => item.chapter === stop.chapter)
-            .findIndex(item => item.id === stop.id && item.revision === stop.revision)
-          if (!packProgress(pack, rows, stop.chapter).playable[chapterIndex]) throw new HttpError(422, 'pack_stop_locked')
+            WHERE c.owner_id=$1 AND l.pack IS NOT NULL AND l.pack->>'id'=$2`, [user.id, pack.id])).rows
+        }
+        if (chapterIndex > 0 && !chapterProgress(pack, completions, stop.chapter).unlocked)
+          throw new HttpError(422, 'pack_chapter_locked')
+        if (packRules.inOrder && stop.chapterStop > 1) {
+          const chapterStops = stops.filter(item => item.chapter === stop.chapter)
+          const stopIndex = chapterStops.findIndex(item => item.id === stop.id && item.revision === stop.revision)
+          if (!packProgress(pack, completions, stop.chapter).playable[stopIndex])
+            throw new HttpError(422, 'pack_stop_locked')
         }
       } else if (mutation.data.packRevision !== undefined) {
         throw new HttpError(422, 'level_version_unavailable')

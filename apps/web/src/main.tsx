@@ -9,7 +9,7 @@ import { ArrowLeft, BookOpen, CalendarDays, LogIn, LogOut, Newspaper,
   Pencil, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
-import { packProgress, packStopAt, packTheme, upgradePackRevision, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
+import { chapterProgress, packProgress, packStopAt, packTheme, upgradePackRevision, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
 import { AccountMenu, ProfileForm } from './AccountSettings.js'
@@ -412,8 +412,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     const pack = suppliedPack ?? (level.pack && !level.pack.legacyStandalone ? await findPack(game, level.pack.id, level.pack.revision) : undefined)
     const location = pack && level.pack ? packStopAt(pack, level.pack.stop) : undefined
     const chapterId = location?.chapter.id ?? pack?.data.chapters[0]?.id
+    const completionEvents = packCompletionEvents(completed, sessions)
+    if (pack && location && chapterId && !chapterProgress(pack, completionEvents, chapterId).unlocked)
+      throw new Error('Complete the previous chapter to unlock this chapter.')
     if (!existing && pack && location && chapterId &&
-        !packProgress(pack, packCompletionEvents(completed, sessions), chapterId).playable[location.chapterStop - 1])
+        !packProgress(pack, completionEvents, chapterId).playable[location.chapterStop - 1])
       throw new Error('Solve the previous stop in this chapter first.')
     const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
