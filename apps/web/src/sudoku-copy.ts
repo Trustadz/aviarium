@@ -43,3 +43,32 @@ export function technique(t: Translate, step: LogicalStep) {
   const message = techniques[step.id]
   return message ? t(message) : step.label
 }
+
+export interface SudokuHintTag {
+  label: string
+  tone: 'praise' | 'muted' | 'unknown'
+  title: string
+}
+
+/**
+ * Sudoku's non-ranking annotation for a posted result. A missing count is
+ * reported as unknown rather than zero, so an older result is never credited
+ * with a hint-free solve.
+ */
+export function sudokuResultTags(t: Translate, aids: unknown): readonly SudokuHintTag[] {
+  const report = aids && typeof aids === 'object'
+    ? aids as { hintsUsed?: unknown; hints?: unknown } : undefined
+  const used = typeof report?.hintsUsed === 'number' && Number.isInteger(report.hintsUsed) && report.hintsUsed >= 0
+    ? report.hintsUsed : undefined
+  if (used === undefined) return [{
+    label: t('Not recorded'), tone: 'unknown', title: t('Hint use was not recorded for this result.'),
+  }]
+  if (used > 0) return [{
+    label: t('{count, plural, one {# hint} other {# hints}}', { count: used }), tone: 'muted',
+    title: t('{count, plural, one {# hint used} other {# hints used}}', { count: used }),
+  }]
+  if (report?.hints === false) return [{
+    label: t('Hints off'), tone: 'praise', title: t('Hints were disabled for this run.'),
+  }]
+  return [{ label: t('No hints'), tone: 'praise', title: t('Solved without using hints.') }]
+}

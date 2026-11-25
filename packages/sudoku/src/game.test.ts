@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { validateGameRegistry } from '../../game-sdk/src/game.js'
+import { hintCooldownMs, hintCooldownRemaining } from './contracts.js'
 import { sudokuGame } from './game.js'
 import { validate } from './solver.js'
 
@@ -51,6 +52,33 @@ test('save creation and validation preserve the published level contract', async
   assert.equal(result.value, 1234)
   assert.equal(result.unit, 'ms')
   assert.match(result.puzzleContent, /\|1$/)
+})
+
+test('hints used is reported with the result but never changes the value', async () => {
+  const generation = sudokuGame.generation!
+  assert.ok(generation.materialize)
+  const content = await generation.generate(seed, options)
+  assert.ok(content)
+  const level = await generation.materialize(seed, options, content)
+  const save = sudokuGame.play.save.create(level, { rules: sudokuGame.play.rules.defaults })
+  assert.equal(save.hintsUsed, 0)
+  save.elapsedMs = 4321
+  save.hintsUsed = 2
+  save.aids = { hints: true, autoNotes: true, mistakes: false }
+  const result = sudokuGame.leaderboard!.result(level, save, sudokuGame.play.rules.defaults)
+  assert.equal(result.value, 4321)
+  assert.deepEqual(result.aids, { hints: true, autoNotes: true, mistakes: false, hintsUsed: 2 })
+
+  save.hintsUsed = undefined
+  assert.deepEqual(sudokuGame.leaderboard!.result(level, save, sudokuGame.play.rules.defaults).aids, save.aids)
+})
+
+test('a used hint cools down before another hint is available', () => {
+  assert.equal(hintCooldownMs, 10_000)
+  assert.equal(hintCooldownRemaining({ hintCooldownUntil: 25_000 }, 20_000), 5_000)
+  assert.equal(hintCooldownRemaining({ hintCooldownUntil: 20_000 }, 20_000), 0)
+  assert.equal(hintCooldownRemaining({ hintCooldownUntil: 19_000 }, 20_000), 0)
+  assert.equal(hintCooldownRemaining({}, 20_000), 0)
 })
 
 test('a changed given is rejected with a typed rule error', async () => {

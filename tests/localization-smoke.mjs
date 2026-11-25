@@ -138,8 +138,10 @@ try {
   await page.getByRole('heading', { name: 'Garden Perch', level: 1 }).waitFor()
   assert.equal(await page.locator('html').getAttribute('lang'), 'en')
   assert.deepEqual(await page.getByLabel('Sudoku board', { exact: true }).locator('button').allTextContents(), before)
+  await page.locator('.hint-trigger:not([disabled])').waitFor()
   await page.getByRole('button', { name: 'Hint', exact: true }).click()
-  await page.getByText(/Try the .* technique/).waitFor()
+  await page.locator('.hint-drawer[data-open=true]').waitFor()
+  await page.locator('.hint-drawer').getByText(/Hint/).first().waitFor()
   assert.deepEqual(errors, [])
   await admin.setOffline(false)
   let remoteLocale

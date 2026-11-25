@@ -1,17 +1,17 @@
-import { resetSudokuInput, type Preferences, type PublishedLevel, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
+import { hintCooldownMs, hintCooldownRemaining, resetSudokuInput, type Preferences, type PublishedLevel, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { errorMessage } from './api.js'
-import { levelTitle, packTitle, technique } from './sudoku-copy.js'
-import type { Message } from './messages.js'
+import { levelTitle, packTitle } from './sudoku-copy.js'
 import { knownMessage, useT } from './i18n.js'
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { ArrowLeft, Eraser, Heart, Lightbulb, Pause, Pencil, Play, Redo2, RotateCcw, Settings2, Timer, Undo2, WandSparkles } from 'lucide-react'
-import { bit, candidateMasks, column, conflicts, row, rulesFor, type Board } from '../../../packages/sudoku/src/rules.js'
+import { bit, candidateMasks, conflicts, rulesFor, type Board } from '../../../packages/sudoku/src/rules.js'
 import { logicalHint, type LogicalStep } from '../../../packages/sudoku/src/logic.js'
 import { effectivePackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { createSave } from '../../../packages/sudoku/src/save.js'
 export { createSave } from '../../../packages/sudoku/src/save.js'
 import { validate } from '../../../packages/sudoku/src/solver.js'
 import { Grid } from './Grid.js'
+import { HintDrawer, type Hint } from './HintDrawer.js'
 import { displayTime, PuzzleShare } from './SudokuMenu.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import type { LocalSession } from './storage.js'
@@ -28,8 +28,6 @@ interface Props {
   standingsPanel?: ReactNode
   replay?: { label: string; backLabel?: string }
 }
-type Hint = { cell?: number } & ({ stage: 1 | 2 | 3; step: LogicalStep } | { stage?: never; message: Message })
-
 function digitUsedUp(entries: readonly number[], digit: number) {
   return entries.filter(value => value === digit).length >= 9
 }
@@ -57,6 +55,9 @@ export default function Player({ session, level, preferences, reader, pack, pers
   const [lockedDigit, setLockedDigit] = useState(0)
   const [paused, setPaused] = useState(false)
   const [hint, setHint] = useState<Hint>()
+  const [hintOpen, setHintOpen] = useState(false)
+  const [cooldownNow, setCooldownNow] = useState(() => Date.now())
+  const hintTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const excluded = useRef<number[]>([])
   const [lostLife, setLostLife] = useState<number>()
   const [problem, setProblem] = useState('')
@@ -64,7 +65,34 @@ export default function Player({ session, level, preferences, reader, pack, pers
   const [celebration, setCelebration] = useState<number>()
   const started = useRef(Date.now())
   const press = useRef<{ pointer: number; x: number; y: number; timer: ReturnType<typeof setTimeout>; skipClick: boolean } | null>(null)
-  useEffect(() => () => { if (press.current) clearTimeout(press.current.timer) }, [])
+  useEffect(() => () => {
+    if (press.current) clearTimeout(press.current.timer)
+    clearTimeout(hintTimer.current)
+  }, [])
+  /** Show a new hint. The count is reported with the result but never ranked. */
+  function showHint(next: Hint) {
+    clearTimeout(hintTimer.current)
+    setHint(next)
+    setHintOpen(true)
+  }
+  /** Animate the panel out, then drop the board highlight and the hint text. */
+  function dismissHint() {
+    setHintOpen(false)
+    clearTimeout(hintTimer.current)
+    hintTimer.current = setTimeout(() => setHint(undefined), 220)
+  }
+  /** Drop a hint immediately when the board changes underneath it. */
+  function clearHint() {
+    clearTimeout(hintTimer.current)
+    setHintOpen(false)
+    setHint(undefined)
+  }
+  /** Put the panel away but keep the hint, highlight and count for reopening. */
+  function collapseHint() {
+    if (!hintOpen) return
+    clearTimeout(hintTimer.current)
+    setHintOpen(false)
+  }
   const persistRef = useRef(persist)
   persistRef.current = persist
   function commit(next: SudokuSave) {
@@ -83,11 +111,17 @@ export default function Player({ session, level, preferences, reader, pack, pers
   }
   const gameOver = data.lives === 0
   const finished = data.completed || gameOver
+  useEffect(() => { if (paused) setHintOpen(false) }, [paused])
+  useEffect(() => {
+    if ((data.hintCooldownUntil ?? 0) <= Date.now()) return
+    const timer = setTimeout(() => setCooldownNow(Date.now()), 1000)
+    return () => clearTimeout(timer)
+  }, [cooldownNow, data.hintCooldownUntil])
   /** Clear the board only: keep the attempt, elapsed time, lives, aids and revisions. */
   function resetInput() {
     if (finished) return
     excluded.current = []
-    setHint(undefined)
+    clearHint()
     setLostLife(undefined)
     setLockedDigit(0)
     select(Math.max(givens.indexOf(0), 0))
@@ -127,7 +161,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
     if (board === current.board) return
     if (board.entries !== current.board.entries) {
       excluded.current = []
-      setHint(undefined)
+      clearHint()
       setLostLife(undefined)
     }
     if (!note && lockedDigit && digitUsedUp(board.entries, lockedDigit)) setLockedDigit(0)
@@ -176,7 +210,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
     const source = current[direction]
     const board = source.at(-1)
     if (!board) return
-    setHint(undefined)
+    clearHint()
     excluded.current = []
     setLostLife(undefined)
     if (!note && lockedDigit && digitUsedUp(board.entries, lockedDigit)) setLockedDigit(0)
@@ -192,26 +226,39 @@ export default function Player({ session, level, preferences, reader, pack, pers
     const current = latest.current
     saveBoard({ ...current.board, entries: [...result.solution] })
   }
-  function getHint() {
-    if (hint?.stage) {
-      if (hint.stage < 3) setHint({ ...hint, stage: hint.stage === 1 ? 2 : 3 })
+  function requestHint() {
+    if (paused || finished) return
+    if (hint) {
+      clearTimeout(hintTimer.current)
+      setHintOpen(true)
       return
     }
+    if (hintCooldownRemaining(latest.current) > 0) return
     const board = latest.current.board.entries
     const bad = conflicts(board, diagonal)
     if (bad.size) {
-      setHint({ message: "Check the highlighted conflict before requesting a hint.", cell: [...bad][0] })
+      showHint({ kind: 'conflict', message: "Check the highlighted conflict before requesting a hint.", cells: [...bad] })
       return
     }
     const result = validate(board, 5_000, diagonal)
     if (result.kind === 'unsolvable') {
-      setHint({ message: "The current entries cannot lead to a solution. Try undoing a move." })
+      showHint({ kind: 'unsolvable', message: "The current entries cannot lead to a solution. Try undoing a move." })
       return
     }
     const step = logicalHint(board, excluded.current, diagonal)
-    if (step) {
-      setHint({ step, stage: 1 })
-    } else setHint({ message: 'No supported logical deduction was found for this board.' })
+    if (!step) {
+      showHint({ kind: 'none', message: 'No supported logical deduction was found for this board.' })
+      return
+    }
+    const now = Date.now()
+    setCooldownNow(now)
+    showHint({ step, stage: 1 })
+    void snapshot({ ...latest.current, hintsUsed: (latest.current.hintsUsed ?? 0) + 1,
+      hintCooldownUntil: now + hintCooldownMs })
+  }
+  function advanceHint() {
+    if (!hint?.stage || hint.stage >= 3) return
+    setHint({ ...hint, stage: hint.stage === 1 ? 2 : 3 })
   }
   function applyEliminations(step: LogicalStep) {
     const board = latest.current.board
@@ -221,26 +268,21 @@ export default function Player({ session, level, preferences, reader, pack, pers
       notes[index] &= ~bit(eliminatedCandidate)
     }
     if (notes.some((mask, cell) => mask !== board.notes[cell])) saveBoard({ ...board, notes })
-    setHint(undefined)
+    clearHint()
   }
-  const visibleHint = showHints && !paused ? hint : undefined
-  const hintCells = visibleHint?.stage && visibleHint.stage > 1
-    ? new Set([...(visibleHint.step.patternCells ?? []), ...visibleHint.step.updates.map(update => update.index)]) : undefined
-  const cellText = (index: number) => t('row {row}, column {column}', { row: row(index) + 1, column: column(index) + 1 })
-  function describeHint(current: Hint) {
-    if (!current.stage) return t(current.message)
-    const step = current.step
-    if (current.stage === 3) return step.updates.map(({ index, filledValue, eliminatedCandidate }) => filledValue
-      ? t('Place {digit} in {cell}.', { digit: filledValue, cell: cellText(index) })
-      : t('Eliminate {digit} from {cell}.', { digit: eliminatedCandidate!, cell: cellText(index) })).join(' ')
-    const techniqueText = t('Try the {technique} technique.', { technique: technique(t, step) })
-    const explanation = step.diagonal ? t('Find a digit that can fit in only one cell of a diagonal.') : step.id === 'hidden-single' ? t('Find a digit that can fit in only one cell of a row, column, or box.')
-      : step.id === 'naked-single' || step.id === 'open-singles' ? t('Find an empty cell with just one possible digit.')
-        : step.type === 'elimination' ? t('Find the pattern to identify which candidates it rules out.') : undefined
-    const prompt = current.stage === 1 ? t('Press Hint again to highlight the cell.')
-      : t('{count, plural, one {Look at the highlighted cell.} other {Look at the highlighted cells.}}', { count: hintCells?.size ?? 0 }) +
-        ' ' + t('Press Hint again to reveal the deduction.')
-    return [techniqueText, explanation, prompt].filter(Boolean).join(' ')
+  const visibleHint = showHints && !paused && !finished ? hint : undefined
+  const hintCells = visibleHint
+    ? visibleHint.stage && visibleHint.stage > 1
+      ? new Set([...(visibleHint.step.patternCells ?? []), ...visibleHint.step.updates.map(update => update.index)])
+      : visibleHint.cells ? new Set(visibleHint.cells) : undefined
+    : undefined
+  const hintsUsed = data.hintsUsed ?? 0
+  const hintCooldown = hintCooldownRemaining(data, cooldownNow)
+  const hintCoolingDown = hintCooldown > 0
+  const hintSeconds = Math.ceil(hintCooldown / 1000)
+  function selectCell(cell: number) {
+    collapseHint()
+    select(cell)
   }
   const seconds = Math.floor(display / 1000)
   const packArt = pack?.data.background ?? pack?.data.cover
@@ -249,6 +291,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
     ...(pack && level.pack ? [{ label: t('Pack'), value: packTitle(t, pack) + ' · ' +
       t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
     ...(data.lives !== undefined && lifeLimit ? [{ label: t('Lives left'), value: data.lives + ' / ' + lifeLimit }] : []),
+    ...(showHints ? [{ label: t('Hints used'), value: hintsUsed === 0 ? t('None') : String(hintsUsed) }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: finish ?? leave },
@@ -275,9 +318,9 @@ export default function Player({ session, level, preferences, reader, pack, pers
     <div className="play-layout">
       <div className="board-wrap">
         {paused ? <div className="pause-panel"><h2>{t("Game paused")}</h2><button className="primary" onClick={() => { started.current = Date.now(); setPaused(false) }}><Play size={18}/>{" "}{t("Resume game")}</button></div>
-          : <Grid entries={data.board.entries} notes={data.board.notes} givens={givens} selected={selected} select={select}
-            enter={move} activate={cell => { select(cell); if (lockedDigit) move(lockedDigit, cell) }}
-            highlightedDigit={lockedDigit || data.board.entries[selected]} hintCell={visibleHint?.cell} hintCells={hintCells}
+          : <Grid entries={data.board.entries} notes={data.board.notes} givens={givens} selected={selected} select={selectCell}
+            enter={move} activate={cell => { collapseHint(); select(cell); if (lockedDigit) move(lockedDigit, cell) }}
+            highlightedDigit={lockedDigit || data.board.entries[selected]} hintCells={hintCells}
             errors={preferences.mistakes ? conflicts(data.board.entries, diagonal) : undefined} diagonal={diagonal} disabled={finished}/>}
       </div>
       <div className="play-controls">
@@ -318,20 +361,40 @@ export default function Player({ session, level, preferences, reader, pack, pers
             }}><Pencil size={18}/>{" "}{t("Notes")}</button>
             {showAutoNotes && <button disabled={paused} onClick={autoNotes}><Pencil size={18}/>{" "}{t("Auto notes")}</button>}
             <button disabled={paused} onClick={() => { setLockedDigit(0); move(0) }}><Eraser size={18}/>{" "}{t("Erase")}</button>
-            {showHints && <button disabled={paused} onClick={getHint}><Lightbulb size={18}/>{" "}{t("Hint")}</button>}
             {!challengeMode && <button onClick={() => { if (!paused) void snapshot(); setPaused(!paused) }}>{paused ? <Play size={18}/> : <Pause size={18}/>} {paused ? t("Resume") : t("Pause")}</button>}
           </div>
-          {visibleHint && <p role="status" className="feedback">{describeHint(visibleHint)}</p>}
-          {visibleHint?.stage === 3 && visibleHint.step.type === 'elimination' && <button className="secondary"
-            onClick={() => applyEliminations(visibleHint.step)}>{t("Apply deduction")}</button>}
           {lostLife !== undefined && <p role="status" className="error">
             {t('Wrong digit. {count, plural, one {# life} other {# lives}} left.', { count: lostLife })}
           </p>}
           {!pack && !challengeMode && level.seed && <PuzzleShare level={level}/>}
           </>}
-        {!finished && <button className="text-button" onClick={() => { if (confirm(t("Reset the board? Your board clears, the game stays saved, and the timer keeps running."))) resetInput() }}>
-          <RotateCcw size={16}/>{" "}{t("Reset puzzle")}
-        </button>}
+        {!finished && <div className="play-footer">
+          {showHints && <button type="button" className="hint-trigger" disabled={paused || (!visibleHint && hintCoolingDown)}
+            aria-haspopup="dialog" aria-controls={visibleHint ? 'sudoku-hint' : undefined}
+            aria-expanded={hintOpen && Boolean(visibleHint)}
+            aria-label={visibleHint?.stage ? t('Hint, step {step} of 3', { step: visibleHint.stage })
+              : !visibleHint && hintCoolingDown ? t('{count, plural, one {Hint available in # second} other {Hint available in # seconds}}', { count: hintSeconds })
+                : t('Hint')}
+            title={!visibleHint && hintCoolingDown
+              ? t('{count, plural, one {Hint available in # second} other {Hint available in # seconds}}', { count: hintSeconds })
+              : undefined}
+            onClick={hintOpen ? dismissHint : requestHint}>
+            <Lightbulb size={18} aria-hidden="true"/><span>{t("Hint")}</span>
+            {/* Fixed-width slot: step dots or the cooldown, so the trigger never reflows. */}
+            <span className="hint-steps" aria-hidden="true"
+              data-visible={visibleHint?.stage ? true : undefined}
+              data-cooldown={!visibleHint && hintCoolingDown ? true : undefined}>
+              {!visibleHint && hintCoolingDown ? hintSeconds + 's'
+                : [1, 2, 3].map(step => <span key={step} data-on={visibleHint?.stage && step <= visibleHint.stage ? true : undefined}/>)}
+            </span>
+          </button>}
+          <button className="text-button" onClick={() => { if (confirm(t("Reset the board? Your board clears, the game stays saved, and the timer keeps running."))) resetInput() }}>
+            <RotateCcw size={16}/>{" "}{t("Reset puzzle")}
+          </button>
+          {visibleHint && <HintDrawer hint={visibleHint} open={hintOpen} hintsUsed={hintsUsed}
+            onClose={dismissHint} onAdvance={advanceHint}
+            onApply={() => { if (visibleHint.stage) applyEliminations(visibleHint.step) }}/>}
+        </div>}
         <p role="alert" className="error">{problem && t('Save failed. {detail}', { detail: knownMessage(t, problem) })}</p>
       </div>
     </div>
