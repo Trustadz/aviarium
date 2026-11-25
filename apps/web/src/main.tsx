@@ -5,8 +5,8 @@ import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { useIntl } from 'react-intl'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, BookOpen, CalendarDays, LogIn, LogOut, Newspaper,
-  Pencil, Trophy, Users, WifiOff } from 'lucide-react'
+import { ArrowLeft, BookOpen, CalendarDays, History, LogIn, LogOut, Newspaper,
+  Pencil, Settings2, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
 import { chapterProgress, packProgress, packStopAt, packTheme, upgradePackRevision, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
@@ -681,11 +681,11 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   }
   const activeRemoval = removalNotices[0]
   const playing = playingNow
-  const inPackRoadmap = Boolean(openGame?.packs && path.startsWith(openGame.url + '/packs/'))
-  // Gameplay and the pack roadmap are immersive pack modes. Everything else,
-  // including the game menu, history, guide, and leaderboards, is inside the
-  // app shell so the player always has a way out.
-  const immersive = Boolean(playing) || inPackRoadmap
+  const inPackRoutes = Boolean(openGame?.packs && path.startsWith(openGame.url + '/packs/'))
+  // Gameplay is the only immersive game mode. Pack browsing and selection use
+  // the app shell so their navigation matches the game menu, history, guide,
+  // and leaderboards.
+  const immersive = Boolean(playing)
   const inShell = !immersive
   const playPack = playing?.pack
   const playLocation = playPack && playing?.level.pack ? packStopAt(playPack, playing.level.pack.stop) : undefined
@@ -698,6 +698,15 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const gameSurface = useRef<HTMLElement>(null)
   const themeGame = openGame ?? playing?.game ?? studioGame
   const settings = (openGame ?? playing?.game)?.settings
+  const packTools = inPackRoutes && openGame ? <>
+    {openGame.leaderboards && <a className="icon-button" href={openGame.url + '/leaderboards'}
+      onClick={event => link(event, openGame.url + '/leaderboards')}
+      aria-label={t('Leaderboard')} title={t('Leaderboard')}><Trophy size={18}/></a>}
+    {openGame.history && <button className="icon-button" aria-label={t('History')} title={t('History')}
+      onClick={() => go(openGame.url + '/history')}><History size={18}/></button>}
+    {settings && <button className="icon-button" aria-label={t(settings.title)} title={t(settings.title)}
+      onClick={() => showDialog('game')}><Settings2 size={18}/></button>}
+  </> : undefined
   useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
     [reader, surface, theme, themeGame?.id, playTheme])
   const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
@@ -815,7 +824,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           path === chapterPath(viewedPack, viewedChapterId)
         ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} chapterId={viewedChapterId}
           completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
-          canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))}
+          canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))} tools={packTools}
           leave={() => back(packPath(viewedPack))} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
               item.data.level === level.id && item.data.levelRevision === level.revision)
@@ -823,7 +832,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           })}/>
         : viewedPack && path === packPath(viewedPack)
           ? <PackChapters presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions}
-            canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))}
+            canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))} tools={packTools}
             leave={() => back(openGame.url)} open={chapterId => go(chapterPath(viewedPack, chapterId))}/>
           : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
             <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>

@@ -712,6 +712,8 @@ button.chapter-card { cursor: pointer; }
 button.chapter-card:hover:not(:disabled) { border-color: var(--pack-text); }
 button.chapter-card:disabled { opacity: 1; cursor: default; }
 button.chapter-card.is-locked { opacity: .7; border-style: dashed; }
+.chapter-card.no-art .chapter-card-art { min-height: 96px; }
+.chapter-card.no-art .chapter-cover-empty { aspect-ratio: auto; height: 96px; }
 .chapter-card-locked { display: flex; align-items: center; gap: 5px; font-size: .76rem; font-weight: 650; }
 .chapter-locked-notice { display: flex; align-items: center; gap: 9px; margin-top: 18px; padding: 18px;
   border: 1px dashed var(--pack-border); border-radius: var(--radius); color: var(--pack-text);
@@ -745,7 +747,8 @@ button.chapter-card:focus-visible { outline: 3px solid var(--accent); outline-of
 .pack-card-title { display: flex; align-items: center; justify-content: space-between; gap: 5px; font-size: 1.02rem; font-weight: 770; }
 .pack-roadmap { display: flex; flex-direction: column; }
 .pack-roadmap > .pack-banner { order: 1; }
-.pack-roadmap.pack-chapters > .pack-banner { order: 0; }
+.pack-roadmap.pack-chapters > .pack-banner,
+.pack-roadmap.pack-trail-screen > .pack-banner { order: 0; }
 .pack-roadmap > .pack-trail { width: 100%; }
 .pack-roadmap > .game-navigation {
   position: sticky;
@@ -753,6 +756,10 @@ button.chapter-card:focus-visible { outline: 3px solid var(--accent); outline-of
   z-index: 2;
   background: var(--game-page, var(--bg));
 }
+.pack-screen-summary { grid-template-columns: minmax(0,1fr) minmax(0, min(30%, 220px)); }
+.pack-screen-summary .pack-intro { padding: clamp(16px, 3vw, 26px); }
+.pack-screen-summary .pack-intro h1 { font-size: clamp(1.8rem, 3.8vw, 2.7rem); }
+.pack-screen-summary .pack-backdrop { aspect-ratio: 16 / 10; }
 .pack-banner { display: grid; grid-template-columns: minmax(0,1fr) minmax(0, min(40%, 300px)); overflow: hidden;
   border: 1px solid var(--pack-border); border-radius: var(--radius); background: var(--pack-surface); }
 .pack-backdrop { grid-column: 2; grid-row: 1; aspect-ratio: 4 / 5; height: 100%; }

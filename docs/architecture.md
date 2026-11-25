@@ -33,21 +33,22 @@ an origin.
   independently when a level's puzzle or effective chapter rules change.
   Draft edits and pack visibility can change independently of saved
   attempts. Keep the referenced level revisions available.
-- **Back retraces the navigation path; progression is explicit.** Gameplay,
-  chapter trails, and chapter overviews are immersive screens with no app
-  chrome. The game menu, history, guide, leaderboards, library, Studio, and
+- **Back retraces the navigation path; progression is explicit.** Gameplay is
+  the only immersive game screen, with no app chrome. The game menu, chapter
+  overview, chapter trail, history, guide, leaderboards, library, Studio, and
   account screens use the app shell. On desktop the shell is a full-height
   sidebar with the brand, destinations, account, and offline status; there is
   no top header. On phones a non-sticky header carries the brand, account, and
-  offline status, and a fixed bottom destination bar stays visible. Browser,
-  hardware, and in-app back pop the screen the player actually visited.
-  Opening a game from Continue, History, or a leaderboard returns to that
-  screen; a directly opened URL is seeded with its canonical parents, including
-  a pack overview and chapter trail. Back never starts or resumes a level, and
-  the completion screen's roadmap or choose-another action is a separate
-  forward action. Every exit from an immersive pack screen returns to a shelled
-  screen. Studio pack editing and test play keep their existing layers. Keep
-  this rule when adding screens under a game or Studio.
+  offline status, and a fixed bottom destination bar stays visible. Pack screens
+  use the same Back action and game tools as the game menu: Back returns to the
+  game menu from the pack overview and to the pack overview from a chapter
+  trail. Browser, hardware, and in-app back pop the screen the player actually
+  visited. Opening a game from Continue, History, or a leaderboard returns to
+  that screen; a directly opened URL is seeded with its canonical parents,
+  including a pack overview and chapter trail. Back never starts or resumes a
+  level, and the completion screen's roadmap or choose-another action is a
+  separate forward action. Studio pack editing and test play keep their
+  existing layers. Keep this rule when adding screens under a game or Studio.
 - **Game play fits the viewport.** The Sudoku and Nonograms play screens fill
   the dynamic viewport and size their boards from the space left by the header
   and controls, so the board, inputs, tools, and result actions stay visible

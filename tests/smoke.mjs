@@ -840,9 +840,9 @@ try {
   assert.ok(await packPage.locator('.pack-roadmap').evaluate(roadmap => {
     const info = roadmap.querySelector('.pack-banner').getBoundingClientRect()
     const trail = roadmap.querySelector('.pack-trail').getBoundingClientRect()
-    return info.top >= trail.bottom
+    return info.bottom <= trail.top
   }))
-  assert.ok(await packPage.getByRole('button', { name: 'Chapters', exact: true }).evaluate(button =>
+  assert.ok(await packPage.getByRole('button', { name: 'Back', exact: true }).evaluate(button =>
     button.getBoundingClientRect().top >= 0 && button.getBoundingClientRect().bottom <= innerHeight))
   assert.equal(await packPage.evaluate(() => document.documentElement.scrollWidth), 320)
 
@@ -905,7 +905,7 @@ try {
   const secondChapterLevelButton = packPage.getByRole('button', { name: 'Play Second chapter level', exact: true })
   await secondChapterLevelButton.waitFor()
   assert.equal(await secondChapterLevelButton.isEnabled(), true)
-  await packPage.getByRole('button', { name: 'Chapters', exact: true }).click()
+  await packPage.getByRole('button', { name: 'Back', exact: true }).click()
   await packPage.locator('.chapter-card').first().click()
   await packPage.getByRole('button', { name: 'Replay First chapter level', exact: true }).waitFor()
   await packContext.close()
@@ -1049,8 +1049,8 @@ try {
   await nonogramPage.getByRole('button', { name: 'Play Nest Hollow' }).waitFor()
   await until(async () => (await request('/api/progress', { headers: playbackHeaders })).completions
     .some(item => item.level === egg.id && item.revision === egg.revision), 'synced Nonograms completion')
-  await nonogramPage.getByRole('button', { name: 'Chapters', exact: true }).tap()
-  await nonogramPage.getByRole('button', { name: 'Nonograms menu' }).tap()
+  await nonogramPage.getByRole('button', { name: 'Back', exact: true }).tap()
+  await nonogramPage.getByRole('button', { name: 'Back', exact: true }).tap()
   await until(() => nonogramPage.evaluate(async () =>
     Boolean(await caches.match('/__aviarium/last-played', { cacheName: 'aviarium-game-nonograms' }))), 'Nonograms offline download')
   await nonogramContext.setOffline(true)
@@ -1118,27 +1118,27 @@ try {
   await navigationPage.goto(origin)
   await navigationPage.getByRole('link', { name: 'Sudoku', exact: true }).click()
   await navigationPage.getByRole('button', { name: /^Budgies/ }).click()
-  assert.equal(await navigationPage.locator('.site-header').count(), 0)
-  assert.equal(await navigationPage.locator('.app-rail').count(), 0)
+  assert.equal(await navigationPage.locator('.site-header').count(), 1)
+  assert.equal(await navigationPage.locator('.app-rail').count(), 1)
   assert.equal(await navigationPage.getByRole('button', { name: 'Resume Garden Perch', exact: true }).count(), 0)
   await navigationPage.getByRole('button', { name: 'Open chapter Budgies', exact: true }).click()
   await navigationPage.getByRole('button', { name: /^(Play|Replay) Garden Perch/ }).click()
   await navigationPage.getByLabel('Sudoku board', { exact: true }).waitFor()
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
-  assert.equal(await navigationPage.locator('.site-header').count(), 0)
-  assert.equal(await navigationPage.locator('.app-rail').count(), 0)
+  assert.equal(await navigationPage.locator('.site-header').count(), 1)
+  assert.equal(await navigationPage.locator('.app-rail').count(), 1)
   // A level opened by mistake must not leave a Resume entry behind.
   assert.equal(await navigationPage.getByRole('button', { name: 'Resume Garden Perch', exact: true }).count(), 0)
 
-  await navigationPage.getByRole('button', { name: 'Chapters', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
-  await navigationPage.getByRole('button', { name: 'Sudoku menu', exact: true }).waitFor()
-  assert.equal(await navigationPage.getByRole('banner').count(), 0)
-  await navigationPage.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
   await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
   assert.equal(await navigationPage.getByRole('banner').count(), 1)
+  await navigationPage.goBack()
+  await navigationPage.getByRole('heading', { name: 'Sudoku', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
   assert.equal(await navigationPage.locator('.header-account .account-trigger').isVisible(), true)
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Game library' }).waitFor()
@@ -1165,7 +1165,7 @@ try {
   await navigationPage.goto(`${origin}/games/sudoku/packs/budgies/${navigationPack.revision}/chapters/chapter-1`)
   await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
   await navigationPage.goBack()
-  await navigationPage.getByRole('button', { name: 'Sudoku menu', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
   await navigationPage.goBack()
   await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
   await navigationContext.close()
@@ -1181,12 +1181,12 @@ try {
   assert.equal(await desktopPage.getByRole('banner').count(), 0)
   await desktopPage.getByRole('button', { name: /^Budgies/ }).click()
   await desktopPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
-  assert.equal(await desktopPage.locator('.app-rail').count(), 0)
+  assert.equal(await desktopPage.locator('.app-rail').count(), 1)
   await desktopPage.goBack()
   await desktopPage.locator('.app-rail .rail-brand .brand').waitFor()
   assert.equal(await desktopPage.getByRole('banner').count(), 0)
   await desktopContext.close()
-  console.info('Shell and origin Back checks passed: mobile header and bottom bar, desktop sidebar, full-screen pack mode, and shortcut returns.')
+  console.info('Shell and origin Back checks passed: mobile header and bottom bar, desktop sidebar, shelled pack browsing, and shortcut returns.')
 
   console.info('Browser checks passed: mobile controls, notes, history, keyboard, pause, e-reader, offline reload and resume', adminToken ? ', studio and admin' : '', playerToken ? ', two-browser sync' : '')
 } finally {
