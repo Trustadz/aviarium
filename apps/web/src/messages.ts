@@ -981,6 +981,10 @@ export const dutch = {
   "Remove {game} selection": "Selectie van {game} verwijderen",
   "Game content": "Spelinhoud",
   "Add games and choose the options and settings each selection uses. A game is still used at most once per day.": "Voeg spellen toe en kies de opties en instellingen voor elke selectie. Een spel wordt nog steeds maximaal één keer per dag gebruikt.",
+  "Generate new daily challenges": "Nieuwe dagelijkse uitdagingen genereren",
+  "New daily challenges generated.": "Nieuwe dagelijkse uitdagingen gegenereerd.",
+  "The challenge could not be generated. Try again.": "De uitdaging kon niet worden gegenereerd. Probeer het opnieuw.",
+  "Test environment only. Applies the current settings and replaces today's challenge.": "Alleen in de testomgeving. Past de huidige instellingen toe en vervangt de uitdaging van vandaag.",
 } as const satisfies Record<typeof apiMessages[keyof typeof apiMessages], string> & Record<string, string>
 
 export type Message = keyof typeof dutch

@@ -5,7 +5,7 @@ import type {
 } from '../../../../packages/game-sdk/src/challenges.js'
 import type { LeaderboardStanding } from '../../../../packages/game-sdk/src/leaderboards.js'
 import { HttpError, requireUser } from '../auth.js'
-import { challengeTimeZone, challengesEnabled, pool } from '../config.js'
+import { challengeTimeZone, challengesEnabled, pool, testEnvironment, transaction } from '../config.js'
 import type { ServerGame } from '../game-runtime.js'
 import { boardSummaries } from '../leaderboards.js'
 import { requestNow } from './now.js'
@@ -374,6 +374,15 @@ export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMa
     }
   })
 
+  function occurrenceSettings(series: SeriesRow) {
+    return {
+      gameLimit: series.game_limit,
+      eligibleGames: series.eligible_games,
+      gameOptions: series.game_options,
+      gameSelections: series.game_selections,
+    }
+  }
+
   async function settingsPayload(series: SeriesRow, now: number) {
     const ensured = series.enabled ? await ensureOccurrence(pool, series, now) : { occurrence: undefined, nextStart: null }
     const nextStart = nextOccurrenceStart(now, series.timezone, series.reset_minute)
@@ -381,6 +390,7 @@ export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMa
     return {
       ...seriesView(series),
       timezoneSource: 'env' as const,
+      testEnvironment,
       registeredGames: challengeGames.map(game => ({
         id: game.id, label: game.label, optionGroups: game.optionGroups,
       })),
@@ -493,7 +503,7 @@ export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMa
       if (!date) throw new HttpError(400, 'invalid_request')
       const startsAt = localBoundary(date, series.reset_minute, series.timezone)
       const endsAt = localBoundary(addCivilDays(date, 1), series.reset_minute, series.timezone)
-      const settings = { gameLimit: series.game_limit, eligibleGames: series.eligible_games, gameOptions: series.game_options }
+      const settings = occurrenceSettings(series)
       const { rows: [created] } = await pool.query<OccurrenceRow>(`INSERT INTO challenge_occurrences(
           series_id,period_key,starts_at,ends_at,timezone,reset_minute,generation_version,settings,seed)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -515,6 +525,39 @@ export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMa
     return { ...prepared, occurrence: fresh ? occurrenceView(fresh) : null, slots }
   })
 
+  app.post('/api/admin/challenges/generate', async request => {
+    // Deliberately test-only: production content changes apply from the next
+    // occurrence, and there is no admin action that rewrites a live round.
+    if (!testEnvironment) throw new HttpError(404, 'challenge_not_found')
+    await requireUser(request, 'admin')
+    const now = requestNow(request)
+    const series = await readSeries(pool)
+    if (!series) throw new HttpError(404, 'challenge_not_found')
+    if (!series.enabled) throw new HttpError(409, 'challenge_disabled')
+    const ensured = await ensureOccurrence(pool, series, now)
+    if (!ensured.occurrence) throw new HttpError(409, 'challenge_prepare_failed')
+
+    const occurrence = await transaction(async db => {
+      await db.query(`DELETE FROM leaderboard_results
+        WHERE challenge_slot_id IN (SELECT id FROM challenge_slots WHERE occurrence_id=$1)`, [ensured.occurrence!.id])
+      await db.query('DELETE FROM challenge_attempts WHERE occurrence_id=$1', [ensured.occurrence!.id])
+      await db.query('DELETE FROM challenge_slots WHERE occurrence_id=$1', [ensured.occurrence!.id])
+      const { rows: [updated] } = await db.query<OccurrenceRow>(`UPDATE challenge_occurrences SET
+          seed=$2,settings=$3,prepared_at=NULL,preparing_at=NULL,failure_code=NULL,generation_version=$4
+        WHERE id=$1 RETURNING *`,
+      [ensured.occurrence!.id, crypto.randomUUID().replaceAll('-', ''), JSON.stringify(occurrenceSettings(series)),
+        series.generation_version])
+      return updated!
+    })
+    const prepared = await prepareOccurrence(pool, occurrence, challengeGames, series)
+    const { rows: [fresh] } = await pool.query<OccurrenceRow>('SELECT * FROM challenge_occurrences WHERE id=$1',
+      [occurrence.id])
+    const { rows: slots } = await pool.query(`SELECT id,game_id,position,status,failure_code FROM challenge_slots
+      WHERE occurrence_id=$1 ORDER BY position`, [occurrence.id])
+    return { ...prepared, occurrence: fresh ? occurrenceView(fresh) : null, slots }
+  })
+
   // The startup hook above keeps the series timezone in step with TZ without
   // relabelling already prepared occurrences.
 }
+

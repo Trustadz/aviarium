@@ -102,6 +102,11 @@ try {
     assert.equal(saved.gameSelections.length, 2)
     assert.deepEqual(saved.gameSelections[0].options.difficulty, ['Medium'])
 
+    const generated = await request('/api/admin/challenges/generate', { method: 'POST', headers: headers1,
+      now: clock.day, body: {} })
+    assert.equal(generated.prepared, true)
+    assert.equal(generated.slots.length, 2)
+
     const day = await request('/api/challenges', { headers: headers1, now: clock.day })
     assert.ok(day.occurrence, 'today has an occurrence')
     assert.equal(day.slots.length, 2)

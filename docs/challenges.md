@@ -124,7 +124,7 @@ Write requests still require the configured origin. API responses are
 | `GET /api/challenges/games` | Registered challenge-capable games and their option groups. Used by admin/discovery; not required by the player UI. |
 | `GET /api/admin/challenges/settings` | Series settings, registered games/options, current/next occurrence, `appliesFrom`, minimum window. |
 | `PATCH /api/admin/challenges/settings` | Enable/disable, reset minute, game limit and repeatable game selections (`{ game, options }`). Legacy eligible-games/options payloads are accepted for compatibility. `expectedUpdatedAt` guards two-admin edits. Changes apply to the next occurrence. |
-| `POST /api/admin/challenges/prepare` | Force ensure/prepare today (or a `periodKey`) and return diagnostics. Retries failed slots with the same recipe; it is not an editor. |
+| `POST /api/admin/challenges/generate` | **Test environments only.** Applies the current settings to the current occurrence, replaces its attempts/slots and generates new levels. Returns 404 outside `TEST_ENVIRONMENT=true`. |
 
 `GET /api/challenges/summary` returns `200 { enabled: false }` when the feature
 is disabled; the nav hides the destination. `CHALLENGES_ENABLED=false` is an
@@ -160,7 +160,7 @@ settings.
   an input;
 - the global **Enable daily challenges** toggle at the top (default on); turning
   it off removes the **Challenges** menu item;
-- current/next occurrence status and **Prepare now**.
+- current/next occurrence status.
 
 The scheduler follows four steps:
 
@@ -174,8 +174,12 @@ The scheduler follows four steps:
 Administration is organized into **Backups**, **Users**, **Leaderboards**,
 **Packs** and **Daily Challenge** tabs.
 
-There is no challenge editor. Puzzle content is generated from the game and the
-selected options; an admin cannot pin or author a daily puzzle.
+There is no challenge editor and no manual prepare action. Puzzle content is
+generated from the game and selected options; an admin cannot pin or author a
+daily puzzle. In production, settings changes apply from the next occurrence. A
+test environment additionally exposes **Generate new daily challenges**, which
+applies the current settings and replaces the current occurrence so generation
+can be exercised end to end.
 
 ## First-release scope and deferred work
 

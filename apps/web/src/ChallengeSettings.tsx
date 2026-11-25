@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CalendarDays, Plus, Save, Trash2, WandSparkles, X } from 'lucide-react'
+import { CalendarDays, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 import { useIntl } from 'react-intl'
 import { api, errorMessage, json } from './api.js'
 import { knownMessage, useT } from './i18n.js'
@@ -32,6 +32,7 @@ interface ChallengeSettingsData {
   resetMinute: number
   timezone: string
   timezoneSource: 'env'
+  testEnvironment: boolean
   updatedAt: string
   gameOptions: Record<string, Record<string, string[]>>
   gameSelections: GameSelection[]
@@ -133,27 +134,36 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
     setMinute(value.resetMinute % 60)
   }
 
+  function settingsBody() {
+    return {
+      enabled,
+      gameLimit,
+      resetMinute: hour * 60 + minute,
+      gameSelections: selections.map(selection => ({ game: selection.game, options: selection.options })),
+    }
+  }
+
   function save() {
     if (!data || !valid) return
     run(async () => {
       const value = await api<ChallengeSettingsData>('/admin/challenges/settings', json('PATCH', {
-        enabled,
-        gameLimit,
-        resetMinute: hour * 60 + minute,
-        gameSelections: selections.map(selection => ({ game: selection.game, options: selection.options })),
-        expectedUpdatedAt: data.updatedAt,
+        ...settingsBody(), expectedUpdatedAt: data.updatedAt,
       }), accountId)
       refresh(value)
       setMessage(t('Challenge settings saved.'))
     })
   }
 
-  function prepare() {
+  function generate() {
+    if (!data?.testEnvironment || !valid || !enabled) return
     run(async () => {
-      const value = await api<{ prepared: boolean; preparing: boolean }>('/admin/challenges/prepare', json('POST', {}), accountId)
+      await api<ChallengeSettingsData>('/admin/challenges/settings', json('PATCH', {
+        ...settingsBody(), expectedUpdatedAt: data.updatedAt,
+      }), accountId)
+      const result = await api<{ prepared: boolean }>('/admin/challenges/generate', json('POST', {}), accountId)
       const refreshed = await api<ChallengeSettingsData>('/admin/challenges/settings', undefined, accountId)
       refresh(refreshed)
-      setMessage(value.prepared ? t('Challenge prepared.') : t('The challenge could not be prepared. Try again.'))
+      setMessage(result.prepared ? t('New daily challenges generated.') : t('The challenge could not be generated. Try again.'))
     })
   }
 
@@ -253,8 +263,10 @@ export function ChallengeSettings({ accountId }: { accountId: string }) {
           time: formatChallengeTime(t, intl, data.appliesFrom, data.timezone), zone: data.timezone })}</p>
         <div className="button-bar">
           <button className="primary" onClick={save} disabled={busy || !valid}><Save size={16}/> {t('Save challenge settings')}</button>
-          <button className="secondary" onClick={prepare} disabled={busy || !data.enabled}
-            title={t('Recovers a missing or failed challenge for the current window.')}><WandSparkles size={16}/> {t('Prepare now')}</button>
+          {data.testEnvironment && <button className="secondary" onClick={generate} disabled={busy || !valid || !enabled}
+            title={t("Test environment only. Applies the current settings and replaces today's challenge.")}>
+            <RefreshCw size={16}/> {t('Generate new daily challenges')}
+          </button>}
         </div>
       </>}
     </section>
