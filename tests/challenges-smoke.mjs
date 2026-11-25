@@ -15,7 +15,7 @@ const port = '4184'
 const origin = 'http://127.0.0.1:' + port
 const app = spawn(process.execPath, ['dist/apps/server/src/app.js'], {
   env: { ...process.env, DATABASE_URL: database, HOST: '127.0.0.1', PORT: port, PUBLIC_ORIGIN: origin,
-    TEST_ENVIRONMENT: 'true', LOGIN_ENABLED: 'false', CHALLENGES_ENABLED: 'true', CHALLENGE_TIMEZONE: 'UTC' },
+    TEST_ENVIRONMENT: 'true', LOGIN_ENABLED: 'false', CHALLENGES_ENABLED: 'true', TZ: 'UTC' },
   stdio: 'inherit',
 })
 const digest = value => createHash('sha256').update(value).digest('hex')

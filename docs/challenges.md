@@ -38,7 +38,8 @@ extension.
 
 ## Time and reset
 
-- `CHALLENGE_TIMEZONE` sets the instance-wide IANA timezone (default `UTC`).
+- `TZ` sets the instance-wide IANA timezone. Compose defaults it to `UTC`;
+  a source checkout uses the process/system timezone when it is unset.
 - The admin picks the reset minute (00:00–23:59 local). It is stored in
   `challenge_series.reset_minute`.
 - The occurrence label is the local date of the start boundary. A 04:00
@@ -127,7 +128,7 @@ still allows in-flight completions.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `CHALLENGE_TIMEZONE` | `UTC` | IANA timezone for daily boundaries. Invalid values fail startup. |
+| `TZ` | process timezone | IANA timezone for daily boundaries. Compose defaults to `UTC`; invalid values fail startup. |
 | `CHALLENGES_ENABLED` | `true` | Emergency kill switch. Set `false` to stop scheduling and writes. |
 
 The reset minute, enabled state, difficulty options, eligible games and game

@@ -188,7 +188,7 @@ eligible, X can be 1 or 2, and each enabled game contributes at most one slot.
 Pack-rule variants are a future option-group extension.
 
 Occurrence boundaries use an instance-wide IANA timezone from
-`CHALLENGE_TIMEZONE` (default UTC) and an admin reset minute. Spring-forward gap
+`TZ` (Compose defaults it to UTC) and an admin reset minute. Spring-forward gap
 times resolve to the first valid instant after the gap; fall-back repeats use
 the earlier instant. A day with less than two hours remaining is not created.
 The daily board closes at `ends_at`; a late completion is saved but not posted.

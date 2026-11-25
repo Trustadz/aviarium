@@ -173,6 +173,9 @@ async function enabledSeries(): Promise<{ enabled: boolean; series?: SeriesRow }
 
 export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMap<string, ServerGame>,
   challengeGames: readonly ChallengeGameRuntime[]) {
+  // Apply TZ before the server accepts requests; existing occurrences keep their
+  // timezone snapshot, while new occurrences use the environment zone.
+  app.addHook('onReady', async () => { await syncSeriesTimezone(pool, challengeTimeZone) })
   app.get('/api/challenges/summary', async request => {
     const user = await requireUser(request)
     const now = requestNow(request)
@@ -492,6 +495,6 @@ export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMa
     return { ...prepared, occurrence: fresh ? occurrenceView(fresh) : null, slots }
   })
 
-  // Keep the series timezone in step with the environment without relabelling history.
-  void syncSeriesTimezone(pool, challengeTimeZone).catch(() => undefined)
+  // The startup hook above keeps the series timezone in step with TZ without
+  // relabelling already prepared occurrences.
 }
