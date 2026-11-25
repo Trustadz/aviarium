@@ -202,7 +202,7 @@ export default function Admin({ account, openPackStudio }: {account: Account; op
         </details>
       </section>}
 
-      {tab === 'challenge' && <div role="tabpanel" id="admin-panel-challenge" aria-labelledby="admin-tab-challenge"><ChallengeSettings accountId={account.id}/></div>}
+      {tab === 'challenge' && <div className="admin-challenge-stack" role="tabpanel" id="admin-panel-challenge" aria-labelledby="admin-tab-challenge"><ChallengeSettings accountId={account.id}/></div>}
     </div>
   </section>
 }

@@ -977,6 +977,10 @@ export const dutch = {
   "Manage Aviarium accounts, content and scheduled database backups.": "Beheer Aviarium-accounts, inhoud en geplande databaseback-ups.",
   "Administration sections": "Beheeronderdelen",
   "Daily Challenge": "Dagelijkse uitdaging",
+  "Each row is a possible daily game. A game is still used at most once per day.": "Elke rij is een mogelijk dagelijks spel. Een spel wordt nog steeds maximaal één keer per dag gebruikt.",
+  "Remove {game} selection": "Selectie van {game} verwijderen",
+  "Game content": "Spelinhoud",
+  "Add games and choose the options and settings each selection uses. A game is still used at most once per day.": "Voeg spellen toe en kies de opties en instellingen voor elke selectie. Een spel wordt nog steeds maximaal één keer per dag gebruikt.",
 } as const satisfies Record<typeof apiMessages[keyof typeof apiMessages], string> & Record<string, string>
 
 export type Message = keyof typeof dutch
