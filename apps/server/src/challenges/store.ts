@@ -110,7 +110,7 @@ export async function readSeries(db: Db, id = 'daily'): Promise<SeriesRow | unde
   return row
 }
 
-/** Keep the series' timezone in step with CHALLENGE_TIMEZONE without relabelling history. */
+/** Keep the series' timezone in step with TZ without relabelling history. */
 export async function syncSeriesTimezone(db: Db, timeZone: string): Promise<void> {
   await db.query(`UPDATE challenge_series SET timezone=$1, updated_at=now()
     WHERE id='daily' AND timezone<>$1`, [timeZone])

@@ -15,9 +15,11 @@ const challengesFlag = process.env.CHALLENGES_ENABLED ?? 'true'
 if (challengesFlag !== 'true' && challengesFlag !== 'false') throw new Error('CHALLENGES_ENABLED must be true or false')
 /** Emergency kill switch. The database series switch is the graceful pause. */
 export const challengesEnabled = challengesFlag === 'true'
-export const challengeTimeZone = process.env.CHALLENGE_TIMEZONE ?? 'UTC'
+// Challenge boundaries follow the same TZ as the Node process and its logs. The
+// Compose default is UTC; a source checkout falls back to the host zone.
+export const challengeTimeZone = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone
 if (!validTimeZone(challengeTimeZone))
-  throw new Error('CHALLENGE_TIMEZONE must be a valid IANA timezone')
+  throw new Error('TZ must be a valid IANA timezone')
 
 const { DATABASE_URL, PUBLIC_ORIGIN, OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_CALLBACK_URL } = process.env
 export const pool = new pg.Pool({

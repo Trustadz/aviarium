@@ -16,7 +16,7 @@ process.env.PUBLIC_ORIGIN = origin
 process.env.LOGIN_ENABLED = 'true'
 process.env.TEST_ENVIRONMENT = 'false'
 process.env.CHALLENGES_ENABLED = 'true'
-process.env.CHALLENGE_TIMEZONE = 'UTC'
+process.env.TZ = 'UTC'
 
 const { migrate } = await import('../dist/apps/server/src/migrate.js')
 const { makeApp } = await import('../dist/apps/server/src/app.js')
