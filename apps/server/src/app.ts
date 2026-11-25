@@ -7,17 +7,24 @@ import { ZodError } from 'zod'
 import { HttpError, pocketAvatarOrigin, registerAuth } from './auth.js'
 import { runBackups } from './backup-runner.js'
 import { registerBackups } from './backups.js'
+import { registerChallenges } from './challenges/routes.js'
 import { enabledLocales, listenHost, origin, pool } from './config.js'
 import { registerNews } from './news.js'
 import { runNewsTranslations } from './news-translation.js'
-import { serverGames } from './games.js'
+import { createServerGames } from './games.js'
+import { gameRegistry } from './game-registry.js'
+import { challengeGamesFromRegistry } from './challenges/registry.js'
+import { registerGameRoutes } from './game-routes.js'
 import { registerLeaderboards } from './leaderboards.js'
 import { registerPacks } from './packs.js'
 import { registerProgress } from './progress.js'
 import { migrate } from './migrate.js'
 import { runPuzzleJobs } from './worker.js'
+import type { GameRegistry } from '../../../packages/game-sdk/src/game.js'
 
-export async function makeApp() {
+export async function makeApp(registry: GameRegistry = gameRegistry) {
+  const serverGames = createServerGames(registry)
+  const challengeGames = challengeGamesFromRegistry(registry)
   const app = Fastify({
     logger: {
       serializers: {
@@ -57,13 +64,17 @@ export async function makeApp() {
   })
   registerAuth(app)
   registerNews(app)
+  registerGameRoutes(app, registry)
+  const legacyPackGame = serverGames.keys().next().value
   for (const game of serverGames.values()) {
-    game.routes(app)
+    game.routes?.(app)
     registerPacks(app, game, '/api/games/' + game.id)
-    if (game.id === 'sudoku') registerPacks(app, game, '/api')
+    // Main keeps the pre-platform Sudoku pack alias alive for existing clients.
+    if (game.id === legacyPackGame) registerPacks(app, game, '/api')
   }
-  registerProgress(app)
-  registerLeaderboards(app)
+  registerProgress(app, serverGames, challengeGames)
+  registerLeaderboards(app, serverGames)
+  registerChallenges(app, serverGames, challengeGames)
   registerBackups(app)
   await app.register(staticFiles, {
     root: fileURLToPath(new URL('../../../../dist/web/', import.meta.url)),
@@ -75,7 +86,8 @@ export async function makeApp() {
     const path = request.url.split('?')[0].replace(/\/$/, '')
     const game = /^\/(?:games|studio)\/([a-z0-9-]+)(?:\/|$)/.exec(path)?.[1]
     const standalonePage = ['', '/news', '/about', '/leaderboards', '/studio', '/studio/packs', '/admin'].includes(path)
-    if (request.method === 'GET' && (standalonePage || (game && serverGames.has(game))))
+    const challengePage = path === '/challenges' || path.startsWith('/challenges/')
+    if (request.method === 'GET' && (standalonePage || challengePage || (game && serverGames.has(game))))
       return reply.sendFile('index.html')
     return reply.code(404).send({ error: apiMessages.not_found, code: 'not_found' })
   })

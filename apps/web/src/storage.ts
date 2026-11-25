@@ -12,8 +12,21 @@ export const localProfile = 'local-play'
 type QueuedMutation = AttemptMutation & Record<string, unknown>
 export type MutationExtras = (game: string, level: GameLevel | undefined) => Record<string, unknown> | undefined
 
+export interface LocalChallenge {
+  attemptId: string
+  slotId?: string
+  game?: string
+  occurrenceId?: string
+  endsAt?: string
+  status?: 'started' | 'completed' | 'closed'
+  ranked?: boolean
+  invalid?: boolean
+}
+
 export type LocalSession<Attempt extends GameAttempt = GameAttempt> = SavedAttempt<Attempt> & {
   profile: string; updated: number; dirty: boolean; sent?: QueuedMutation; expired?: true
+  /** Present when this attempt belongs to a daily-challenge claim. */
+  challenge?: LocalChallenge
 }
 export type ProfilePreferences = Record<string, string | boolean | number | null | undefined> & { locale?: Locale }
 interface LocalPrefs { profile: string; data: ProfilePreferences; pending: Partial<ProfilePreferences>; revision?: number }
@@ -61,7 +74,8 @@ export async function cacheLevels(levels: GameLevel[]) {
 async function trimSavedGames(profile: string) {
   const sessions = (await db.sessions.where('profile').equals(profile).toArray())
     .sort((a, b) => b.updated - a.updated || b.revision - a.revision || b.id.localeCompare(a.id))
-  const expired = sessions.filter(isResumable).slice(savedGameLimit)
+  // An active challenge attempt is pinned: the five-save cap must not archive it.
+  const expired = sessions.filter(session => isResumable(session) && !session.challenge).slice(savedGameLimit)
   for (const session of expired) {
     session.archived = true
     session.dirty = profile !== localProfile
@@ -99,7 +113,7 @@ export function writeAttempt(expected: LocalSession, data: LocalSession['data'])
     const current = await db.sessions.get(expected.id)
     if (!current || current.profile !== expected.profile || current.archived)
       throw new Error('This saved game was deleted.')
-    const concurrent = current.revision !== expected.revision || current.updated !== expected.updated
+    const concurrent = !expected.challenge && (current.revision !== expected.revision || current.updated !== expected.updated)
     const dirty = expected.profile !== localProfile
     const next: LocalSession = concurrent
       ? { ...expected, id: randomId(), parentId: expected.id, revision: 0, sent: undefined,
@@ -174,7 +188,8 @@ async function synchronize(profile: string, extras: MutationExtras) {
       const stored = await db.levels.get(levelKey(current.data.level, current.data.levelRevision))
       const mutation: QueuedMutation = { sessionId: current.id, mutationId: randomId(),
         baseRevision: current.revision, data: current.data, archived: current.archived, updatedAt: current.updated,
-        archiveIfUnchanged: current.expired, ...extras(current.data.game, stored?.level) }
+        archiveIfUnchanged: current.expired, ...extras(current.data.game, stored?.level),
+        ...(current.challenge ? { challenge: { attemptId: current.challenge.attemptId } } : {}) }
       await db.sessions.put({ ...current, sent: mutation, dirty: false })
       return mutation
     })
@@ -184,8 +199,14 @@ async function synchronize(profile: string, extras: MutationExtras) {
       const current = await db.sessions.get(mutation.sessionId)
       if (current?.sent?.mutationId !== mutation.mutationId) return
       if (saved.id !== current.id) await db.sessions.delete(current.id)
+      const terminal = saved.challenge?.status === 'completed' || saved.challenge?.status === 'closed'
+      const challenge = saved.challenge
+        ? { ...current.challenge, ...saved.challenge }
+        : current.challenge
       await db.sessions.put({
-        ...saved, profile, updated: current.dirty ? current.updated : saved.updatedAt ?? current.updated, dirty: current.dirty,
+        ...saved, challenge, profile,
+        updated: current.dirty ? current.updated : saved.updatedAt ?? current.updated,
+        dirty: terminal ? false : current.dirty,
         data: current.dirty ? current.data : saved.data,
         archived: saved.archived || (current.dirty && current.archived),
         expired: current.dirty ? current.expired : undefined,

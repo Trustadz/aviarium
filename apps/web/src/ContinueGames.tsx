@@ -9,6 +9,8 @@ export interface ContinueGame {
   progress?: string
   preview: ReactNode
   canResume: boolean
+  removable?: boolean
+  daily?: boolean
 }
 
 interface Props {
@@ -35,17 +37,18 @@ export function ContinueGames({ games, resume, remove }: Props) {
   return <section className="continue-games" aria-labelledby={heading}>
     <h2 id={heading}>{t("Continue")}</h2>
     <ul className="continue-track" aria-labelledby={heading} tabIndex={0}>
-      {games.map(game => <li key={game.id} className="continue-card">
+      {games.map(game => <li key={game.id} className={'continue-card' + (game.daily ? ' continue-daily' : '')}>
         <div className="continue-card-summary">
           <div className="continue-preview" aria-hidden="true">{game.preview}</div>
           <div className="continue-card-info">
+            {game.daily && <span className="badge continue-daily-badge">{t('Daily challenge')}</span>}
             <p>{game.details}</p>
             <h3>{game.title}</h3>
             {game.progress && <p>{game.progress}</p>}
           </div>
         </div>
         <div className="continue-actions">
-          <div className="continue-options" ref={openOptions === game.id ? options : undefined}
+          {game.removable !== false && <div className="continue-options" ref={openOptions === game.id ? options : undefined}
             onBlur={event => {
               if (!event.currentTarget.contains(event.relatedTarget)) setOpenOptions(undefined)
             }}
@@ -64,7 +67,7 @@ export function ContinueGames({ games, resume, remove }: Props) {
                 remove(game.id)
               }}><Trash2 size={15}/>{" "}{t("Delete save")}</button>
             </div>}
-          </div>
+          </div>}
           <button className="primary" disabled={!game.canResume} onClick={() => resume(game.id)}>{t("Resume")}{" "}<ChevronRight size={17}/></button>
         </div>
       </li>)}

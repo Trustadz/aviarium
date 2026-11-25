@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import type { GameLevel } from '../../game-sdk/src/index.js'
 import { definePackSchemas, packLevelFields, packLevelId, progressionRules, type PackRevision } from '../../game-sdk/src/packs.js'
-import { attemptIdentity, attemptOutcome, mutationHeader, packRevisionField } from '../../game-sdk/src/progress.js'
-import { fromPicture, randomDifficulties, randomPuzzle, type Puzzle } from './puzzles.js'
+import { attemptIdentity, attemptOutcome, challengeMutationField, mutationHeader, packRevisionField } from '../../game-sdk/src/progress.js'
+import { fromPicture, randomDifficulties, randomPuzzle, type Cell, type Puzzle } from './puzzles.js'
 import { sha256 } from '../../game-sdk/src/sha256.js'
 
 export const nonogramsId = 'nonograms'
@@ -21,10 +21,21 @@ export const nonogramSaveSchema = z.object({
   board: marksSchema, undo: z.array(marksSchema).max(100),
 })
 export type NonogramSave = z.infer<typeof nonogramSaveSchema>
+
+/**
+ * Clear the player's marks while keeping the attempt intact. Outcome and
+ * identity fields (elapsed time, completion, revisions, pack) are preserved. A
+ * solved run is already not resettable.
+ */
+export function resetNonogramInput(save: NonogramSave): NonogramSave {
+  if (save.completed) return save
+  return { ...save, board: Array<Cell>(save.board.length).fill(0), undo: [] }
+}
+
 export const quickDescriptor = z.object({
   seed: z.uuid(), size: gridSizeSchema, difficulty: z.enum(randomDifficulties), version: z.literal(1),
 })
-export const nonogramMutation = mutationHeader.extend({ data: nonogramSaveSchema, quickPlay: quickDescriptor.optional() })
+export const nonogramMutation = mutationHeader.extend({ data: nonogramSaveSchema, ...challengeMutationField, quickPlay: quickDescriptor.optional() })
 type QuickDescriptor = z.infer<typeof quickDescriptor>
 
 const pictureSchema = z.array(z.string().regex(/^[.#]+$/).max(10)).max(10)

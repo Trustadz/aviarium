@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { difficulties, type Difficulty, type GameLevel } from '../../game-sdk/src/index.js'
-import { attemptIdentity, attemptOutcome, mutationIdentity, mutationStatus, packRevisionField, type SavedAttempt } from '../../game-sdk/src/progress.js'
+import { attemptIdentity, attemptOutcome, challengeMutationField, mutationIdentity, mutationStatus, packRevisionField, type SavedAttempt } from '../../game-sdk/src/progress.js'
+import { rulesFor } from './rules.js'
 
 export interface PublishedLevel extends GameLevel {
   grid: string
@@ -31,6 +32,18 @@ export const saveSchema = z.object({
   packRevision: packRevisionField,
 })
 export type SudokuSave = z.infer<typeof saveSchema>
+
+/**
+ * Clear the player's board input while keeping the attempt intact: the givens
+ * return, notes and undo/redo history clear, and every outcome/identity field
+ * (elapsed time, lives, aids, completion, revisions, pack) is preserved. A
+ * finished run (solved or out of lives) is already not resettable.
+ */
+export function resetSudokuInput(save: SudokuSave, givens: readonly number[]): SudokuSave {
+  if (save.completed || save.lives === 0) return save
+  return { ...save, board: rulesFor(save.ruleset === 2).create(givens), undo: [], redo: [] }
+}
+
 export const preferenceSchema = z.object({
   favorite: z.boolean(), mistakes: z.boolean(), timer: z.boolean(), hints: z.boolean(),
   autoNotes: z.boolean(), autoNoteDeletion: z.boolean(),
@@ -41,7 +54,7 @@ export const defaults: Preferences = {
 }
 
 export const mutationSchema = z.object({
-  ...mutationIdentity, data: saveSchema, ...mutationStatus,
+  ...mutationIdentity, data: saveSchema, ...mutationStatus, ...challengeMutationField,
   quickPlay: quickPlayDescriptorSchema.optional(),
 })
 export type Mutation = z.infer<typeof mutationSchema>

@@ -64,9 +64,11 @@ export function useGameDownloads(game: string | undefined, online: boolean, enab
   return { installed, remove, recordActivity }
 }
 
-export async function registerOffline(onUpdate: (activate: () => void) => void) {
+export async function registerOffline(onUpdate: (activate: () => void) => void, signal: AbortSignal) {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return
   const registration = await navigator.serviceWorker.register('/sw.js')
+  if (signal.aborted) return
+
   const announce = () => {
     if (!registration.waiting || !navigator.serviceWorker.controller) return
     onUpdate(() => {
@@ -74,6 +76,26 @@ export async function registerOffline(onUpdate: (activate: () => void) => void) 
       registration.waiting?.postMessage('activate')
     })
   }
+  const watchInstall = () => registration.installing?.addEventListener('statechange', announce, { signal })
+  registration.addEventListener('updatefound', watchInstall, { signal })
+  watchInstall()
   announce()
-  registration.addEventListener('updatefound', () => registration.installing?.addEventListener('statechange', announce))
+
+  let checking = false
+  const checkForUpdate = async () => {
+    if (document.hidden || !navigator.onLine || checking || registration.installing || registration.waiting) return
+    checking = true
+    try {
+      await registration.update()
+    } catch {
+      // A failed request is expected offline. Retry at the next check.
+    } finally {
+      checking = false
+    }
+  }
+  const interval = window.setInterval(checkForUpdate, 2 * 60_000)
+  signal.addEventListener('abort', () => window.clearInterval(interval), { once: true })
+  document.addEventListener('visibilitychange', checkForUpdate, { signal })
+  window.addEventListener('online', checkForUpdate, { signal })
+  void checkForUpdate()
 }

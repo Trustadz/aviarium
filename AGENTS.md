@@ -20,6 +20,10 @@ it specifies a narrower scope or a different workflow.
 - Use a dedicated branch under `agent/` for each distinct change. Keep
   unrelated work on its own branch or in its own checkout. Preserve existing
   working files and stage only the intended paths.
+- For a user-visible change, add one new fragment under `changelog.d/`; do not
+  edit `CHANGELOG.md`. Follow [the fragment contract](changelog.d/README.md) and
+  run `npm run changelog:check`. Chores, tests, refactors, and the post-release
+  fold PR use the `changelog-not-required` label instead.
 - For changes the user wants to test, run a local preview from the feature
   branch with a dedicated database and localhost-only test mode where needed.
   Give the user the preview URL. A local preview does not put code on GitHub.
@@ -48,5 +52,10 @@ it specifies a narrower scope or a different workflow.
   or major increment and sets that version in the Docker build.
 - Use `enhancement` or `feature` for PRs that add features and `bug` or `fix`
   for PRs that fix bugs so the generated release notes group them correctly.
+- Release notes combine curated `## Unreleased` content, rendered `changelog.d/`
+  fragments, and GitHub's generated pull-request list. After publishing, open
+  the small post-release fold PR with `npm run changelog:release -- X.Y.Z` and
+  apply `changelog-not-required`; do not leave fragments for the next release
+  to publish again.
 - After publishing, verify that the version and `latest` image tags match and
   that a GitHub Release exists for the version. See [release instructions](README.md#publish-a-release).

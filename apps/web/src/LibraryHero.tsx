@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
-import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { packCover, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import { starterPack } from '../../../packages/nonograms/src/puzzles.js'
+import challengeArt from './art/daily-challenges.webp'
 import type { WebGame } from './game-web.js'
 import { useT } from './i18n.js'
 import type { Message } from './messages.js'
 import { findGame } from './registry.js'
 
-const slides = [
+const gameSlides = [
   {
     game: 'sudoku', title: 'Aviarium', label: 'PUZZLE LIBRARY',
     description: 'A quiet place to play. Find your next puzzle or pick up where you left off.',
@@ -18,6 +18,11 @@ const slides = [
     description: 'Use row and column clues to reveal a picture. Start with the Sulphur-crested Cockatoos pack.',
   },
 ] as const satisfies readonly { game: string; title: string; label: Message; description: Message }[]
+
+const challengeSlides = [{
+  game: 'challenges', title: 'Daily challenges', label: 'New in Aviarium',
+  description: 'A fresh set of puzzles to solve before the next reset.',
+}, ...gameSlides] as const
 
 const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
 const rotationInterval = 8_000
@@ -43,13 +48,14 @@ type DragState = {
   horizontal: boolean
 }
 
-export function LibraryHero({ catalog, packs, reader, open }: {
-  catalog: readonly GameLevel[]
+export function LibraryHero({ packs, reader, open, openChallenges }: {
   packs: readonly PackRevision[]
   reader: boolean
   open: (game: WebGame) => void
+  openChallenges?: () => void
 }) {
   const t = useT()
+  const slides = openChallenges ? challengeSlides : gameSlides
   const [{ index, outgoing, direction }, setSlide] = useState({ index: 0, outgoing: null as number | null, direction: 1 })
   const [hovering, setHovering] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -173,7 +179,7 @@ export function LibraryHero({ catalog, packs, reader, open }: {
 
   function renderSlide(position: number, active: boolean, leaving = false) {
     const slide = slides[position]
-    const game = findGame(slide.game)!
+    const game = slide.game === 'challenges' ? undefined : findGame(slide.game)!
     const cover = slide.game === 'nonograms' && cockatooCover
 
     return <div key={slide.game} className={'hero-slide hero-' + slide.game} inert={!active}
@@ -185,20 +191,21 @@ export function LibraryHero({ catalog, packs, reader, open }: {
       }}>
       <div className="hero-content">
         <p className="hero-kicker"><span/>{' '}{t(slide.label)}</p>
-        <h1>{slide.title}</h1>
+        <h1>{slide.game === 'challenges' ? t(slide.title) : slide.title}</h1>
         <p>{t(slide.description)}</p>
         <div className="hero-actions">
-          <button className="primary hero-action" onClick={() => open(game)}>
-            {t('Explore {game}', { game: game.title })}{' '}<ArrowRight size={17}/>
+          <button className="primary hero-action" onClick={game ? () => open(game) : openChallenges}>
+            {game ? t('Explore {game}', { game: game.title }) : t('View challenges')}{' '}<ArrowRight size={17}/>
           </button>
         </div>
       </div>
-      {cover ? <div className="hero-cover" aria-hidden="true"><img src={cover} alt="" draggable={false}/></div>
-        : <div className={'hero-art ' + game.theme} aria-hidden="true">{game.preview(game.sample?.(catalog))}</div>}
+      {!game ? <img className="hero-challenge-art" src={challengeArt} alt="" draggable={false}/>
+        : cover ? <div className="hero-cover" aria-hidden="true"><img src={cover} alt="" draggable={false}/></div>
+        : <div className={'hero-art ' + game.theme} aria-hidden="true">{game.preview(game.sample?.(packs))}</div>}
     </div>
   }
 
-  return <section className={'hero hero-' + slides[index].game} aria-label={t('Featured games')}
+  return <section className={'hero hero-' + slides[index].game} aria-label={t(openChallenges ? 'Featured' : 'Featured games')}
     tabIndex={0} data-dragging={dragging || undefined}
     onPointerEnter={event => { if (event.pointerType === 'mouse') setHovering(true) }}
     onPointerLeave={() => setHovering(false)}
@@ -218,7 +225,7 @@ export function LibraryHero({ catalog, packs, reader, open }: {
     </div>
     <div className="hero-dots">
       {slides.map((item, position) => <button key={item.game} type="button" className="hero-dot"
-        aria-label={t('Show {game}', { game: findGame(item.game)!.title })} aria-controls="featured-game"
+        aria-label={t('Show {game}', { game: item.game === 'challenges' ? t(item.title) : findGame(item.game)!.title })} aria-controls="featured-game"
         aria-pressed={index === position} onClick={() => { if (position !== index) move(position - index) }}><span/></button>)}
     </div>
   </section>

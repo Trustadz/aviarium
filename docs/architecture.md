@@ -31,21 +31,31 @@ an origin.
   rules, and ordered levels. Pack revisions track changes across the pack,
   including chapter order and chapter settings. Level revisions advance
   independently when a level's puzzle or effective chapter rules change.
-  Draft edits and catalog visibility can change independently of saved
+  Draft edits and pack visibility can change independently of saved
   attempts. Keep the referenced level revisions available.
-- **Back follows the visible screen hierarchy.** Gameplay, chapter trails,
-  chapter overviews, Studio pack editing, and Studio test play are history
-  layers. Browser, hardware, and in-app back move a game to its chapter trail,
-  a trail to the chapter overview, an overview to the game menu, a game menu
-  to the library, test play to the pack editor, the pack editor to **My
-  packs**, and My packs to Studio or to the game menu it was opened from.
-  In-app back actions pop the current layer rather than pushing a duplicate.
-  Opening a game from a shortcut such as Continue, History, or a shared puzzle
-  lays down the missing menu, chapter overview, and chapter trail first. A
-  directly opened deep link is seeded with its parent layers so back stays
-  inside the app. Keep this hierarchy when adding screens that sit under a
-  game or Studio.
-
+- **Back retraces the navigation path; progression is explicit.** Gameplay,
+  chapter trails, and chapter overviews are immersive screens with no app
+  chrome. The game menu, history, guide, leaderboards, library, Studio, and
+  account screens use the app shell. On desktop the shell is a full-height
+  sidebar with the brand, destinations, account, and offline status; there is
+  no top header. On phones a non-sticky header carries the brand, account, and
+  offline status, and a fixed bottom destination bar stays visible. Browser,
+  hardware, and in-app back pop the screen the player actually visited.
+  Opening a game from Continue, History, or a leaderboard returns to that
+  screen; a directly opened URL is seeded with its canonical parents, including
+  a pack overview and chapter trail. Back never starts or resumes a level, and
+  the completion screen's roadmap or choose-another action is a separate
+  forward action. Every exit from an immersive pack screen returns to a shelled
+  screen. Studio pack editing and test play keep their existing layers. Keep
+  this rule when adding screens under a game or Studio.
+- **Game play fits the viewport.** The Sudoku and Nonograms play screens fill
+  the dynamic viewport and size their boards from the space left by the header
+  and controls, so the board, inputs, tools, and result actions stay visible
+  without page scrolling from phone portrait through ultrawide desktop. Short
+  viewports compact the heading and controls, and Nonograms derive their cell
+  size from both available dimensions. Menus, catalogs, and long lists may
+  still scroll because their content is not a fixed play surface. A new game
+  should follow the same rule or explain why its play surface needs to scroll.
 - **Shared game contracts with game-specific logic.** The renderer-neutral SDK
   defines common types. Each game owns its codecs, rules, and generation. A
   stable ruleset, save format, and generator version let the browser and
@@ -57,10 +67,14 @@ an origin.
   accepting a save. Retried mutations return the stored result for the same
   ID and payload. Concurrent edits can create a separate attempt. Keep those
   guarantees when changing either side of synchronization.
+- **App updates while online.** The visible app checks its service worker for
+  updates at startup, every two minutes, and when it returns to the foreground
+  or reconnects. Unreachable servers are handled silently. The Library offers
+  Reload once an update is ready, so a check does not interrupt play.
 - **Leaderboards record every completed sync.** A verified completion writes its
   result in the same transaction as its completion record. Boards group results
   by the game's settings: Sudoku Quick Play by difficulty, Nonograms random
-  boards by size and difficulty, and pack or fixed levels by level revision.
+  boards by size and difficulty, and pack levels by level revision.
   The exact starting grid or clue set is hashed for a 30-day per-puzzle
   cooldown; a repeat inside that window is stored as `cooldown` and hidden,
   while a different puzzle posts immediately. Standings show the best active
@@ -73,7 +87,7 @@ an origin.
   leaderboard registration point; Sudoku and Nonograms implement it. New tables
   only: no historical completions are backfilled, and suppressed results never
   remove the completion.
-  The web leaderboard keeps the player in view: the catalog and game hub lead
+  The web leaderboard keeps the player in view: the leaderboard catalog and game hub lead
   with the signed-in player's latest active posting (`recorded_at`, not their
   best) and best current rank (lowest rank, then more players, then recency),
   scoped globally and per game. Board pages show a `Your best` strip, the top
@@ -96,8 +110,8 @@ an origin.
   best-per-player cap. Pack cards aggregate entire packs across their
   chapters: a player's total is the sum of their best active time on every
   level, ranked only when every level is present, with avatars in the pack
-  table, mini top-three lists, and each level's best row. On phones the profile sits in the upper-right header
-  so the remaining bottom destinations keep their labels. Studio is not a
+  table, mini top-three lists, and each level's best row. On phones the profile sits in the non-sticky header so the
+  bottom destination bar keeps its labels. Studio is not a
   destination: editors reach it from the library heading or a game menu.
 - **The server owns permissions.** Pocket ID supplies identity in the normal
   login flow. PostgreSQL stores Aviarium sessions and roles. Use
@@ -138,15 +152,15 @@ The shared types, rules for progression, revision assignment, and attempt metada
 
 ## Levels and checks
 
-Givens are 81 row-major digits. Zero means empty. A pack draft can be edited without affecting published revisions. The generation job records a seed and generator version. Validation jobs capture the draft revision and return one of invalid, unsolvable, unique, multiple, or inconclusive. The app processes the PostgreSQL job queue after startup. A bounded worker thread runs the solver off the HTTP event loop. The job lease survives browser close and app restart. An expired search budget is inconclusive. Publishing requires verification of the current pack draft. Published data is immutable and the newest revision of each ID forms the shared catalog. Previous revisions remain available for saved attempts. Admins can hide an editor’s publication from the catalog while retaining its saved attempts. Users can play every published game and manage their profile, preferences, and device settings. Editors additionally have Studio access for every game, with ownership checks on pack drafts. Admins also have administration access. Existing game-specific grants are promoted to the Editor role during upgrade.
+Givens are 81 row-major digits. Zero means empty. A pack draft can be edited without affecting published revisions. The generation job records a seed and generator version. Validation jobs capture the draft revision and return one of invalid, unsolvable, unique, multiple, or inconclusive. The app processes the PostgreSQL job queue after startup. A bounded worker thread runs the solver off the HTTP event loop. The job lease survives browser close and app restart. An expired search budget is inconclusive. Publishing requires verification of the current pack draft. Published data is immutable and pack revisions form the shared library. Previous revisions remain available for saved attempts. Owners can unpublish a pack while retaining its saved attempts. Users can play every published game and manage their profile, preferences, and device settings. Editors additionally have Studio access for every game, with ownership checks on pack drafts. Admins also have administration access. Existing game-specific grants are promoted to the Editor role during upgrade.
 
 New Sudoku publications use a deterministic, easiest-first logical solver. Easy uses singles, Medium adds pairs and locked candidates, and Hard adds techniques such as triples and X-Wing. Extreme requires an advanced technique and Genius uses at least three distinct Extreme families in the logical solve. Search is used to verify uniqueness, while grading, hints, and playback use named deductions. An incomplete logical solve needs review. Older puzzle revisions retain their published grades. Quick Play v2 uses verified puzzle pools and seeded grid transformations, and checks that the transformed board keeps its requested grade. Once Sudoku is downloaded, a bundled browser worker creates random or seeded Quick Play puzzles online or offline. The browser keeps the existing seed-derived puzzle ID. On the first sync for an unknown puzzle, the server regenerates its grid from the seed, difficulty and generator version before accepting the save. A shared seed code carries its difficulty and generator version. The installed web app can receive the code through the share sheet on browsers that support share targets.
 
 ## Packs and Studio
 
-Open Studio from the library heading (editors and admins only) or from a game menu, choose a game, then work in **My packs**. Authored levels belong to a chapter, and chapters belong to a pack. The shared workspace provides chapter navigation, level ordering, appearance, rule controls, and previews of both the chapter overview and the chapter trail. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack, chapter, and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
+Open Studio from the library heading (editors and admins only) or from a game menu, choose a game, then work in **My packs**. Authored levels belong to a chapter, and chapters belong to a pack. The shared workspace provides chapter navigation, level ordering, separate **Pack settings** and **Chapter settings** screens, rule controls, and previews of both the chapter overview and the chapter trail. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack, chapter, and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
 
-Owners manage their packs. Admins use **Administration → Packs → Edit as admin** to enter another creator’s workspace. Server permissions and draft version checks apply to both modes. The package records the last editor and logs admin publications. Publish verifies the exact draft in a server worker and atomically replaces the visible pack revision. Legacy standalone publications appear in recovered packs without changing their existing level or save keys.
+Owners manage their packs. Admins use **Administration → Packs → Edit as admin** to enter another creator’s workspace. Server permissions and draft version checks apply to both modes. The package records the last editor and logs admin publications. Publish verifies the exact draft in a server worker and atomically replaces the visible pack revision. Every shipped or authored level belongs to a pack; the pre-pack built-in Sudoku starters are retired, while legacy standalone publications appear in recovered packs without changing their existing level or save keys.
 
 A pack revision determines chapter order, chapter metadata, and each chapter's rules, artwork, and level order. Stable level IDs survive changes in order and movement between chapters, and each level has an independent revision. Changes to givens or effective chapter rules create a new level revision. Level access lives on the chapter. Levels inherit gameplay defaults and may override the controls supplied by the game. Ordered chapters preserve access earned on earlier snapshots, count inserted levels toward completion, and allow players to continue from the next new stop. Chapters are independent: the pack overview shows one card per chapter with its own image, and each chapter trail opens at that chapter's next stop above the information card.
 
@@ -158,13 +172,57 @@ Nonograms stores row and column clues as level content with a versioned mark gri
 
 The shared attempt identifies game, level ID and revision, ruleset, and save format. It tracks elapsed time and completion. Sudoku supplies the entries, note masks, and bounded undo/redo. Dexie saves the latest local state and pending upload. Server mutations are idempotent by UUID. A stale base revision creates a separate attempt rather than overwriting the server snapshot. Verified completion is stored independently of individual attempts.
 
-Foreground sync runs when an authenticated player visits the library, returns to the foreground, or reconnects. Active play checkpoints locally until returning to the library or puzzle list. Account identity is checked on authorization-sensitive sync requests. Synced preferences merge field updates. Theme and e-reader mode are device-local. Games use the device's light or dark mode with their own palettes. Sudoku's timer, hints, and conflict highlighting are controlled from the Sudoku menu. The library and catalog endpoint require an account. Saves and the synchronization queue are keyed by account ID.
+Foreground sync runs when an authenticated player visits the library, returns to the foreground, or reconnects. Active play checkpoints locally until returning to the library or puzzle list. Account identity is checked on authorization-sensitive sync requests. Synced preferences merge field updates. Theme and e-reader mode are device-local. Games use the device's light or dark mode with their own palettes. Sudoku's timer, hints, and conflict highlighting are controlled from the Sudoku menu. The library and pack endpoints require an account. Saves and the synchronization queue are keyed by account ID.
 
 The production service worker caches the library shell and installs game assets when a game opens. Enable **Manage installs** in **Device settings** to reveal download removal on library cards. Removing a download preserves saves and their versioned puzzle references. Downloads are specific to the browser and are removed after 30 days of inactivity once the server is reachable. While offline, the browser can reopen downloaded games until its last verified session expires. Signing out clears the cached session. API and authentication traffic stay network-only.
 
+## Daily challenges
+
+Daily challenges are a platform-owned scheduled drop. Aviarium stores the
+series, occurrence, slot, attempt and challenge-result grains; generates and
+persists the exact level once; claims one attempt per player per game; closes the
+challenge board at the next reset; and exposes the current day, a closed day and
+a seed replay. A game supplies its normal generation, attempt validation and
+result interpretation; it does not implement scheduling, boards, attempts or
+challenge UI. Challenge-capable games are derived from the shared `GameRegistry`: a
+`GameDefinition` with `generation` and `leaderboard` is automatically eligible,
+and its `challenge.optionGroups` drive the admin and scheduler. The current release uses each game's default rules; Sudoku and Nonograms are
+eligible, X can be 1 or 2, and each enabled game contributes at most one slot.
+Pack-rule variants are a future option-group extension.
+
+Occurrence boundaries use an instance-wide IANA timezone from
+`CHALLENGE_TIMEZONE` (default UTC) and an admin reset minute. Spring-forward gap
+times resolve to the first valid instant after the gap; fall-back repeats use
+the earlier instant. A day with less than two hours remaining is not created.
+The daily board closes at `ends_at`; a late completion is saved but not posted.
+The closed day exposes a replay seed, which launches a normal generated game and
+posts to the general board, not the closed daily board. Challenge levels use
+`source='Challenge'`, `catalog_visible=false`, and are rejected by normal
+progress mutations. Challenge results use `board_kind='challenge'` and
+`board_key='challenge:<slotId>'` and are excluded from general cooldowns,
+player summaries and board selection. The pure boundary helper is
+[`challenges/time.ts`](../apps/server/src/challenges/time.ts); the API and
+product rules are documented in [daily challenges](challenges.md).
+## Game contract
+
+The shared game contract is documented in [game contract](game-contract.md). A
+game supplies its level/attempt codecs, generation, pack materialization and
+result interpretation; the platform owns routing, packs, leaderboards, saves and
+daily challenges. The Sudoku and Nonograms `GameDefinition` adapters, the runtime
+registry and a fake-game fixture are in place. The server compatibility map is
+built from the definitions and injected into the platform registrations. Daily
+challenges now derive their registry from the same definitions, so a new game
+with `generation` and `leaderboard` is eligible without a challenge adapter. Game
+modules no longer own routes: generic `/api/games/:game/quick-play` and
+`/api/games/:game/levels/:id/:revision` live in `game-routes.ts`; the old
+Sudoku quick-play, level and `/api` pack aliases are removed, and only the old
+Sudoku Studio/catalog routes remain quarantined. The legacy `ServerGame` adapter remains. On the web, board identity, initial save creation and pack level materialization
+now come from the shared definitions; the remaining `WebGame` surface is
+player/studio/presentation, pack presentation labels and Quick Play extras.
+
 ## Current scope
 
-The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships chaptered Sudoku and Nonograms packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges are planned. Scheduling and rankings belong to Aviarium, while each game supplies challenge content, completion validation, and how to interpret its results.
+The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships chaptered Sudoku and Nonograms packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges use the platform-owned scheduling and ranking model described above; Sudoku and Nonograms are eligible, X is configured by an admin (1–2), and the feature is disabled until enabled.
 
 ## Release announcements
 

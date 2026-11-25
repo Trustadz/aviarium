@@ -1,8 +1,8 @@
 import { lazy, useState } from 'react'
 import { Shuffle } from 'lucide-react'
 import {
-  createNonogramAttempt, gridSizeSchema, nonogramLevels, nonogramsId, quickNonogram, quickDescriptor,
-  type NonogramLevel, type NonogramPack, type NonogramSave,
+  createNonogramAttempt, gridSizeSchema, nonogramsId, quickNonogram, quickDescriptor,
+  type NonogramLevel, type NonogramSave,
 } from '../../../packages/nonograms/src/contracts.js'
 import { randomDifficulties, randomSizes, type RandomOptions } from '../../../packages/nonograms/src/puzzles.js'
 import { nonogramBoardKey } from '../../../packages/nonograms/src/leaderboards.js'
@@ -20,8 +20,6 @@ function title(t: Translate, level: GameLevel) {
 
 export const nonogramPresentation: PackPresentation = {
   menuLabel: 'Nonograms menu',
-  levels: (pack, chapter) => nonogramLevels(pack as NonogramPack).filter(level =>
-    !chapter || level.pack?.chapter === chapter.id),
   title: (t, pack) => pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title,
   description: (t, pack) => pack.builtIn ? knownMessage(t, pack.data.description) : pack.data.description,
   chapterTitle: (t, pack, chapter) => pack.builtIn ? knownMessage(t, chapter.title) : chapter.title,

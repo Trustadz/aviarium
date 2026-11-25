@@ -1,40 +1,15 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { generationSchema, gridSchema } from '../../../packages/sudoku/src/contracts.js'
-import { HttpError, requireEditor, requireUser } from './auth.js'
-import { loginEnabled, pool, testEnvironment, transaction } from './config.js'
+import { HttpError, requireEditor } from './auth.js'
+import { pool, transaction } from './config.js'
 
 interface Draft { id: string; owner_id: string; title: string; grid: string; version: number; seed: string | null }
 const draftInput = z.object({ title: z.string().trim().min(1).max(100), grid: gridSchema, generationJob: z.uuid().optional() })
 const recordId = (request: FastifyRequest) => z.uuid().parse((request.params as { id: string }).id)
-const latestLevels = "(SELECT DISTINCT ON (id) * FROM published_levels WHERE game_id='sudoku' ORDER BY id,revision DESC)"
 const jobColumns = 'id, kind, status, result, draft_id AS "draftId", draft_version AS "draftVersion"'
 
 export function registerLevels(app: FastifyInstance) {
-  app.get('/api/catalog', async request => {
-    if (loginEnabled || testEnvironment) await requireUser(request)
-    const result = await pool.query(`SELECT id,revision,ruleset,title,grid,difficulty,source,seed,generator_version AS "generatorVersion" FROM
-      ${latestLevels} latest WHERE catalog_visible AND pack IS NULL AND NOT EXISTS (SELECT 1 FROM hidden_levels h WHERE h.level_id=latest.id)
-      ORDER BY CASE id WHEN 'first-light' THEN 0 WHEN 'quiet-current' THEN 1 WHEN 'afterglow' THEN 2 ELSE 3 END,
-      published_at,id`)
-    return result.rows
-  })
-  app.get('/api/admin/levels', async request => {
-    await requireUser(request, 'admin')
-    return (await pool.query(`SELECT l.id,l.revision,l.title,l.source,h.level_id IS NOT NULL AS hidden
-      FROM ${latestLevels} l LEFT JOIN hidden_levels h ON h.level_id=l.id
-      WHERE l.source <> 'Built-in' AND l.catalog_visible AND l.pack IS NULL ORDER BY l.published_at DESC,l.id`)).rows
-  })
-  app.patch('/api/admin/levels/:id', async request => {
-    const user = await requireUser(request, 'admin')
-    const id = recordId(request)
-    const { hidden } = z.object({ hidden: z.boolean() }).parse(request.body)
-    const result = await pool.query(`SELECT 1 FROM published_levels WHERE id=$1 AND source <> 'Built-in' LIMIT 1`, [id])
-    if (!result.rowCount) throw new HttpError(404, 'level_not_found')
-    if (hidden) await pool.query('INSERT INTO hidden_levels(level_id,hidden_by) VALUES($1,$2) ON CONFLICT DO NOTHING', [id, user.id])
-    else await pool.query('DELETE FROM hidden_levels WHERE level_id=$1', [id])
-    return { hidden }
-  })
   app.get('/api/drafts', async request => {
     const user = await requireEditor(request)
     return (await pool.query('SELECT id,title,grid,version,seed FROM drafts WHERE owner_id=$1 ORDER BY updated_at DESC', [user.id])).rows

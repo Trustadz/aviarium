@@ -10,6 +10,12 @@ import type { PackStudioProps } from './PackStudio.js'
 import type { LocalSession, ProfilePreferences } from './storage.js'
 
 export interface GamePlayerProps {
+  /** Present only for a daily-challenge claim. */
+  challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
+  /** Optional compact standings block rendered inside the after-game overlay. */
+  standingsPanel?: ReactNode
+  /** Present when a closed challenge seed is being replayed outside the daily board. */
+  replay?: { label: string; backLabel?: string }
   level: GameLevel
   pack?: PackRevision
   session: LocalSession
@@ -19,6 +25,8 @@ export interface GamePlayerProps {
   testMode?: boolean
   persist: (data: GameAttempt) => Promise<void>
   leave: () => void
+  /** Leave through the canonical progress action (roadmap, menu, or editor). */
+  finish?: () => void
   reset: () => void
   openSettings?: () => void
   leaderboard?: { open: () => void }
@@ -43,8 +51,7 @@ export interface WebGame extends GameMetadata {
   Studio: ComponentType<PackStudioProps>
   Player: ComponentType<GamePlayerProps>
   menu?(context: GameMenuContext): ReactNode
-  sample?(levels: readonly GameLevel[]): GameLevel | undefined
-  catalog?: string
+  sample?(packs: readonly PackRevision[]): GameLevel | undefined
   preview(level?: GameLevel, attempt?: GameAttempt): ReactNode
   levelTitle(t: Translate, level: GameLevel): string
   resultDetail(t: Translate, level: GameLevel | undefined, attempt: GameAttempt): string | undefined

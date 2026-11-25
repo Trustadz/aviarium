@@ -4,7 +4,7 @@ import { knownMessage, useT, type Translate } from './i18n.js'
 import { useState } from 'react'
 import { Share2, Shuffle } from 'lucide-react'
 import { difficulties, type Difficulty } from '../../../packages/game-sdk/src/index.js'
-import { packLevels, type GradedPack, type PackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { type GradedPack, type PackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { quickPlayVersion } from '../../../packages/sudoku/src/contracts.js'
 import { formatSeedCode, parseSeedCode } from '../../../packages/sudoku/src/seed-code.js'
 import { errorMessage } from './api.js'
@@ -31,14 +31,14 @@ export function PuzzleShare({ level }: { level: PublishedLevel }) {
     }
     setShow(true)
   }
-  return <><button className="text-button" onClick={() => { void share() }}><Share2 size={16}/>{" "}{t("Share seed")}</button>
-    {show && <div className="puzzle-share">
-      <input readOnly aria-label={t("Seed code")} value={seed} onFocus={event => event.target.select()}/>
-      {navigator.clipboard && <button className="secondary" onClick={() => {
-        void navigator.clipboard.writeText(seed).then(() => setCopied(true)).catch(() => undefined)
-      }}>{copied ? t("Copied") : t("Copy seed")}</button>}
-    </div>}
-  </>
+  return show ? <div className="puzzle-share">
+    <input readOnly aria-label={t("Seed code")} value={seed} onFocus={event => event.target.select()}/>
+    {navigator.clipboard && <button className="secondary" onClick={() => {
+      void navigator.clipboard.writeText(seed).then(() => setCopied(true)).catch(() => undefined)
+    }}>{copied ? t("Copied") : t("Copy seed")}</button>}
+    <button className="secondary" onClick={() => { setShow(false); setCopied(false) }}>{t("Close")}</button>
+  </div>
+    : <button className="text-button" onClick={() => { void share() }}><Share2 size={16}/>{" "}{t("Share seed")}</button>
 }
 
 export function QuickPlay({ canPlay, profile, generate }: {
@@ -120,8 +120,7 @@ function ruleLabels(t: Translate, rules: PackRules) {
 
 export const sudokuPackPresentation: PackPresentation = {
   menuLabel: 'Sudoku menu',
-  levels: (pack, chapter) => packLevels(pack as PublishedPack).filter(level =>
-    !chapter || level.pack?.chapter === chapter.id),
+
   title: (t, pack) => packTitle(t, pack as PublishedPack),
   description: (t, pack) => packDescription(t, pack as PublishedPack),
   chapterTitle: (t, pack, chapter) => packChapterTitle(t, pack as PublishedPack, chapter),

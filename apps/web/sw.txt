@@ -5,6 +5,7 @@ const shellAssets = __SHELL_ASSETS__
 function shellRoute(path) {
   const route = path.replace(/\/$/, '')
   if (['', '/news', '/about', '/leaderboards', '/studio', '/studio/packs', '/admin'].includes(route)) return true
+  if (route === '/challenges' || route.startsWith('/challenges/')) return true
   const game = /^\/(?:games|studio)\/([a-z0-9-]+)(?:\/|$)/.exec(route)?.[1]
   return Boolean(game && Object.hasOwn(gameAssets, game))
 }

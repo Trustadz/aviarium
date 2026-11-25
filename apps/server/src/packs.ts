@@ -62,7 +62,7 @@ export async function seedPacks(db: PoolClient, game: ServerGame) {
       }
       continue
     }
-    const data = game.packs.verify(readPackDraft(game.packs, draft), [])
+    const data = await game.packs.verify(readPackDraft(game.packs, draft), [])
     await db.query(`INSERT INTO packs(id,draft,published_revision,game_id) VALUES($1,$2,$3,$4)
       ON CONFLICT (id) DO UPDATE SET draft=excluded.draft,published_revision=excluded.published_revision
       WHERE packs.owner_id IS NULL AND packs.published_revision < excluded.published_revision`, [id, data, revision, game.id])

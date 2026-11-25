@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import { ArrowLeft, RotateCcw, Settings2, Timer, Undo2, WandSparkles } from 'lucide-react'
-import { type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
+import { resetNonogramInput, type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
 import { fillsFitClues, matchesClues, solveByDeduction, type Cell } from '../../../packages/nonograms/src/puzzles.js'
 import type { GamePlayerProps } from './game-web.js'
 import { knownMessage, useT } from './i18n.js'
@@ -10,9 +10,10 @@ import { packStopAt, packTheme, type PackChapter } from '../../../packages/game-
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences, leave, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard }:
+export default function Nonograms({ level, pack, session, preferences, leave, finish, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel, replay }:
 GamePlayerProps & { trial?: boolean }) {
   const t = useT()
+  const challengeMode = Boolean(challenge)
   const [saved, setSaved] = useState(() => session.data as NonogramSave)
   const started = useRef(Date.now())
   const [problem, setProblem] = useState('')
@@ -23,7 +24,7 @@ GamePlayerProps & { trial?: boolean }) {
   const persistRef = useRef(persist)
   persistRef.current = persist
   const [display, setDisplay] = useState(saved.elapsedMs)
-  const showTimer = preferences.nonogramTimer !== false && !reader
+  const showTimer = challengeMode || (preferences.nonogramTimer !== false && !reader)
   const title = pack?.builtIn || level.source === 'Generated' ? knownMessage(t, level.title) : level.title
   const packLocation = pack && level.pack ? packStopAt(pack as NonogramPack, level.pack.stop) : undefined
   const chapter = packLocation?.chapter
@@ -66,6 +67,12 @@ GamePlayerProps & { trial?: boolean }) {
     leave()
   }
 
+  /** Clear the marks only: keep the attempt, elapsed time and revisions. */
+  function resetInput() {
+    if (previous.current.completed) return
+    void commit(resetNonogramInput({ ...previous.current, elapsedMs: takeElapsed() }))
+  }
+
   useEffect(() => {
     if (saved.completed) return
     const tick = showTimer ? setInterval(() => {
@@ -78,7 +85,8 @@ GamePlayerProps & { trial?: boolean }) {
         void commit({ ...previous.current, elapsedMs: takeElapsed() })
     }, 5000)
     function visibility() {
-      if (previous.current.completed) return
+      // A daily challenge is timed; hiding the tab must not stop the clock.
+      if (previous.current.completed || challengeMode) return
       if (!document.hidden) { started.current = Date.now(); return }
       void commit({ ...previous.current, elapsedMs: takeElapsed() })
     }
@@ -88,7 +96,7 @@ GamePlayerProps & { trial?: boolean }) {
       clearInterval(checkpoint)
       document.removeEventListener('visibilitychange', visibility)
     }
-  }, [saved.completed, showTimer])
+  }, [challengeMode, saved.completed, showTimer])
 
   const celebrationStats = celebration !== undefined ? [
     { label: t('Grid size'), value: puzzle.rows.length + ' × ' + puzzle.columns.length },
@@ -97,22 +105,22 @@ GamePlayerProps & { trial?: boolean }) {
       ' · ' + t('Stop {stop} of {total}', { stop: packLocation.chapterStop, total: chapter?.puzzles.length ?? 0 }) }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
-    { kind: 'primary', label: t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: leave },
-    ...(trial ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
+    { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: finish ?? leave },
+    ...(trial || challengeMode ? [] : [{ kind: 'secondary' as const, label: t('Play again'), onClick: reset }]),
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
 
   return <>
     <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} chapter={chapter} packName={packName} testMode={testMode}
-      leave={exit} reset={reset} openSettings={openSettings} committed={saved.board} undo={saved.undo}
-      problem={problem} trial={trial} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard}/>
+      leave={exit} finish={finish} reset={reset} resetInput={resetInput} openSettings={openSettings} committed={saved.board} undo={saved.undo}
+      problem={problem} trial={trial} challengeMode={challengeMode} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard} replay={replay}/>
     {celebration !== undefined && <CelebrationOverlay reader={reader}
       result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
-        saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) })
-          : t('Your completion has been saved.'),
+        saveNote: trial ? t('Test complete') : problem ? t('Save failed. {detail}', { detail: knownMessage(t, problem) }) : undefined,
         saveError: Boolean(problem) && !trial }}
-      actions={celebrationActions} onClose={() => setCelebration(undefined)}/>}
+      actions={celebrationActions} heading={challengeMode ? t('Daily challenge completed') : undefined}
+      onClose={() => setCelebration(undefined)}>{standingsPanel}</CelebrationOverlay>}
   </>
 }
 
@@ -121,28 +129,38 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, reset, openSettings, committed, undo, problem, trial, testMode, elapsedMs, showTimer, onMove, leaderboard }: {
+function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, finish, reset, resetInput, openSettings, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard, replay }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
   chapter?: PackChapter
   packName: string
   leave: () => void
+  finish?: () => void
   reset: () => void
+  resetInput: () => void
   openSettings?: () => void
   testMode: boolean
   committed: Cell[]
   undo: Cell[][]
   problem: string
   trial: boolean
+  challengeMode?: boolean
   elapsedMs: number
   showTimer: boolean
   onMove: (cells: Cell[], undo: Cell[][]) => void
   leaderboard?: { open: () => void }
+  replay?: { label: string; backLabel?: string }
 }) {
   const t = useT()
   const width = puzzle.columns.length
   const height = puzzle.rows.length
+  const maxRowClues = Math.max(...puzzle.rows.map(runs => runs.length))
+  const maxColumnClues = Math.max(...puzzle.columns.map(runs => runs.length))
+  // The clue font is half the cell size (see nonograms.css). These factors turn
+  // that into the board width and height for the available container.
+  const widthFactor = width + maxRowClues * 0.425 + 0.25
+  const heightFactor = height + maxColumnClues * 0.575 + 0.15
   const [painted, setPainted] = useState<Cell[]>()
   const cells = painted ?? committed
   const rowConflicts = puzzle.rows.map((runs, row) =>
@@ -248,7 +266,7 @@ function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, reset, ope
     aria-labelledby="nonogram-puzzle-title">
     {art && <img className="pack-play-art" src={art} alt=""/>}
     <div className="game-navigation">
-      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Game menu')}</button>
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : 'Back')}</button>
       <div className="game-nav-tools">
         {testMode && !solved && <button className="text-button" onClick={autoSolve} title={t('Test environment')}>
           <WandSparkles size={17}/> {t('Auto solve')}
@@ -257,59 +275,67 @@ function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, reset, ope
       </div>
     </div>
     <div className="play-heading">
-      <div><div className="eyebrow">{pack ? packName : 'Nonograms'}</div><h1 id="nonogram-puzzle-title">{title}</h1></div>
+      <div><div className="eyebrow">{challengeMode ? t('Daily challenge') : pack ? packName : 'Nonograms'}</div><h1 id="nonogram-puzzle-title">{title}</h1></div>
       <div className="play-meta"><span className="badge">{height} × {width}</span>
         {showTimer && <span className="clock"><Timer size={17}/>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}
       </div>
     </div>
+    {replay && <p className="notice replay-notice" role="status">{replay.label}</p>}
     {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
     <div className="play-layout">
-      <div className="nonogram-board" data-solved={solved} data-size={width} style={{
-        '--columns': width,
-        '--row-clues': Math.max(...puzzle.rows.map(clue => clue.length)),
-      } as CSSProperties}>
-        <div className="nonogram-column-clues" aria-hidden="true">
-          {puzzle.columns.map((runs, column) => <div key={column} data-conflict={columnConflicts[column]}>{runs.map((run, index) => <span key={index}>{run}</span>)}</div>)}
-        </div>
-        <div className="nonogram-cells" role="group" aria-label={t('Puzzle grid')}
-          onPointerDown={startStroke} onPointerMove={paint} onPointerUp={endStroke}
-          onPointerCancel={endStroke} onLostPointerCapture={endStroke}>
-          {puzzle.rows.map((runs, row) => <div className="nonogram-row" key={row} role="group"
-            aria-label={t('Row {row}, clues {clues}', { row: row + 1, clues: runs.join(', ') })}>
-            <div className="nonogram-row-clue" data-conflict={rowConflicts[row]} aria-hidden="true">{runs.join(' ')}</div>
-            {puzzle.columns.map((columnRuns, column) => {
-              const index = row * width + column
-              const state = cells[index]
-              return <button key={column} className="nonogram-cell"
-                ref={element => { squares.current[index] = element }}
-                type="button" tabIndex={focus === index ? 0 : -1} data-mark={state} data-cell={index}
-                aria-disabled={solved}
-                aria-description={[
-                  rowConflicts[row] && t('Filled squares conflict with the row clues.'),
-                  columnConflicts[column] && t('Filled squares conflict with the column clues.'),
-                ].filter(Boolean).join(' ') || undefined}
-                aria-label={t('Column {column}, clues {clues}, {mark}', {
-                  column: column + 1, clues: columnRuns.join(', '),
-                  mark: t(state === 1 ? 'filled' : state === 2 ? 'marked blank' : 'unmarked'),
-                })}
-                onFocus={() => setFocus(index)}
-                onClick={event => { if (event.detail === 0) move(index, mode) }}
-                onContextMenu={event => { event.preventDefault(); move(index, 2) }}
-                onKeyDown={event => keyboard(event, index)}>
-                {state === 2 && !solved && <span aria-hidden="true">×</span>}
-              </button>
-            })}
-          </div>)}
+      <div className="board-wrap">
+        <div className="nonogram-board" data-solved={solved} data-size={width} style={{
+          '--columns': width,
+          '--row-clues': maxRowClues,
+          '--cell-width-factor': widthFactor,
+          '--cell-height-factor': heightFactor,
+          '--cell-width-share': 1 / (widthFactor * 1.02),
+          '--cell-height-share': 1 / (heightFactor * 1.02),
+          '--cell-cap': `${410 / widthFactor}px`,
+        } as CSSProperties}>
+          <div className="nonogram-column-clues" aria-hidden="true">
+            {puzzle.columns.map((runs, column) => <div key={column} data-conflict={columnConflicts[column]}>{runs.map((run, index) => <span key={index}>{run}</span>)}</div>)}
+          </div>
+          <div className="nonogram-cells" role="group" aria-label={t('Puzzle grid')}
+            onPointerDown={startStroke} onPointerMove={paint} onPointerUp={endStroke}
+            onPointerCancel={endStroke} onLostPointerCapture={endStroke}>
+            {puzzle.rows.map((runs, row) => <div className="nonogram-row" key={row} role="group"
+              aria-label={t('Row {row}, clues {clues}', { row: row + 1, clues: runs.join(', ') })}>
+              <div className="nonogram-row-clue" data-conflict={rowConflicts[row]} aria-hidden="true">{runs.join(' ')}</div>
+              {puzzle.columns.map((columnRuns, column) => {
+                const index = row * width + column
+                const state = cells[index]
+                return <button key={column} className="nonogram-cell"
+                  ref={element => { squares.current[index] = element }}
+                  type="button" tabIndex={focus === index ? 0 : -1} data-mark={state} data-cell={index}
+                  aria-disabled={solved}
+                  aria-description={[
+                    rowConflicts[row] && t('Filled squares conflict with the row clues.'),
+                    columnConflicts[column] && t('Filled squares conflict with the column clues.'),
+                  ].filter(Boolean).join(' ') || undefined}
+                  aria-label={t('Column {column}, clues {clues}, {mark}', {
+                    column: column + 1, clues: columnRuns.join(', '),
+                    mark: t(state === 1 ? 'filled' : state === 2 ? 'marked blank' : 'unmarked'),
+                  })}
+                  onFocus={() => setFocus(index)}
+                  onClick={event => { if (event.detail === 0) move(index, mode) }}
+                  onContextMenu={event => { event.preventDefault(); move(index, 2) }}
+                  onKeyDown={event => keyboard(event, index)}>
+                  {state === 2 && !solved && <span aria-hidden="true">×</span>}
+                </button>
+              })}
+            </div>)}
+          </div>
         </div>
       </div>
       <div className="play-controls">
         {solved && <section className="panel success" role="status">
-          <h2>{t('Puzzle solved')}</h2>
+          <h2>{t(challengeMode ? 'Daily challenge completed' : 'Puzzle solved')}</h2>
           {!trial && <div className="leaderboard-result">
             <strong>{displayTime(elapsedMs)}</strong>
             <span>{t(problem ? 'Save failed' : 'Saved')}</span>
           </div>}
-          <button className="primary" onClick={leave}>{t(trial ? 'Back to editor' : pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
+          <button className="primary" onClick={finish ?? leave}>{t(trial ? 'Back to editor' : challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle')}</button>
           {!trial && leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
         </section>}
         <div className="tools nonogram-tools" role="group" aria-label={t('Mark squares')}>
@@ -320,7 +346,7 @@ function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, reset, ope
           <button disabled={solved || !undo.length} onClick={() => onMove(undo[undo.length - 1], undo.slice(0, -1))}><Undo2 size={18}/> {t('Undo')}</button>
         </div>
         {!trial && !solved && <button className="text-button" onClick={() => {
-          if (confirm(t('Start over? Your current saved game will be deleted.'))) reset()
+          if (confirm(t('Reset the board? Your board clears, the game stays saved, and the timer keeps running.'))) resetInput()
         }}><RotateCcw size={16}/> {t('Reset puzzle')}</button>}
       </div>
     </div>

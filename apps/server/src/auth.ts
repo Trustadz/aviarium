@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import * as openid from 'openid-client'
 import { z } from 'zod'
 import { accountRoles, canEditGames, type AccountRole } from '../../../packages/game-sdk/src/roles.js'
-import { serverGames } from './games.js'
+import { gameRegistry } from './game-registry.js'
 import { callback, loginEnabled, oidc, origin, pool, testEnvironment, transaction } from './config.js'
 
 export interface User { id: string; name: string; role: AccountRole }
@@ -24,7 +24,7 @@ export const userFields = 'u.id,COALESCE(u.display_name,u.name) AS name,u.role'
 
 // Older installed clients read editorGames until their application shell updates.
 export function withLegacyEditorGames<T extends User>(user: T) {
-  return { ...user, editorGames: canEditGames(user.role) ? [...serverGames.keys()] : [] }
+  return { ...user, editorGames: canEditGames(user.role) ? gameRegistry.all().map(game => game.definition.id) : [] }
 }
 export class HttpError extends Error {
   constructor(readonly statusCode: number, readonly code: ApiCode, readonly values: Record<string, string> = {}) {

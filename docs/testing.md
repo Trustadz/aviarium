@@ -1,6 +1,6 @@
 # Verification
 
-Run `npm run typecheck`, `npm test`, and `npm run build`. Core tests cover the solver outcomes, difficulty, generated puzzle reproducibility, move rules, leaderboard board grouping and cooldowns, and backup settings.
+Run `npm run typecheck`, `npm test`, and `npm run build`. Core tests cover the solver outcomes, difficulty, generated puzzle reproducibility, move rules, leaderboard board grouping and cooldowns, and backup settings. `npm test` also runs the changelog compiler and pull-request diff-rule tests in `scripts/*.test.mjs`; `npm run changelog:check` validates the actual fragments. The separate **Changelog** workflow runs on pull requests and pushes to `main` without the browser suite.
 
 For a local Compose smoke test, install Chromium or run `npx playwright install chromium`. Set `AVIARIUM_CHROMIUM` if using a system Chromium executable. Set `AVIARIUM_TEST_URL` to the local running app. The script defaults to `http://localhost:4183`. Point it at a disposable deployment. It creates draft, job, save, and publication records when administrator and player fixtures are supplied.
 
@@ -11,7 +11,7 @@ To fill a disposable instance through the real API, run `AVIARIUM_TEST_URL=http:
 Mobile checks cover 390×844, 360×800, 320×568 and 844×390 landscape, plus 200% text: no horizontal overflow, 44px targets, sticky hub/board navigation, the two-up player summary and Quick Play grid, the collapsed board row, the twenty-at-a-time admin table, and long removal reasons that scroll inside the dialog.
 The leaderboard browser checks also cover the raw **All records** view and the pack aggregate card/detail; verify the account menu opens below the upper-right profile and the bottom navigation fits at 393px with an editor account.
 
-Check layered Back behavior in a browser and on a phone: from a pack game, Back should go to the pack roadmap, then the game menu, then the library; Quick Play should skip the selector and return to the game menu. Opening a game from Continue, History, or a deep link should still land on the level selector rather than the library. In Studio, Back should move from test play to the pack editor, then to **My packs**, then to Studio (or the game menu it was opened from), and reloading a pack editor should restore it.
+Check the app shell and Back behavior in a browser and on a phone. On desktop the app should have a full-height sidebar with the brand, destinations, account, and offline status, and no top header. On a phone it should have a non-sticky header with the brand and account plus the fixed bottom destination bar. Gameplay and the pack roadmap should be full-screen with neither shell. Back from a pack level opened on the roadmap should return to that roadmap; Back from a level opened through Continue, History, or a leaderboard should return to that screen. A directly opened deep link should still return through its seeded canonical parents. Back must never open or resume a level, and a level opened by mistake and left without a move should not appear in Continue or as Resume. The completion screen should still offer **Back to roadmap** (or **Choose another puzzle**) as an explicit progression action. In Studio, Back should move from test play to the pack editor, then to **My packs**, then to Studio (or the game menu it was opened from), and reloading a pack editor should restore it.
 
 Before a household deployment, verify the real flow against the existing Pocket ID provider. Try sign-in and sign-out and confirm Player, Creator, and Admin permissions. Independently confirm that two accounts see the same level and grade after publishing. Install and play offline on iOS, Android, and the target BOOX device. Restore a backup into a temporary database and check the relevant published level, player save, and completion. Browser storage is device-dependent, so test download, airplane mode, and reopen on the actual devices.
 
@@ -33,3 +33,59 @@ AVIARIUM_BROWSER_TEST_DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432
 The runner creates and removes separate databases for the OIDC, localization, and signed-in smoke tests. The signed-in run also executes `tests/leaderboards-smoke.mjs` with a second player fixture and the disposable database URL; it covers Sudoku and Nonograms boards, the per-exact-puzzle cooldown, tie ranks, admin removal, the once-only notice, and playing a result's exact grid. The **Verify** workflow runs the same suite on pull requests and pushes to `main`. **Publish container** calls it again when you start a manual release.
 
 The browser suite also upgrades a database containing legacy Sudoku publications, checks ordered pack expansion with ten completed stops, and covers offline Studio autosave and level rule overrides.
+
+## Daily challenges
+
+The challenge foundation has pure timezone tests in
+`apps/server/src/challenges-time.test.ts`; they cover UTC, Amsterdam, New York,
+Kolkata, Chatham and Lord Howe, including spring gaps, fall repeats and 23/25-hour
+days.
+
+For the API and browser flow, use a disposable instance with
+`TEST_ENVIRONMENT=true`, `LOGIN_ENABLED=false`, and the daily series enabled:
+
+1. Two accounts see the same Sudoku level for the day.
+2. The first account starts once; a second tab/device resumes the same
+   `sessionId`. Start after completion is rejected.
+3. Input-only reset clears the board and keeps the elapsed time and the same
+   attempt. It does not create a new save.
+4. A completion before reset posts one `challenge:<slotId>` result. The
+   after-game panel shows the top three and the viewer. The challenge board is
+   closed to new results after `ends_at`; a late completion is saved but not
+   posted.
+5. The challenge level does not appear in the catalog, Studio, general boards or
+   the normal History/Continue replay. A general progress mutation for a
+   `source='Challenge'` level is rejected.
+6. A past day shows its final board and **Play this seed**. The replay is a
+   normal generated game and posts to the general board.
+7. Admin settings enable/disable the feature, change the reset minute and
+   enabled difficulties, and **Prepare now** for today or a past `periodKey`.
+8. Check the nav badge, 360/393 px and 200% text, English/Dutch, offline and
+   terminal-sync states.
+
+The pack-content unit test uses the definition-backed Sudoku `ServerGame`
+adapter, not the deleted legacy server-game module.
+
+The unit suite runs `apps/server/src/game-fixture.test.ts`, which sends a
+package-backed third definition through the server compatibility map and the
+challenge derivation, and `apps/server/src/game-source-scan.test.ts`, which fails when
+a platform module branches on a `'sudoku'`/`'nonograms'` string literal outside
+the explicit registration/game/legacy allowlist.
+
+The browser suite also runs `tests/platform-fixture-smoke.mjs`, which starts
+`makeApp(createGameRegistry([sudokuGame, fixtureGame]))` on a disposable
+database and exercises the package-backed third game through real HTTP Quick
+Play, progress, leaderboard and challenge endpoints.
+
+The browser suite runs `tests/challenges-smoke.mjs` on a disposable database. It
+starts its own `TEST_ENVIRONMENT=true` server, enables a two-game series,
+claims and completes one Sudoku with a second start rejected, verifies the
+server time floor (completion ten seconds after the claim with a client-reported
+one second), starts a late attempt before reset and completes it after reset,
+checks that the late result is saved but not posted, checks history and launches
+the replay through the generic Quick Play endpoint, then checks the next day and
+the nav badge.
+
+`TEST_ENVIRONMENT=true` also accepts the test-only
+`X-Aviarium-Test-Now: <ISO>` header on challenge and progress requests so
+boundary/late scenarios do not wait for real time. Production ignores it.

@@ -9,6 +9,9 @@ import type {
 } from '../../../packages/game-sdk/src/leaderboards.js'
 import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { api, errorMessage } from './api.js'
+import { Avatar } from './Avatar.js'
+import { LeaderboardChallenges } from './LeaderboardChallenges.js'
+import { hasLeaderboard } from './game-definitions.js'
 import type { WebGame } from './game-web.js'
 import { knownMessage, useT, type Translate } from './i18n.js'
 import type { Message } from './messages.js'
@@ -19,7 +22,7 @@ interface CatalogEntry extends LeaderboardSummary { game: string; player: Leader
 interface CatalogData { games: CatalogEntry[]; player: LeaderboardPlayerSummary }
 interface HubLevel extends LeaderboardSummary { level: GameLevel }
 interface HubData {
-  game: string; quick: LeaderboardSummary[]; packs: LeaderboardPackSummary[]; standalone: HubLevel[]
+  game: string; quick: LeaderboardSummary[]; packs: LeaderboardPackSummary[]
   player: LeaderboardPlayerSummary
 }
 interface BoardDetail extends LeaderboardSummary { level?: GameLevel; cooldown?: LeaderboardCooldown | null }
@@ -73,14 +76,6 @@ function boardGame(board: LeaderboardBoardInfo) {
   return findGame(board.game)
 }
 
-function Avatar({ name, url }: { name: string; url?: string | null }) {
-  const [failed, setFailed] = useState(false)
-  if (url && !failed)
-    return <img className="leaderboard-avatar" src={url} alt="" referrerPolicy="no-referrer" loading="lazy"
-      onError={() => setFailed(true)}/>
-  return <span className="leaderboard-avatar leaderboard-avatar-initials" aria-hidden="true">
-    {(name.trim().slice(0, 1) || '?').toUpperCase()}</span>
-}
 
 function PlayerStat({ kind, result }: { kind: 'last' | 'best'; result: LeaderboardPlayerResult }) {
   const t = useT()
@@ -163,6 +158,18 @@ export function LeaderboardCatalog({ games, sessions, accountId, online, link }:
   const [data, setData] = useState<CatalogData>()
   const [problem, setProblem] = useState('')
   const [loading, setLoading] = useState(false)
+  const [tab, setTab] = useState<'general' | 'challenges'>(() =>
+    window.location.hash === '#challenges' ? 'challenges' : 'general')
+  useEffect(() => {
+    const sync = () => setTab(window.location.hash === '#challenges' ? 'challenges' : 'general')
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
+  const chooseTab = (next: 'general' | 'challenges') => {
+    setTab(next)
+    const base = window.location.pathname + window.location.search
+    window.history.replaceState(null, '', next === 'challenges' ? base + '#challenges' : base)
+  }
   useEffect(() => {
     if (!online) { setData(undefined); return }
     let current = true
@@ -172,7 +179,7 @@ export function LeaderboardCatalog({ games, sessions, accountId, online, link }:
       error => { if (current) { setProblem(errorMessage(error)); setLoading(false) } })
     return () => { current = false }
   }, [accountId, online])
-  const participating = games.filter(game => game.leaderboards)
+  const participating = games.filter(game => hasLeaderboard(game.id))
   const recent = new Set(sessions.map(session => session.data.game))
   const term = query.trim().toLowerCase()
   const ordered = [...participating].sort((a, b) =>
@@ -182,22 +189,35 @@ export function LeaderboardCatalog({ games, sessions, accountId, online, link }:
   return <section className="catalog leaderboard-catalog">
     <div className="section-heading">
       <h1>{t('Leaderboards')}</h1>
-      <label className="search"><Search size={18}/><input value={query} onChange={event => setQuery(event.target.value)}
-        placeholder={t('Search games')} aria-label={t('Search games')}/></label>
     </div>
-    {!online && <p className="notice">{t('Connect to view leaderboards.')}</p>}
-    {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
-    {loading && <p role="status">{t('Loading…')}</p>}
-    {data && <LeaderboardPlayerPanel player={data.player} link={link}/>}
-    {data && <section className="leaderboard-games-section">
-      <div className="section-heading"><h2>{t('Games')}</h2>
-        <span className="badge">{t('{count, plural, one {# game} other {# games}}', { count: matches.length })}</span></div>
-      <div className="leaderboard-games">{matches.map(game => {
-        const entry = data.games.find(item => item.game === game.id)
-        return entry ? <GameCard key={game.id} entry={entry} game={game} link={link}/> : null
-      })}</div>
-      {!matches.length && <p className="empty">{t('No games match this view.')}</p>}
-    </section>}
+    <div className="leaderboard-tabs" role="tablist" aria-label={t('Leaderboard views')}>
+      <button id="leaderboard-tab-general" role="tab" aria-controls="leaderboard-panel-general"
+        aria-selected={tab === 'general'} className={tab === 'general' ? 'active' : ''}
+        onClick={() => chooseTab('general')}>{t('General')}</button>
+      <button id="leaderboard-tab-challenges" role="tab" aria-controls="leaderboard-panel-challenges"
+        aria-selected={tab === 'challenges'} className={tab === 'challenges' ? 'active' : ''}
+        onClick={() => chooseTab('challenges')}>{t('Challenges')}</button>
+    </div>
+    {tab === 'general' && <div className="leaderboard-search-row"><label className="search"><Search size={18}/>
+      <input value={query} onChange={event => setQuery(event.target.value)}
+        placeholder={t('Search games')} aria-label={t('Search games')}/></label></div>}
+    {tab === 'challenges' ? <div id="leaderboard-panel-challenges" role="tabpanel"
+      aria-labelledby="leaderboard-tab-challenges"><LeaderboardChallenges accountId={accountId} online={online} link={link}/></div> : <div
+      id="leaderboard-panel-general" role="tabpanel" aria-labelledby="leaderboard-tab-general">
+      {!online && <p className="notice">{t('Connect to view leaderboards.')}</p>}
+      {problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>}
+      {loading && <p role="status">{t('Loading…')}</p>}
+      {data && <LeaderboardPlayerPanel player={data.player} link={link}/>}
+      {data && <section className="leaderboard-games-section">
+        <div className="section-heading"><h2>{t('Games')}</h2>
+          <span className="badge">{t('{count, plural, one {# game} other {# games}}', { count: matches.length })}</span></div>
+        <div className="leaderboard-games">{matches.map(game => {
+          const entry = data.games.find(item => item.game === game.id)
+          return entry ? <GameCard key={game.id} entry={entry} game={game} link={link}/> : null
+        })}</div>
+        {!matches.length && <p className="empty">{t('No games match this view.')}</p>}
+      </section>}
+    </div>}
   </section>
 }
 
@@ -307,7 +327,7 @@ export function GameLeaderboards({ game, accountId, online, link, back }: {
   }, [accountId, game.id, online])
   return <section className="catalog leaderboard-hub">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {knownMessage(t, game.title)}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <a className="text-button" href="/leaderboards" onClick={event => link(event, '/leaderboards')}>{t('All leaderboards')}</a></div>
     <div className="section-heading"><h1>{t('{game} leaderboards', { game: knownMessage(t, game.title) })}</h1></div>
     {!online && <p className="notice">{t('Connect to view leaderboards.')}</p>}
@@ -325,12 +345,6 @@ export function GameLeaderboards({ game, accountId, online, link, back }: {
           <span className="badge">{t('{count, plural, one {# pack} other {# packs}}', { count: hub.packs.length })}</span></div>
         <div className="leaderboard-games leaderboard-packs">{hub.packs.map(pack =>
           <PackCard key={pack.id + ':' + pack.revision} pack={pack} game={game} link={link}/>)}</div>
-      </section>}
-      {hub.standalone.length > 0 && <section className="leaderboard-section">
-        <div className="section-heading"><h2>{t('Puzzles')}</h2>
-          <span className="badge">{t('{count, plural, one {# board} other {# boards}}', { count: hub.standalone.length })}</span></div>
-        <div className="panel leaderboard-board-list">{hub.standalone.map(entry =>
-          <BoardRow key={entry.board.key} entry={entry} game={game} link={link}/>)}</div>
       </section>}
     </> : online ? <p role="status">{t('Loading…')}</p> : null}
   </section>
@@ -477,7 +491,7 @@ export function LeaderboardBoardView({ game, boardKey, accountId, online, back, 
   const title = detail ? leaderboardBoardTitle(t, detail.board, game) : ''
   return <section className="catalog leaderboard-board">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {t('{game} leaderboards', { game: knownMessage(t, game.title) })}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <button className="text-button" onClick={copyLink} aria-live="polite">{copied ? t('Copied') : t('Copy link')}</button></div>
     {detail ? <>
       <div className="leaderboard-board-heading">
@@ -551,7 +565,7 @@ export function LeaderboardPackView({ game, packId, revision, accountId, online,
   const title = detail ? knownMessage(t, detail.title) : ''
   return <section className="catalog leaderboard-board leaderboard-pack-view">
     <div className="game-navigation"><button className="text-button back" onClick={back}>
-      <ArrowLeft size={17}/> {t('{game} leaderboards', { game: knownMessage(t, game.title) })}</button>
+      <ArrowLeft size={17}/> {t('Back')}</button>
       <button className="text-button" onClick={copyLink} aria-live="polite">{copied ? t('Copied') : t('Copy link')}</button></div>
     {detail ? <>
       <div className="leaderboard-board-heading"><div>

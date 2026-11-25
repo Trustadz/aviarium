@@ -14,7 +14,7 @@ export function GameGuide({ game, menuUrl, sections, leave }: {
   useEffect(() => { heading.current?.focus() }, [])
 
   return <article className="catalog game-guide" aria-labelledby="game-guide-title">
-    <a className="text-button back" href={menuUrl} onClick={leave}><ArrowLeft size={17}/> {t('{game} menu', { game })}</a>
+    <a className="text-button back" href={menuUrl} onClick={leave}><ArrowLeft size={17}/> {t('Back')}</a>
     <h1 id="game-guide-title" ref={heading} tabIndex={-1}>{t('How to play {game}', { game })}</h1>
     {sections.map(section => <section className="panel game-guide-section" key={section.title}>
       <h2>{t(section.title)}</h2>

@@ -40,13 +40,15 @@ npm run build
 
 ## Publish a release
 
-1. Open a draft PR from a feature branch. Test the local preview when applicable and wait for the automatic **Verify** checks.
+1. Open a draft PR from a feature branch. Test the local preview when applicable and wait for the automatic **Verify** and **Changelog** checks. For each user-visible change, add one new fragment under [`changelog.d/`](changelog.d/README.md); do not edit `CHANGELOG.md`. Pull requests with no user-visible change need the `changelog-not-required` label.
 2. Merge all the approved PRs you want to ship together.
 3. On GitHub, go to **Actions → Publish container → Run workflow**. Under **Use workflow from**, select **main**. Leave the release type on **patch** for fixes, or select **minor** for features or **major** for breaking changes. Click **Run workflow**.
 
-The workflow reruns verification and calculates the next version from the latest stable Git tag. For example, from `v0.1.16`, patch yields `v0.1.17`, minor yields `v0.2.0`, and major yields `v1.0.0`. It sets the version in the Docker build so it appears on the About page, publishes both image tags, and creates a GitHub Release with generated notes and source downloads. Running it again on the same tagged commit reuses that release number.
+The workflow reruns verification and calculates the next version from the latest stable Git tag. For example, from `v0.1.16`, patch yields `v0.1.17`, minor yields `v0.2.0`, and major yields `v1.0.0`. It sets the version in the Docker build so it appears on the About page, publishes both image tags, and creates a GitHub Release with source downloads. Release notes combine, in order, any curated `## Unreleased` content, the rendered `changelog.d/` fragments, and GitHub's generated pull-request list. Running the workflow again on the same tagged commit reuses that release number.
 
-Use a separate PR for each change and merge all the PRs you want in the same release before running the workflow. Label PRs `enhancement` or `feature` for **Added**, and `bug` or `fix` for **Fixed**. Unlabeled PRs appear under **Other changes**. You can edit the generated notes on the repository's **Releases** page.
+After publishing, open a small post-release PR and run `npm run changelog:release -- X.Y.Z`. That folds the remaining `## Unreleased` content and fragments into a dated version section, leaves `## Unreleased` empty, preserves earlier releases, and deletes the consumed fragments. Apply `changelog-not-required` to that PR because it intentionally edits `CHANGELOG.md`. Finish this before the next release so fragments are never published twice.
+
+Use a separate PR for each change and merge all the PRs you want in the same release before running the workflow. Label PRs `enhancement` or `feature` for **Added**, and `bug` or `fix` for **Fixed**. Unlabeled PRs appear under **Other changes**. You can edit the release notes on the repository's **Releases** page.
 
 From a terminal with the GitHub CLI, use `gh workflow run container.yml --ref main` for a patch release or add `-f bump=minor` or `-f bump=major`.
 
