@@ -7,21 +7,24 @@ persistence, one-attempt claim, leaderboard closure, history and replay. A game
 supplies its normal level generation and result interpretation; no game needs a
 challenge endpoint, scheduler, leaderboard or UI.
 
-The first release uses each game's **default rules** and a fixed challenge
-profile (Sudoku Medium). Enabled difficulty options can be narrowed in
-**Administration → Challenge settings**; pack-rule variants (hints, lives,
-timer, diagonal) are deliberately deferred and remain a future option-group
-extension.
+The first release uses each game's **default rules**. Admins configure a list of
+game selections in **Administration → Daily Challenge**; each selection picks a
+game and the option choices available to that candidate. A game may appear more
+than once with different option sets, but a day still uses each game at most
+once. Pack-rule variants (hints, lives, timer, diagonal) are deliberately
+deferred and remain a future option-group extension.
 
 ## Entities
 
 - **Series** (`challenge_series`): the configured daily challenge. One row,
-  `daily`, with `enabled` (default `true`), `game_limit`, `eligible_games`,
-  `game_options`, `timezone`, `reset_minute`, and a generation version.
+  `daily`, with `enabled` (default `true`), `game_limit`, `game_selections`,
+  legacy `eligible_games`/`game_options` compatibility fields, `timezone`,
+  `reset_minute`, and a generation version. `game_selections` is the list of
+  repeatable `{ game, options }` candidates.
 - **Occurrence** (`challenge_occurrences`): one local day, `period_key`
   (`YYYY-MM-DD`), absolute `starts_at`/`ends_at`, a timezone/reset snapshot, a
-  random seed, and a `settings` snapshot so later admin changes cannot reshuffle
-  a day that is already prepared.
+  random seed, and a `settings` snapshot (including game selections) so later
+  admin changes cannot reshuffle a day that is already prepared.
 - **Slot** (`challenge_slots`): one game in the occurrence. Exactly one slot per
   game per day. It stores the chosen options/choices, the slot seed, and the
   exact `published_levels` revision (`source='Challenge'`,
@@ -116,7 +119,7 @@ Write requests still require the configured origin. API responses are
 | `POST /api/progress` | Existing save sync plus optional `challenge: { attemptId }`. Verifies the attempt, writes the challenge result and the matching normal game result, and returns `challenge: { attemptId, status, ranked, invalid? }`. A general mutation for a `source='Challenge'` level is rejected with `challenge_required`. |
 | `GET /api/challenges/games` | Registered challenge-capable games and their option groups. Used by admin/discovery; not required by the player UI. |
 | `GET /api/admin/challenges/settings` | Series settings, registered games/options, current/next occurrence, `appliesFrom`, minimum window. |
-| `PATCH /api/admin/challenges/settings` | Enable/disable, reset minute, game limit, eligible games, and per-game option values. `expectedUpdatedAt` guards two-admin edits. Changes apply to the next occurrence. |
+| `PATCH /api/admin/challenges/settings` | Enable/disable, reset minute, game limit and repeatable game selections (`{ game, options }`). Legacy eligible-games/options payloads are accepted for compatibility. `expectedUpdatedAt` guards two-admin edits. Changes apply to the next occurrence. |
 | `POST /api/admin/challenges/prepare` | Force ensure/prepare today (or a `periodKey`) and return diagnostics. Retries failed slots with the same recipe; it is not an editor. |
 
 `GET /api/challenges/summary` returns `200 { enabled: false }` when the feature
@@ -131,28 +134,41 @@ still allows in-flight completions.
 | `TZ` | process timezone | IANA timezone for daily boundaries. Compose defaults to `UTC`; invalid values fail startup. |
 | `CHALLENGES_ENABLED` | `true` | Emergency kill switch. Set `false` to stop scheduling and writes. |
 
-The reset minute, enabled state, difficulty options, eligible games and game
-limit are admin settings in the database.
+The reset minute, enabled state, game selections and game limit are admin
+settings in the database. `TZ` and `CHALLENGES_ENABLED` are environment
+settings.
 
 ## Administration
 
-**Administration → Challenge settings** provides:
+**Administration → Daily Challenge** provides:
 
 - enable/disable;
-- games per day (1–2 with the current eligible games);
-- games in rotation (enable/disable each eligible game; the limit follows the
-  selected count);
+- games per day;
+- repeatable **game selections**: choose a game and its option choices, and add
+  the same game again for a different option set (for example Nonograms 5 × 5
+  with Easy/Medium/Hard and Nonograms 10 × 10 with Easy/Medium). The same game
+  is still used at most once per day;
 - reset time as 24-hour hour/minute selects;
 - read-only timezone from the environment, rendered as static text rather than
   an input;
 - the global **Enable daily challenges** toggle at the top (default on); turning
   it off removes the **Challenges** menu item;
-- per-game enabled generation options (Sudoku difficulties; Nonograms grid size
-  and difficulties);
 - current/next occurrence status and **Prepare now**.
 
+The scheduler follows four steps:
+
+1. create `games per day` slots;
+2. assign distinct games to the slots;
+3. choose one configured selection profile for each game, then one enabled value
+   for each option group;
+4. generate the resulting levels deterministically from the occurrence seed so
+   every player receives the same puzzles.
+
+Administration is organized into **Backups**, **Users**, **Leaderboards**,
+**Packs** and **Daily Challenge** tabs.
+
 There is no challenge editor. Puzzle content is generated from the game and the
-enabled options; an admin cannot pin or author a daily puzzle.
+selected options; an admin cannot pin or author a daily puzzle.
 
 ## First-release scope and deferred work
 

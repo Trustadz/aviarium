@@ -70,7 +70,9 @@ try {
   await db.connect()
   try {
     await db.query(`UPDATE challenge_series SET enabled=true, game_limit=2, reset_minute=0, timezone='UTC',
-      game_options=$1::jsonb WHERE id='daily'`, [JSON.stringify({
+      game_options=$1::jsonb,
+      game_selections='[{"game":"sudoku","options":{"difficulty":["Medium"]}},{"game":"nonograms","options":{"size":["10"],"difficulty":["Easy","Medium","Hard"]}}]'::jsonb
+      WHERE id='daily'`, [JSON.stringify({
         sudoku: { difficulty: ['Medium'] },
         nonograms: { size: ['10'], difficulty: ['Easy', 'Medium', 'Hard'] },
       })])
@@ -84,6 +86,19 @@ try {
     const settings = await request('/api/admin/challenges/settings', { headers: headers1, now: clock.day })
     assert.equal(settings.enabled, true)
     assert.equal(settings.gameLimit, 2)
+
+    const saved = await request('/api/admin/challenges/settings', { method: 'PATCH', headers: headers1,
+      now: clock.day, body: {
+        enabled: true,
+        gameLimit: 2,
+        gameSelections: [
+          { game: 'sudoku', options: { difficulty: ['Medium'] } },
+          { game: 'nonograms', options: { size: [10], difficulty: ['Easy', 'Medium', 'Hard'] } },
+        ],
+      } })
+    assert.equal(saved.gameLimit, 2)
+    assert.equal(saved.gameSelections.length, 2)
+    assert.deepEqual(saved.gameSelections[0].options.difficulty, ['Medium'])
 
     const day = await request('/api/challenges', { headers: headers1, now: clock.day })
     assert.ok(day.occurrence, 'today has an occurrence')

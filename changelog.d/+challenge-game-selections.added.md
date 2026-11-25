@@ -1,0 +1,1 @@
+**Configurable daily game selections.** Administrators can add the same game more than once with different option sets while a day still uses each game at most once. Challenge settings now save reliably, and Administration is organized into Backups, Users, Leaderboards, Packs and Daily Challenge tabs.

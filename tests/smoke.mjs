@@ -714,6 +714,7 @@ try {
     await adminPage.getByRole('heading', { name: 'Administration' }).waitFor()
     await adminPage.getByRole('button', { name: 'Run now' }).waitFor()
     if (playerToken) {
+      await adminPage.getByRole('tab', { name: 'Users', exact: true }).click()
       const users = await request('/api/admin/users', { headers: adminHeaders })
       const member = (await request('/api/me', { headers: playerHeaders })).user
       const person = users.find(item => item.id === member.id)
