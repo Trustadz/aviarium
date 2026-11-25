@@ -13,8 +13,10 @@ import {
   addCivilDays, localBoundary, nextOccurrenceStart, occurrenceFor, parsePeriodKey,
 } from './time.js'
 import type { ChallengeGameRuntime } from './types.js'
+import type { ChallengeGameSelection } from '../../../../packages/game-sdk/src/challenges.js'
 import {
-  ensureOccurrence, minimumWindowMinutes, occurrenceView, prepareOccurrence, readSeries, seriesView, syncSeriesTimezone,
+  ensureOccurrence, minimumWindowMinutes, normalizeSelections, occurrenceView, prepareOccurrence, readSeries,
+  seriesView, syncSeriesTimezone,
   type OccurrenceRow, type SeriesRow, type SlotRow,
 } from './store.js'
 
@@ -404,11 +406,16 @@ export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMa
 
   app.patch('/api/admin/challenges/settings', async request => {
     await requireUser(request, 'admin')
+    const optionIds = z.union([z.string(), z.number()])
     const input = z.strictObject({
       enabled: z.boolean().optional(),
       gameLimit: z.number().int().min(1).max(50).optional(),
       eligibleGames: z.array(gameParam).nullable().optional(),
-      gameOptions: z.record(z.string(), z.record(z.string(), z.array(z.string()))).optional(),
+      gameOptions: z.record(z.string(), z.record(z.string(), z.array(optionIds))).optional(),
+      gameSelections: z.array(z.strictObject({
+        game: gameParam,
+        options: z.record(z.string(), z.array(optionIds)),
+      })).min(1).optional(),
       resetMinute: z.number().int().min(0).max(1439).optional(),
       expectedUpdatedAt: z.string().datetime().optional(),
     }).parse(request.body)
@@ -419,40 +426,53 @@ export function registerChallenges(app: FastifyInstance, serverGames: ReadonlyMa
       throw new HttpError(409, 'challenge_settings_conflict')
 
     const capable = new Map(challengeGames.map(game => [game.id, game]))
-    const eligible = input.eligibleGames === undefined ? series.eligible_games : input.eligibleGames
-    if (eligible) {
-      const unknown = eligible.find(id => !capable.has(id))
-      if (unknown) throw new HttpError(422, 'challenge_game_unknown', { game: unknown })
-      if (!eligible.length) throw new HttpError(422, 'challenge_no_eligible_games')
+    const normalize = (values: readonly (string | number)[] | undefined) => (values ?? []).map(String)
+    const legacyEligible = input.eligibleGames === undefined ? series.eligible_games : input.eligibleGames
+    const legacyOptions = { ...(series.game_options ?? {}), ...(input.gameOptions ?? {}) }
+    let selections: ChallengeGameSelection[]
+    if (input.gameSelections) {
+      selections = input.gameSelections.map(selection => ({
+        game: selection.game,
+        options: Object.fromEntries(Object.entries(selection.options).map(([key, ids]) => [key, normalize(ids)])),
+      }))
+    } else if (input.eligibleGames !== undefined || input.gameOptions !== undefined) {
+      const ids = legacyEligible ?? [...capable.keys()]
+      selections = ids.map(game => ({ game, options: Object.fromEntries(
+        Object.entries(legacyOptions[game] ?? {}).map(([key, values]) => [key, normalize(values as (string | number)[])])) }))
+    } else {
+      selections = normalizeSelections(series.game_selections.length ? series.game_selections :
+        ([...capable.keys()].map(game => ({ game, options: legacyOptions[game] ?? {} })) as ChallengeGameSelection[]))
     }
-    const options = { ...(series.game_options ?? {}), ...(input.gameOptions ?? {}) }
-    for (const [gameId, groups] of Object.entries(input.gameOptions ?? {})) {
-      const game = capable.get(gameId)
-      if (!game) throw new HttpError(422, 'challenge_game_unknown', { game: gameId })
+    if (!selections.length) throw new HttpError(422, 'challenge_no_eligible_games')
+
+    for (const selection of selections) {
+      const game = capable.get(selection.game)
+      if (!game) throw new HttpError(422, 'challenge_game_unknown', { game: selection.game })
       for (const group of game.optionGroups) {
-        const ids = groups[group.key]
-        if (!ids || !ids.length) throw new HttpError(422, 'challenge_options_required', { game: gameId })
-        if (ids.some(id => !group.choices.some(choice => choice.id === id)))
-          throw new HttpError(422, 'challenge_game_unknown', { game: gameId })
+        const ids = normalize(selection.options[group.key] ?? group.defaultEnabled)
+          .filter(id => group.choices.some(choice => choice.id === id))
+        if (!ids.length) throw new HttpError(422, 'challenge_options_required', { game: selection.game })
+        selection.options[group.key] = ids
       }
     }
-    const allowed = challengeGames.filter(game => !eligible || eligible.includes(game.id))
-    if (!allowed.length) throw new HttpError(422, 'challenge_no_eligible_games')
+    const distinctGames = [...new Set(selections.map(selection => selection.game))]
+    const options: Record<string, Record<string, string[]>> = {}
+    const eligible: string[] = distinctGames
+    for (const selection of selections) {
+      const groups = options[selection.game] ??= {}
+      for (const [key, ids] of Object.entries(selection.options)) {
+        groups[key] = [...new Set([...(groups[key] ?? []), ...ids])]
+      }
+    }
     const gameLimit = input.gameLimit ?? series.game_limit
-    if (gameLimit > allowed.length)
-      throw new HttpError(422, 'challenge_game_limit_invalid', { count: String(allowed.length) })
-    for (const game of allowed) {
-      for (const group of game.optionGroups) {
-        const ids = options[game.id]?.[group.key] ?? group.defaultEnabled
-        if (!ids?.length) throw new HttpError(422, 'challenge_options_required', { game: game.id })
-      }
-    }
+    if (gameLimit > distinctGames.length)
+      throw new HttpError(422, 'challenge_game_limit_invalid', { count: String(distinctGames.length) })
 
     const { rows: [updated] } = await pool.query<SeriesRow>(`UPDATE challenge_series SET
-        enabled=$1,game_limit=$2,eligible_games=$3,game_options=$4,reset_minute=$5,updated_at=now()
-      WHERE id=$6 RETURNING *`,
+        enabled=$1,game_limit=$2,eligible_games=$3,game_options=$4,reset_minute=$5,game_selections=$6,updated_at=now()
+      WHERE id=$7 RETURNING *`,
     [input.enabled ?? series.enabled, gameLimit, eligible, JSON.stringify(options),
-      input.resetMinute ?? series.reset_minute, series.id])
+      input.resetMinute ?? series.reset_minute, JSON.stringify(selections), series.id])
     if (updated.enabled) {
       const ensured = await ensureOccurrence(pool, updated, now)
       if (ensured.occurrence && !ensured.occurrence.prepared_at)

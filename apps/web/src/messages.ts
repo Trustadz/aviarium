@@ -967,6 +967,16 @@ export const dutch = {
   "Locked": "Vergrendeld",
   "Complete the previous chapter to unlock": "Voltooi het vorige hoofdstuk om dit te ontgrendelen",
   "Complete the previous chapter to unlock this chapter.": "Voltooi het vorige hoofdstuk om dit hoofdstuk te ontgrendelen.",
+  "Set the daily reset and the game selections. Challenge content is generated, never authored here.": "Stel de dagelijkse reset en de spelselecties in. Uitdagingsinhoud wordt gegenereerd en hier niet geschreven.",
+  "Game selections": "Spelselecties",
+  "Each row is a possible daily game. Add a game more than once to offer different option sets; a game is still used at most once per day.": "Elke rij is een mogelijk dagelijks spel. Voeg een spel meerdere keren toe voor verschillende optiesets; een spel wordt nog steeds maximaal één keer per dag gebruikt.",
+  "Game selection {position}": "Spelselectie {position}",
+  "Add game selection": "Spelselectie toevoegen",
+  "Add at least one game selection.": "Voeg minstens één spelselectie toe.",
+  "Enable at least one option for every selected game.": "Schakel voor elk geselecteerd spel minstens één optie in.",
+  "Manage Aviarium accounts, content and scheduled database backups.": "Beheer Aviarium-accounts, inhoud en geplande databaseback-ups.",
+  "Administration sections": "Beheeronderdelen",
+  "Daily Challenge": "Dagelijkse uitdaging",
 } as const satisfies Record<typeof apiMessages[keyof typeof apiMessages], string> & Record<string, string>
 
 export type Message = keyof typeof dutch

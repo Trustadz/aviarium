@@ -201,6 +201,7 @@ try {
   await adminContext.addCookies([{ name: 'aviarium', value: adminToken, url: origin }])
   const adminPage = await adminContext.newPage()
   await adminPage.goto(origin + '/admin')
+  await adminPage.getByRole('tab', { name: 'Leaderboards', exact: true }).click()
   await adminPage.locator('.admin-leaderboards').waitFor()
   assert.equal(await adminPage.getByRole('heading', { name: 'Leaderboards', exact: true }).count(), 1)
   assert.equal(pageErrors.length, 0, pageErrors.join('\n'))

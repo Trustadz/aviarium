@@ -1896,3 +1896,17 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
 .main-frame > .continue-games:first-child { margin-top: 0; }
 @media (max-width: 800px) { .app-shell { --frame-gutter: 18px; } }
 @media (max-width: 530px) { .app-shell { --frame-gutter: 13px; } }
+/* Administration tabs and game-selection draft */
+.admin-tabs { display: flex; gap: 2px; overflow-x: auto; margin: 18px 0 0; border-bottom: 1px solid var(--border); scrollbar-width: thin; }
+.admin-tabs button { flex: 0 0 auto; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent;
+  color: var(--muted); padding: 9px 14px; font: inherit; font-weight: 700; cursor: pointer; }
+.admin-tabs button:hover { color: var(--accent-strong); background: var(--tint); }
+.admin-tabs button[aria-selected=true] { border-bottom-color: var(--accent); color: var(--accent-strong); background: transparent; }
+.admin-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.admin-layout > [role=tabpanel] { grid-column: 1 / -1; }
+.challenge-selections { display: grid; gap: 12px; }
+.challenge-selections-help { margin: 0 0 2px; }
+.challenge-selection { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--tint); }
+.challenge-selection-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px; }
+.challenge-selection-head label { display: grid; flex: 1 1 220px; gap: 5px; font-weight: 650; }
+.challenge-selection .challenge-settings-options { margin: 0; background: var(--surface); }
