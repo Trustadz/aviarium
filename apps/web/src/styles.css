@@ -1816,6 +1816,11 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
   color: var(--accent-strong); font-weight: 700;
 }
 .leaderboard-table tbody tr[data-you=true] td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+@media (max-width: 640px) {
+  /* Rows become grid cards here, so mark the whole row instead of the rank cell. */
+  .leaderboard-table tbody tr[data-you=true] td:first-child { box-shadow: none; }
+  .leaderboard-table tbody tr[data-you=true] { box-shadow: inset 3px 0 0 var(--accent); }
+}
 .continue-daily-badge { justify-self: start; margin-bottom: 2px; }
 .continue-daily .continue-preview { background: color-mix(in srgb, var(--accent) 14%, var(--tint)); }
 .continue-daily-art { width: 100%; height: 100%; display: grid; place-items: center; color: var(--accent-strong); }
