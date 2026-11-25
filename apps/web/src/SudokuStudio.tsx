@@ -14,7 +14,7 @@ import { SudokuLevelEditor, type StudioCheck } from './SudokuLevelEditor.js'
 import { sudokuRuleGroups } from './sudoku-studio-rules.js'
 import checkWorkerUrl from './studio-check-worker.ts?worker&url'
 
-type Puzzle = PackDraftData['puzzles'][number]
+type Puzzle = PackDraftData['chapters'][number]['puzzles'][number]
 const blank = '0'.repeat(81)
 const emptyRules: PackRules = { hints: true, autoNotes: true, inOrder: true, lives: null, timeTrial: false }
 
@@ -50,7 +50,9 @@ const sudokuStudio: StudioGame = {
     { id: 'twilight', name: 'Twilight' }, { id: 'sunrise', name: 'Sunrise' }],
   rules: sudokuRuleGroups,
   presentation: sudokuPackPresentation,
-  createPack: title => ({ format: 1, game: sudoku.id, title, description: '', theme: 'default', rules: emptyRules, puzzles: [] }),
+  createPack: title => ({ format: 2, game: sudoku.id, title, description: '', chapters: [{
+    id: 'chapter-1', title, description: '', theme: 'default', rules: emptyRules, puzzles: [],
+  }] }),
   createLevel(t, previous) {
     const puzzle: Puzzle = { title: previous?.title ?? t('Untitled puzzle'), grid: (previous as Puzzle | undefined)?.grid ?? blank, ruleset: 1 }
     return puzzle
@@ -73,12 +75,12 @@ const sudokuStudio: StudioGame = {
     })
   },
   verified(entry) {
-    return report({ kind: 'unique', difficulty: (entry as GradedPack['puzzles'][number]).difficulty })
+    return report({ kind: 'unique', difficulty: (entry as GradedPack['chapters'][number]['puzzles'][number]).difficulty })
   },
   preview(entry, rules, review) {
     const puzzle = entry as Puzzle
     const difficulty = review?.detail ?? 'Easy'
-    return { ...puzzle, ruleset: packRuleset({ ...rules, ...puzzle.rules }), difficulty } as GradedPack['puzzles'][number]
+    return { ...puzzle, ruleset: packRuleset({ ...rules, ...puzzle.rules }), difficulty } as GradedPack['chapters'][number]['puzzles'][number]
   },
   async legacyDrafts(profile, signal) {
     const drafts = await api<{ id: string; title: string; grid: string }[]>('/drafts', { signal }, profile)

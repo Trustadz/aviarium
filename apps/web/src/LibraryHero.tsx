@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
-import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
+import { packCover, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import { starterPack } from '../../../packages/nonograms/src/puzzles.js'
 import challengeArt from './art/daily-challenges.webp'
 import type { WebGame } from './game-web.js'
@@ -67,7 +67,8 @@ export function LibraryHero({ packs, reader, open, openChallenges }: {
   const canRotate = motionAllowed && !reader
   const rotating = canRotate && !hovering && !focused && !dragging
   const transitioning = canRotate && outgoing !== null
-  const cockatooCover = packs.find(pack => pack.id === 'nonograms-' + starterPack.id)?.data.cover
+  const cockatooPack = packs.find(pack => pack.id === 'nonograms-' + starterPack.id)
+  const cockatooCover = cockatooPack && packCover(cockatooPack)
 
   function move(step: number) {
     if (step === 0) return

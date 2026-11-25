@@ -6,6 +6,7 @@ import type { GamePlayerProps } from './game-web.js'
 import { knownMessage, useT } from './i18n.js'
 import { errorMessage } from './api.js'
 import { displayTime } from './SudokuMenu.js'
+import { packStopAt, packTheme, type PackChapter } from '../../../packages/game-sdk/src/packs.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
@@ -25,6 +26,11 @@ GamePlayerProps & { trial?: boolean }) {
   const [display, setDisplay] = useState(saved.elapsedMs)
   const showTimer = challengeMode || (preferences.nonogramTimer !== false && !reader)
   const title = pack?.builtIn || level.source === 'Generated' ? knownMessage(t, level.title) : level.title
+  const packLocation = pack && level.pack ? packStopAt(pack as NonogramPack, level.pack.stop) : undefined
+  const chapter = packLocation?.chapter
+  const chapterTitle = chapter ? (pack?.builtIn ? knownMessage(t, chapter.title) : chapter.title) : ''
+  const packTitle = pack ? (pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title) : ''
+  const packName = chapterTitle && chapterTitle !== packTitle ? packTitle + ' · ' + chapterTitle : packTitle
 
   function takeElapsed() {
     const now = Date.now()
@@ -95,8 +101,8 @@ GamePlayerProps & { trial?: boolean }) {
   const celebrationStats = celebration !== undefined ? [
     { label: t('Grid size'), value: puzzle.rows.length + ' × ' + puzzle.columns.length },
     ...((level as NonogramLevel).difficulty ? [{ label: t('Difficulty'), value: t((level as NonogramLevel).difficulty!) }] : []),
-    ...(pack && level.pack ? [{ label: t('Pack'), value: (pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title) +
-      ' · ' + t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
+    ...(pack && packLocation ? [{ label: t('Pack'), value: packName +
+      ' · ' + t('Stop {stop} of {total}', { stop: packLocation.chapterStop, total: chapter?.puzzles.length ?? 0 }) }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
     { kind: 'primary', label: trial ? t('Back to editor') : replay?.backLabel ?? t(challengeMode ? 'Back to challenges' : pack ? 'Back to roadmap' : 'Choose another puzzle'), onClick: finish ?? leave },
@@ -106,7 +112,7 @@ GamePlayerProps & { trial?: boolean }) {
   ] : []
 
   return <>
-    <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} testMode={testMode}
+    <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} chapter={chapter} packName={packName} testMode={testMode}
       leave={exit} finish={finish} reset={reset} resetInput={resetInput} openSettings={openSettings} committed={saved.board} undo={saved.undo}
       problem={problem} trial={trial} challengeMode={challengeMode} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard} replay={replay}/>
     {celebration !== undefined && <CelebrationOverlay reader={reader}
@@ -123,10 +129,12 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, leave, finish, reset, resetInput, openSettings, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard, replay }: {
+function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, finish, reset, resetInput, openSettings, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard, replay }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
+  chapter?: PackChapter
+  packName: string
   leave: () => void
   finish?: () => void
   reset: () => void
@@ -253,8 +261,8 @@ function PuzzleBoard({ puzzle, title, pack, leave, finish, reset, resetInput, op
     if (!target) return
     onMove([...target.cells], [...undo.slice(-99), committed])
   }
-  const art = pack?.data.background ?? pack?.data.cover
-  return <section className={pack ? 'play-page nonogram-play pack-play pack-' + pack.data.theme : 'play-page nonogram-play'}
+  const art = chapter?.background ?? chapter?.cover
+  return <section className={pack ? 'play-page nonogram-play pack-play pack-' + (chapter?.theme ?? packTheme(pack)) : 'play-page nonogram-play'}
     aria-labelledby="nonogram-puzzle-title">
     {art && <img className="pack-play-art" src={art} alt=""/>}
     <div className="game-navigation">
@@ -267,7 +275,7 @@ function PuzzleBoard({ puzzle, title, pack, leave, finish, reset, resetInput, op
       </div>
     </div>
     <div className="play-heading">
-      <div><div className="eyebrow">{challengeMode ? t('Daily challenge') : pack ? (pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title) : 'Nonograms'}</div><h1 id="nonogram-puzzle-title">{title}</h1></div>
+      <div><div className="eyebrow">{challengeMode ? t('Daily challenge') : pack ? packName : 'Nonograms'}</div><h1 id="nonogram-puzzle-title">{title}</h1></div>
       <div className="play-meta"><span className="badge">{height} × {width}</span>
         {showTimer && <span className="clock"><Timer size={17}/>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}
       </div>

@@ -234,7 +234,7 @@ try {
   const me = await (await context.request.get(origin + '/api/me')).json()
   assert.deepEqual(me, { user: null, signIn: false, loginEnabled: false, testEnvironment: false })
   const packs = await (await context.request.get(origin + '/api/packs')).json()
-  const level = packs.find(pack => pack.id === 'budgies')?.data.puzzles[0]
+  const level = packs.find(pack => pack.id === 'budgies')?.data.chapters[0].puzzles[0]
   assert.ok(level)
   assert.equal((await context.request.get(origin + '/api/auth/login')).status(), 404)
   for (const path of ['/api/progress', '/api/drafts', '/api/admin/backup']) {
@@ -258,6 +258,7 @@ try {
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
   await page.getByRole('button', { name: 'Explore Sudoku' }).click()
   await page.getByRole('button', { name: /^Budgies/ }).click()
+  await page.getByRole('button', { name: 'Open chapter Budgies', exact: true }).click()
   await page.getByRole('button', { name: 'Play ' + level.title }).click()
   const blank = level.grid.indexOf('0')
   const cell = cellValue => page.getByRole('button', {
@@ -268,9 +269,10 @@ try {
   })
   await page.getByRole('button', { name: '1', exact: true }).click()
   await cell('1').waitFor()
-  await page.getByRole('button', { name: 'Back' }).click()
   await page.getByRole('button', { name: 'Back', exact: true }).click()
-  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Chapters', exact: true }).click()
+  await page.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
   await page.reload()
   await page.getByRole('heading', { name: 'Game library' }).waitFor()
   await page.getByRole('button', { name: 'Remove Sudoku from favorites' }).waitFor()
@@ -282,7 +284,7 @@ try {
   // A game opened from the game menu has two layers to pop: the level and the
   // menu. (A level opened from the pack roadmap has the roadmap in between.)
   const toLibrary = async () => {
-    await page.getByRole('button', { name: 'Back' }).click()
+    await page.getByRole('button', { name: 'Back', exact: true }).click()
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     await page.getByRole('heading', { name: 'Game library' }).waitFor()
   }
@@ -426,7 +428,7 @@ try {
   assert.equal(imported.status(), 200)
   const packDraft = await imported.json()
   assert.equal(packDraft.data.title, 'Budgies')
-  assert.equal(packDraft.data.puzzles.length, 3)
+  assert.equal(packDraft.data.chapters[0].puzzles.length, 3)
   assert.equal(packDraft.published, null)
   const publishedPack = await context.request.post(origin + '/api/pack-drafts/' + packDraft.id + '/publish', {
     headers: { Origin: origin }, data: { version: packDraft.version },

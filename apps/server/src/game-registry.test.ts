@@ -94,7 +94,8 @@ test('the definition-backed server adapter preserves a challenge claim', () => {
 
 test('the server adapter maps pack rule errors to the API envelope', async () => {
   const game = serverGameFromDefinition(sudokuGame)
-  const empty = { ...sudokuGame.packs.builtIn[0]!.data, puzzles: [] }
+  const data = sudokuGame.packs.builtIn[0]!.data
+  const empty = { ...data, chapters: data.chapters.map(chapter => ({ ...chapter, puzzles: [] })) }
   await assert.rejects(async () => { await game.packs.verify(empty, []) }, (error: unknown) => {
     const failure = error as { statusCode?: number; code?: string }
     return failure.statusCode === 422 && failure.code === 'pack_empty'

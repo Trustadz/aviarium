@@ -98,7 +98,8 @@ test('built-in packs materialize and re-verify through the game contract', async
   const builtIn = sudokuGame.packs.builtIn[0]!
   const pack = { id: builtIn.id, revision: builtIn.revision, builtIn: true, data: builtIn.data }
   const levels = sudokuGame.packs.materialize(pack)
-  assert.equal(levels.length, builtIn.data.puzzles.length)
+  assert.equal(levels.length, builtIn.data.chapters.reduce((total, chapter) => total + chapter.puzzles.length, 0))
   const verified = await sudokuGame.packs.verify(builtIn.data, [])
-  assert.equal(verified.puzzles.length, builtIn.data.puzzles.length)
+  assert.equal(verified.chapters.reduce((total, chapter) => total + chapter.puzzles.length, 0),
+    builtIn.data.chapters.reduce((total, chapter) => total + chapter.puzzles.length, 0))
 })

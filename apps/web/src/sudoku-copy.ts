@@ -1,6 +1,7 @@
 import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
 import type { LogicalStep } from '../../../packages/sudoku/src/logic.js'
 import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import type { PackChapter } from '../../../packages/game-sdk/src/packs.js'
 import { type Translate } from './i18n.js'
 import type { Message } from './messages.js'
 
@@ -25,6 +26,16 @@ export function packDescription(t: Translate, pack: PublishedPack) {
   return pack.builtIn && pack.id === 'budgies'
     ? t('Follow the flock from the garden perch to the treetops in three Sudoku puzzles.')
     : pack.data.description
+}
+
+export function packChapterTitle(t: Translate, pack: PublishedPack, chapter: PackChapter) {
+  return pack.builtIn && pack.id === 'budgies' && chapter.id === 'chapter-1' ? t('Budgies') : chapter.title
+}
+
+export function packChapterDescription(t: Translate, pack: PublishedPack, chapter: PackChapter) {
+  return pack.builtIn && pack.id === 'budgies' && chapter.id === 'chapter-1'
+    ? t('Follow the flock from the garden perch to the treetops in three Sudoku puzzles.')
+    : chapter.description
 }
 
 const techniques: Partial<Record<LogicalStep['id'], Message>> = {

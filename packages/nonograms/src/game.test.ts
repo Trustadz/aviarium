@@ -60,8 +60,9 @@ test('built-in Nonogram packs materialize and verify through the contract', asyn
   const builtIn = nonogramsGame.packs.builtIn[0]!
   const pack = { id: builtIn.id, revision: builtIn.revision, builtIn: true, data: builtIn.data }
   const levels = nonogramsGame.packs.materialize(pack)
-  assert.equal(levels.length, builtIn.data.puzzles.length)
+  assert.equal(levels.length, builtIn.data.chapters.reduce((total, chapter) => total + chapter.puzzles.length, 0))
   const verified = await nonogramsGame.packs.verify(builtIn.data, [])
-  assert.equal(verified.puzzles.length, builtIn.data.puzzles.length)
+  assert.equal(verified.chapters.reduce((total, chapter) => total + chapter.puzzles.length, 0),
+    builtIn.data.chapters.reduce((total, chapter) => total + chapter.puzzles.length, 0))
   assert.ok(randomSizes.includes(5) && randomDifficulties.includes('Easy'))
 })

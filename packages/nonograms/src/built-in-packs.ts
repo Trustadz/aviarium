@@ -6,10 +6,13 @@ import { starterPack } from './puzzles.js'
 export const nonogramBuiltInPacks: readonly { id: string; revision: number; coverFile?: string; data: PackDocument }[] = [{
   id: 'nonograms-' + starterPack.id, revision: starterPack.revision, coverFile: 'cockatoos-portrait.webp',
   data: {
-    format: 1, game: nonogramsId, title: starterPack.title, description: starterPack.description,
-    theme: 'cockatoos', rules: { inOrder: true },
-    puzzles: starterPack.puzzles.map(({ id, title, puzzle }) => ({
-      levelId: 'nonograms-' + id, title, content: puzzle, ruleset: 1,
-    })),
+    format: 2, game: nonogramsId, title: starterPack.title, description: starterPack.description,
+    chapters: [{
+      id: 'chapter-1', title: starterPack.title, description: starterPack.description,
+      theme: 'cockatoos', rules: { inOrder: true },
+      puzzles: starterPack.puzzles.map(({ id, title, puzzle }) => ({
+        levelId: 'nonograms-' + id, title, content: puzzle, ruleset: 1,
+      })),
+    }],
   } as PackDocument,
 }]

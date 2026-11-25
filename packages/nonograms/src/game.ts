@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { GameRuleError, gameContractVersion, type GameDefinition, type StoredLevel } from '../../game-sdk/src/game.js'
-import type { PackDocument, ProgressionRules } from '../../game-sdk/src/packs.js'
+import { effectiveChapterRules, upgradePackDocument, type PackDocument, type ProgressionRules } from '../../game-sdk/src/packs.js'
 import { nonogramBuiltInPacks } from './built-in-packs.js'
 import {
   createNonogramAttempt, gridSizeSchema, nonogramLevels, nonogramPacks, nonogramsId, nonogramSaveSchema,
@@ -31,11 +31,14 @@ const difficultyGroup = {
 }
 
 export function verifyNonogramPack(input: unknown, _prior: readonly StoredLevel[] = []): PackDocument {
-  const draft = nonogramPacks.draft.parse(input)
-  if (!draft.puzzles.length) throw new GameRuleError('pack_empty')
-  for (const entry of draft.puzzles)
-    if (!entry.content.rows.some(runs => runs[0] > 0) || !solveByDeduction(entry.content))
-      throw new GameRuleError('pack_puzzle_unverified', { title: entry.title })
+  const draft = nonogramPacks.draft.parse(upgradePackDocument(input))
+  if (!draft.chapters.some(chapter => chapter.puzzles.length)) throw new GameRuleError('pack_empty')
+  for (const chapter of draft.chapters) {
+    if (!chapter.puzzles.length) throw new GameRuleError('pack_chapter_empty', { chapter: chapter.title })
+    for (const entry of chapter.puzzles)
+      if (!entry.content.rows.some(runs => runs[0] > 0) || !solveByDeduction(entry.content))
+        throw new GameRuleError('pack_puzzle_unverified', { title: entry.title })
+  }
   return nonogramPacks.published.parse(draft) as PackDocument
 }
 

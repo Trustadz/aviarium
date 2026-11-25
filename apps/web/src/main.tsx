@@ -9,7 +9,7 @@ import { ArrowLeft, BookOpen, CalendarDays, LogIn, LogOut, Newspaper,
   Pencil, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
-import { packProgress, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
+import { chapterProgress, packProgress, packStopAt, packTheme, upgradePackRevision, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
 import { AccountMenu, ProfileForm } from './AccountSettings.js'
@@ -28,7 +28,7 @@ import { registerOffline, useGameDownloads } from './offline.js'
 import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
-import { PackCards, PackRoadmap, packApi, packPath } from './GamePacks.js'
+import { PackCards, PackChapters, PackRoadmap, chapterPath, packApi, packPath } from './GamePacks.js'
 import { packLevels } from './game-definitions.js'
 import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory, type ScreenRef } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
@@ -228,7 +228,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         const index: unknown = JSON.parse(localStorage.getItem(packIndexKey) ?? '[]')
         if (Array.isArray(index) && index.every(key => typeof key === 'string')) {
           const records = await db.packs.bulkGet(index)
-          cached = records.flatMap(record => record ? [record.pack] : [])
+          cached = records.flatMap(record => record ? [upgradePackRevision(record.pack)] : [])
         }
       } catch { /* Pack cards can still use in-memory data. */ }
     }
@@ -251,15 +251,16 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   }, [accountId, online, packIndexKey])
   const findPack = useCallback(async (game: WebGame, id: string, revision: number, review = false) => {
     const key = levelKey(id, revision)
-    const cached = await db.packs.get(key).catch(() => undefined)
-    if (cached?.pack.data.game === game.id && (!review || !online)) return cached.pack
+    const stored = await db.packs.get(key).catch(() => undefined)
+    const cached = stored ? upgradePackRevision(stored.pack) : undefined
+    if (cached?.data.game === game.id && (!review || !online)) return cached
     if (!online) throw new Error('Connect to open this pack for the first time.')
     try {
       const { ownedByViewer, ...pack } = await api<PackRevision>(`${packApi(game.id)}/${id}/${revision}`, undefined, accountId)
       void db.packs.put({ key, pack }).catch(() => undefined)
       return { ...pack, ownedByViewer }
     } catch (error) {
-      if (cached?.pack.data.game === game.id) return cached.pack
+      if (cached?.data.game === game.id) return cached
       throw error
     }
   }, [accountId, online])
@@ -299,12 +300,17 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     void refreshPacks(controller.signal)
     return () => controller.abort()
   }, [packRetry, refreshPacks])
+  const packRoute = openGame?.packs
+    ? /^\/packs\/([a-z0-9-]+)\/(\d+)(?:\/chapters\/([a-z0-9-]+))?$/.exec(path.slice(openGame.url.length))
+    : null
+  const viewedChapterId = packRoute?.[3]
   useEffect(() => {
-    const match = openGame?.packs && /^\/packs\/([a-z0-9-]+)\/(\d+)$/.exec(path.slice(openGame.url.length))
-    if (!match || !openGame) return
+    if (!packRoute || !openGame) return
     let cancelled = false
-    setViewedPack(undefined); setPackProblem('')
-    void findPack(openGame, match[1], Number(match[2]), true).then(pack => {
+    setViewedPack(current => current && current.id === packRoute[1] &&
+      current.revision === Number(packRoute[2]) && current.data.game === openGame.id ? current : undefined)
+    setPackProblem('')
+    void findPack(openGame, packRoute[1], Number(packRoute[2]), true).then(pack => {
       if (!cancelled) setViewedPack(pack)
     }, error => { if (!cancelled) setPackProblem(errorMessage(error)) })
     return () => { cancelled = true }
@@ -410,13 +416,18 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (level.source === 'Challenge' && !existing?.challenge)
       throw new Error('Open this from Challenges.')
     const pack = suppliedPack ?? (level.pack && !level.pack.legacyStandalone ? await findPack(game, level.pack.id, level.pack.revision) : undefined)
-    if (!existing && pack && level.pack &&
-        !packProgress(pack, packCompletionEvents(completed, sessions)).playable[level.pack.stop - 1])
-      throw new Error('Solve the previous stop in this pack first.')
+    const location = pack && level.pack ? packStopAt(pack, level.pack.stop) : undefined
+    const chapterId = location?.chapter.id ?? pack?.data.chapters[0]?.id
+    const completionEvents = packCompletionEvents(completed, sessions)
+    if (pack && location && chapterId && !chapterProgress(pack, completionEvents, chapterId).unlocked)
+      throw new Error('Complete the previous chapter to unlock this chapter.')
+    if (!existing && pack && location && chapterId &&
+        !packProgress(pack, completionEvents, chapterId).playable[location.chapterStop - 1])
+      throw new Error('Solve the previous stop in this chapter first.')
     const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
-    const parent = options.parent ?? (pack ? packPath(pack) : game.url)
+    const parent = options.parent ?? (pack && chapterId ? chapterPath(pack, chapterId) : pack ? packPath(pack) : game.url)
     // A new attempt is only written on the first real move. This keeps a
     // mis-click from becoming a resumable game that Back can land on later.
     if (options.replace) {
@@ -510,7 +521,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   }
 
   async function finishGame(attempt: NonNullable<typeof active>) {
-    const target = attempt.pack ? packPath(attempt.pack) : attempt.game.url
+    const target = attempt.pack && attempt.level.pack?.chapter
+      ? chapterPath(attempt.pack, attempt.level.pack.chapter)
+      : attempt.pack ? packPath(attempt.pack) : attempt.game.url
     setActive(undefined)
     if (attempt.from?.path === target) {
       back(target)
@@ -675,6 +688,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const immersive = Boolean(playing) || inPackRoadmap
   const inShell = !immersive
   const playPack = playing?.pack
+  const playLocation = playPack && playing?.level.pack ? packStopAt(playPack, playing.level.pack.stop) : undefined
+  const playTheme = playLocation?.chapter.theme ?? (playPack ? packTheme(playPack) : undefined)
   const surface = immersive ? 'game' : inStudio ? 'studio' : 'library'
   const navLibrary = inLibrary || Boolean(inGame && !inGameLeaderboards && !inChallenges)
   const navChallenges = inChallenges
@@ -684,7 +699,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const themeGame = openGame ?? playing?.game ?? studioGame
   const settings = (openGame ?? playing?.game)?.settings
   useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
-    [reader, surface, theme, themeGame?.id, playPack?.data.theme])
+    [reader, surface, theme, themeGame?.id, playTheme])
   const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
     item.data.game === playing.game.id && item.data.level === playing.level.id &&
     item.data.levelRevision === playing.level.revision && item.data.completed).map(item => item.data.elapsedMs)) : Number.POSITIVE_INFINITY
@@ -729,7 +744,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     </>}
     <main ref={gameSurface} className={(immersive ? 'game-frame' : inGame ? 'main-frame game-content' : 'frame main-frame') +
       (themeGame ? ' game-theme ' + themeGame.theme : '') + (studioGame ? ' studio-game-canvas' : '') +
-      (playPack ? ` pack-palette pack-${playPack.data.theme}` : '')}>
+      (playPack ? ` pack-palette pack-${playTheme}` : '')}>
       {notice && <div className="notice" role="alert">{knownMessage(t, notice)}<button onClick={() => setNotice('')}>{t("Dismiss")}</button></div>}
       {inLibrary && networkNotice && <p role="status" className="network-notice">{t("Sync delayed.")}{" "}{knownMessage(t, networkNotice)}</p>}
       {inLibrary && online && activate && <div className="notice">{t("An Aviarium update is ready.")}<button onClick={activate}>{t("Reload")}</button></div>}
@@ -796,16 +811,22 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         sections={openGame.guide} leave={event => backLink(event, openGame.url)}/>
       : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
         leave={() => back(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
-      : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && packPath(viewedPack) === path
-        ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
+      : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && viewedChapterId &&
+          path === chapterPath(viewedPack, viewedChapterId)
+        ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} chapterId={viewedChapterId}
+          completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
           canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))}
-          leave={() => back(openGame.url)} play={level => perform(() => {
+          leave={() => back(packPath(viewedPack))} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
               item.data.level === level.id && item.data.levelRevision === level.revision)
             return existing ? resume(existing.id) : open(openGame, level, undefined, viewedPack)
           })}/>
-        : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t('Back')}</button>
-          <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
+        : viewedPack && path === packPath(viewedPack)
+          ? <PackChapters presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions}
+            canExport={Boolean(online && canEdit && (account?.role === 'admin' || viewedPack.ownedByViewer))}
+            leave={() => back(openGame.url)} open={chapterId => go(chapterPath(viewedPack, chapterId))}/>
+          : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
+            <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
       : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
         leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
           open: event => link(event, openGame.url + '/leaderboards') } : undefined}
@@ -844,7 +865,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     {activeRemoval && <LeaderboardNotice notice={activeRemoval} onAcknowledge={acknowledgeRemoval}/>}
     {dialog && <div className="settings-overlay" onClick={() => showDialog(undefined)}>
       <section className={'settings-panel' + (dialog === 'game' && openGame ? ' game-theme ' + openGame.theme +
-        (playPack ? ` pack-palette pack-${playPack.data.theme}` : '') : '')}
+        (playPack ? ` pack-palette pack-${playTheme}` : '') : '')}
         role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={event => event.stopPropagation()}>
         <div className="section-heading"><h2 id="settings-title">
           {dialog === 'display' ? t('Device settings') : dialog === 'game' && settings ? t(settings.title)

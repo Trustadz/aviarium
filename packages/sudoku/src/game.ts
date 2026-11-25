@@ -4,7 +4,7 @@ import type { Difficulty } from '../../game-sdk/src/index.js'
 import { difficulties } from '../../game-sdk/src/index.js'
 import { builtInPacks } from './built-in-packs.js'
 import { difficultySchema, preferenceSchema, quickPlayDescriptorSchema, saveSchema, quickPlayVersion, type PublishedLevel, type SudokuSave } from './contracts.js'
-import type { PackDocument } from '../../game-sdk/src/packs.js'
+import { effectiveChapterRules, upgradePackDocument, type PackDocument } from '../../game-sdk/src/packs.js'
 import { gradePuzzle } from './logic.js'
 import { sudoku } from './metadata.js'
 import {
@@ -31,27 +31,31 @@ const difficultyGroup = {
   defaultEnabled: ['Easy', 'Medium', 'Hard'],
 }
 
-type SudokuEntry = PackDraftData['puzzles'][number]
+type SudokuEntry = PackDraftData['chapters'][number]['puzzles'][number]
 type QuickPlayOptions = { difficulty: Difficulty }
 
 export function verifySudokuPack(input: unknown, prior: readonly StoredLevel[] = []): GradedPack {
-  const draft = authoringPack(packDraftSchema.parse(input))
+  const draft = authoringPack(packDraftSchema.parse(upgradePackDocument(input)))
   const known = new Map(prior.map(level => [level.id, level]))
-  if (!draft.puzzles.length) throw new GameRuleError('pack_empty')
-  const puzzles = draft.puzzles.map(puzzle => {
-    const ruleset = packRuleset({ ...draft.rules, ...puzzle.rules })
-    const diagonal = ruleset === 2
-    const previous = puzzle.levelId && known.get(puzzle.levelId)
-    if (previous && previous.grid === puzzle.grid && previous.ruleset === ruleset)
-      return { ...puzzle, ruleset, difficulty: previous.difficulty ?? 'Medium' }
-    const grid = Array.from(puzzle.grid, Number)
-    if (validate(grid, 65_000, diagonal).kind !== 'unique')
-      throw new GameRuleError('pack_puzzle_unverified', { title: puzzle.title })
-    const { difficulty } = gradePuzzle(grid, diagonal)
-    if (!difficulty) throw new GameRuleError('pack_puzzle_review', { title: puzzle.title })
-    return { ...puzzle, ruleset, difficulty }
+  if (!draft.chapters.some(chapter => chapter.puzzles.length)) throw new GameRuleError('pack_empty')
+  const chapters = draft.chapters.map(chapter => {
+    if (!chapter.puzzles.length) throw new GameRuleError('pack_chapter_empty', { chapter: chapter.title })
+    const puzzles = chapter.puzzles.map((puzzle, index) => {
+      const ruleset = packRuleset(effectiveChapterRules(chapter, index + 1))
+      const diagonal = ruleset === 2
+      const previous = puzzle.levelId && known.get(puzzle.levelId)
+      if (previous && previous.grid === puzzle.grid && previous.ruleset === ruleset)
+        return { ...puzzle, ruleset, difficulty: previous.difficulty ?? 'Medium' }
+      const grid = Array.from(puzzle.grid, Number)
+      if (validate(grid, 65_000, diagonal).kind !== 'unique')
+        throw new GameRuleError('pack_puzzle_unverified', { title: puzzle.title })
+      const { difficulty } = gradePuzzle(grid, diagonal)
+      if (!difficulty) throw new GameRuleError('pack_puzzle_review', { title: puzzle.title })
+      return { ...puzzle, ruleset, difficulty }
+    })
+    return { ...chapter, puzzles }
   })
-  return gradedPackSchema.parse({ ...draft, puzzles })
+  return gradedPackSchema.parse({ ...draft, chapters })
 }
 
 export function validateSudokuAttempt(input: unknown, level: StoredLevel, rules?: PackRules) {

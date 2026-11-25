@@ -1,11 +1,12 @@
 import { liveQuery } from 'dexie'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowLeft, Check, Download, Plus, Upload } from 'lucide-react'
+import { ArrowLeft, ArrowDown, ArrowUp, Check, Download, Plus, Trash2, Upload } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
-import { assignPackLevels, authoringPack, packImageBytes, packLevelId, packLevelLimit, packProgressPath, packUploadBytes,
-  type PackDraftRecord as PackDraft, type PackDocument as PackDraftData, type PackEntry as Puzzle, type PackRevision as PublishedPack } from '../../../packages/game-sdk/src/packs.js'
+import { assignPackLevels, authoringPack, packChapterLimit, packImageBytes, packLevelId, packLevelLimit,
+  packProgressPath, packStopAt, packUploadBytes, upgradePackDocument, type PackChapter, type PackDraftRecord as PackDraft,
+  type PackDocument as PackDraftData, type PackEntry as Puzzle, type PackRevision as PublishedPack } from '../../../packages/game-sdk/src/packs.js'
 import { api, ApiError, errorMessage, json, type SessionAccount } from './api.js'
-import { packApi, packExportUrl, PackRoadmap } from './GamePacks.js'
+import { PackChapters, packApi, packExportUrl, PackRoadmap } from './GamePacks.js'
 import { packLevels } from './game-definitions.js'
 import type { LevelReview, StudioGame } from './game-studio.js'
 import { knownMessage, useT } from './i18n.js'
@@ -44,12 +45,24 @@ async function packArtwork(file: File) {
 }
 
 function stableDraft(draft: PackDraft): PackDraft {
-  return { ...draft, visible: draft.published !== null && draft.visible, data: authoringPack({ ...draft.data, puzzles: draft.data.puzzles.map((puzzle, index) =>
-    ({ ...puzzle, levelId: puzzle.levelId ?? packLevelId(draft.id, index + 1) })) }) }
+  const seen = new Set<string>()
+  const data = upgradePackDocument(draft.data) as PackDraftData
+  const chapters = data.chapters.map((chapter, chapterIndex) => {
+    let id = chapter.id || 'chapter-' + (chapterIndex + 1)
+    while (seen.has(id)) id = 'chapter-' + Math.random().toString(36).slice(2, 10)
+    seen.add(id)
+    return { ...chapter, id, puzzles: chapter.puzzles.map((puzzle, index) =>
+      ({ ...puzzle, levelId: puzzle.levelId ?? packLevelId(draft.id, id, index + 1) })) }
+  })
+  return { ...draft, visible: draft.published !== null && draft.visible, data: authoringPack({ ...data, chapters }) }
 }
 
 function newLevelId(packId: string) {
   return 'pack:' + packId + ':' + randomId().replaceAll('-', '').slice(0, 20)
+}
+
+function newChapterId() {
+  return 'chapter-' + randomId().replaceAll('-', '').slice(0, 12)
 }
 
 export interface PackStudioProps {
@@ -65,6 +78,9 @@ export interface PackStudioProps {
   onPublish: () => void
 }
 
+type Chapter = PackDraftData['chapters'][number]
+type ChapterPuzzle = Chapter['puzzles'][number]
+
 export default function PackStudio({ game, account, online, admin = false, reader, theme, packs, leave, leaveLabel, onPublish }:
   PackStudioProps & { game: StudioGame }) {
   const t = useT()
@@ -77,6 +93,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
   const recordsRef = useRef(records)
   recordsRef.current = records
   const [selected, setSelected] = useState<StudioPack>()
+  const [chapterId, setChapterId] = useState<string>()
   const [levelId, setLevelId] = useState<string>()
   const [tab, setTab] = useState('levels')
   const [showLevelList, setShowLevelList] = useState(false)
@@ -118,7 +135,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
   useLayoutEffect(() => {
     const trail = trailPreview.current
     if (tab === 'preview' && trail) trail.scrollTop = trail.scrollHeight
-  }, [tab, editingId, trial])
+  }, [tab, editingId, chapterId, trial])
   useEffect(() => {
     setLivePack(undefined)
     setReturning(false)
@@ -129,14 +146,17 @@ export default function PackStudio({ game, account, online, admin = false, reade
     return () => controller.abort()
   }, [account.id, editingId, game.id, liveRevision, online])
 
-  const selectedRules = selected?.draft.data.rules
-  const pending = selectedRules && (tab === 'review' || tab === 'preview') ? selected?.draft.data.puzzles.find(
-    puzzle => !checks[game.checkKey(puzzle, selectedRules)]) : undefined
-  const pendingKey = pending && selectedRules ? game.checkKey(pending, selectedRules) : undefined
+  const selectedChapter = selected?.draft.data.chapters.find(chapter => chapter.id === chapterId) ??
+    selected?.draft.data.chapters[0]
+  const pending = selected && (tab === 'review' || tab === 'preview')
+    ? selected.draft.data.chapters.flatMap(chapter => chapter.puzzles.map(puzzle => ({ puzzle, rules: chapter.rules })))
+      .find(item => !checks[game.checkKey(item.puzzle, item.rules)])
+    : undefined
+  const pendingKey = pending ? game.checkKey(pending.puzzle, pending.rules) : undefined
   useEffect(() => {
-    if (!pendingKey || !pending || !selectedRules) return
+    if (!pendingKey || !pending) return
     const controller = new AbortController()
-    void game.check(pending, selectedRules, controller.signal).then(review => {
+    void game.check(pending.puzzle, pending.rules, controller.signal).then(review => {
       if (!controller.signal.aborted) onCheck(pendingKey, review)
     }).catch(() => {
       if (!controller.signal.aborted) onCheck(pendingKey, { ready: false, status: 'Verification inconclusive' })
@@ -256,8 +276,17 @@ export default function PackStudio({ game, account, online, admin = false, reade
     if (item) persist({ ...item, dirty: true, draft: { ...item.draft, data: authoringPack(change(item.draft.data)) } })
   }
 
+  function editChapter(id: string, change: (chapter: Chapter) => Chapter) {
+    edit(data => ({ ...data, chapters: data.chapters.map(chapter => chapter.id === id ? change(chapter) : chapter) }))
+  }
+
   function openEditor(record?: StudioPack) {
-    show(record && { ...record, draft: stableDraft(record.draft) }); setTab('levels'); setLevelId(record?.draft.data.puzzles[0]?.levelId)
+    const next = record && { ...record, draft: stableDraft(record.draft) }
+    const chapter = next?.draft.data.chapters[0]
+    show(next)
+    setChapterId(chapter?.id)
+    setLevelId(chapter?.puzzles[0]?.levelId)
+    setTab(next && next.draft.data.chapters.length > 1 ? 'chapters' : 'levels')
     setShowLevelList(false); setTrial(undefined); setProblem(''); setConflict(false); setNotice(''); setSaved(Boolean(record))
   }
 
@@ -281,8 +310,15 @@ export default function PackStudio({ game, account, online, admin = false, reade
 
   function create(data: PackDraftData) {
     const id = randomId()
-    const puzzles = data.puzzles.map(puzzle => ({ ...puzzle, levelId: newLevelId(id), levelRevision: undefined }))
-    const record = wrap({ id, version: 0, published: null, visible: false, data: { ...data, puzzles } }, true)
+    const seen = new Set<string>()
+    const chapters = (data.chapters.length ? data.chapters : [game.createPack(data.title).chapters[0]]).map(chapter => {
+      let chapterId = chapter.id || newChapterId()
+      while (seen.has(chapterId)) chapterId = newChapterId()
+      seen.add(chapterId)
+      return { ...chapter, id: chapterId,
+        puzzles: chapter.puzzles.map(puzzle => ({ ...puzzle, levelId: newLevelId(id), levelRevision: undefined })) }
+    })
+    const record = wrap({ id, version: 0, published: null, visible: false, data: { ...data, chapters } }, true)
     selectPack(record); persist(record)
   }
 
@@ -376,23 +412,62 @@ export default function PackStudio({ game, account, online, admin = false, reade
 
   function add(input?: Puzzle, after?: number) {
     const item = active.current
-    if (!item || item.draft.data.puzzles.length >= packLevelLimit) return
+    const chapter = item?.draft.data.chapters.find(entry => entry.id === selectedChapter?.id)
+    if (!item || !chapter || chapter.puzzles.length >= packLevelLimit) return
     const levelId = newLevelId(item.draft.id)
-    edit(data => {
-      const puzzles = [...data.puzzles]
+    edit(data => ({ ...data, chapters: data.chapters.map(entry => {
+      if (entry.id !== chapter.id) return entry
+      const puzzles = [...entry.puzzles]
       puzzles.splice(after === undefined ? puzzles.length : after + 1, 0, { ...game.createLevel(t, input), levelId })
-      return { ...data, puzzles }
-    })
+      return { ...entry, puzzles }
+    }) }))
     setLevelId(levelId); setTab('levels'); setShowLevelList(false)
   }
 
   function move(index: number, target: number) {
-    edit(data => {
-      const puzzles = [...data.puzzles]
+    if (!selectedChapter) return
+    editChapter(selectedChapter.id, chapter => {
+      const puzzles = [...chapter.puzzles]
       const [item] = puzzles.splice(index, 1)
       puzzles.splice(target, 0, item)
-      return { ...data, puzzles }
+      return { ...chapter, puzzles }
     })
+  }
+
+  function addChapter() {
+    const item = active.current
+    if (!item || item.draft.data.chapters.length >= packChapterLimit) return
+    const source = item.draft.data.chapters[0]
+    if (!source) return
+    const chapter: Chapter = {
+      id: newChapterId(), title: t('Chapter {number}', { number: item.draft.data.chapters.length + 1 }),
+      description: '', theme: source.theme, rules: source.rules, puzzles: [],
+    }
+    edit(data => ({ ...data, chapters: [...data.chapters, chapter] }))
+    setChapterId(chapter.id); setLevelId(undefined); setTab('levels')
+  }
+
+  function moveChapter(index: number, target: number) {
+    if (target < 0) return
+    edit(data => {
+      const chapters = [...data.chapters]
+      if (target >= chapters.length) return data
+      const [item] = chapters.splice(index, 1)
+      chapters.splice(target, 0, item)
+      return { ...data, chapters }
+    })
+  }
+
+  function removeChapter(id: string) {
+    const chapters = active.current?.draft.data.chapters
+    if (!chapters || chapters.length <= 1) return
+    const index = chapters.findIndex(chapter => chapter.id === id)
+    if (index < 0 || !window.confirm(t('Remove {title} from this pack draft?', { title: chapters[index].title }))) return
+    edit(data => ({ ...data, chapters: data.chapters.filter(chapter => chapter.id !== id) }))
+    if (chapterId === id) {
+      const next = chapters[index + 1] ?? chapters[index - 1]
+      setChapterId(next.id); setLevelId(next.puzzles[0]?.levelId)
+    }
   }
 
   const feedback = problem && <p className="error" role="alert">{knownMessage(t, problem)}</p>
@@ -400,7 +475,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
     <div className="section-heading"><div>
       <button className="text-button" onClick={leave}><ArrowLeft size={17}/> {admin ? t('Administration') : leaveLabel}</button>
       <h1>{admin ? t('Edit as admin') : t('My packs')}</h1>
-      <p>{admin ? t('Choose a creator’s pack to open its shared draft.') : t('Create a pack and build its trail one puzzle at a time.')}</p></div>
+      <p>{admin ? t('Choose a creator’s pack to open its shared draft.') : t('Create a pack of chapters, then build each chapter’s trail one puzzle at a time.')}</p></div>
       {!admin && online && <label className="secondary file-label"><Upload size={16}/> {t('Import pack')}
         <input type="file" aria-label={t('Import pack')} accept=".aviarium-pack,.zip" disabled={busy} onChange={event => {
           const file = event.target.files?.[0]
@@ -428,11 +503,14 @@ export default function PackStudio({ game, account, online, admin = false, reade
         {pack.data.cover && <img src={pack.data.cover} alt=""/>}
         <strong>{game.presentation.title(t, pack)}</strong>
         <button className="secondary" type="button" onClick={() => {
-          const title = game.presentation.title(t, pack)
-          setChecks(current => ({ ...current, ...Object.fromEntries(pack.data.puzzles.map(item => [
-            game.checkKey(item, pack.data.rules), game.verified(item),
-          ])) }))
-          create({ ...pack.data, title: t('{title} (test copy)', { title }).slice(0, 80), description: game.presentation.description(t, pack) })
+          const copyTitle = game.presentation.title(t, pack)
+          setChecks(current => ({
+            ...current,
+            ...Object.fromEntries(pack.data.chapters.flatMap(chapter =>
+              chapter.puzzles.map(item => [game.checkKey(item, chapter.rules), game.verified(item)]))),
+          }))
+          create({ ...pack.data, title: t('{title} (test copy)', { title: copyTitle }).slice(0, 80),
+            description: game.presentation.description(t, pack) })
         }}>{t('Make test copy')}</button>
       </li>)}</ul>
     </section>}
@@ -440,6 +518,7 @@ export default function PackStudio({ game, account, online, admin = false, reade
       <div><h2>{record.draft.data.title}</h2>
         <p>{[record.draft.ownerName, record.draft.visible && record.draft.published ? t('Live revision {revision}', { revision: record.draft.published })
           : record.draft.published ? t('Unpublished') : t('Draft'),
+          t('{count, plural, one {# chapter} other {# chapters}}', { count: record.draft.data.chapters.length }),
           record.dirty ? t('Changes on this device') : t('Draft saved online')].filter(Boolean).join(' · ')}</p></div>
       <button className="secondary" onClick={() => selectPack(record)}>{admin ? t('Edit as admin') : t('Open pack')}</button>
     </li>)}</ul>
@@ -449,6 +528,9 @@ export default function PackStudio({ game, account, online, admin = false, reade
   const selectedKey = selected.key
   const syncConflict = conflict || remoteConflicts.has(selected.key)
   const data = draft.data
+  const chapters = data.chapters
+  const chapter = chapters.find(item => item.id === selectedChapter?.id) ?? chapters[0]
+  const puzzle = chapter?.puzzles.find(item => item.levelId === levelId)
   async function currentRecord() {
     await draftsInFlight.current.get(selectedKey)?.catch(() => undefined)
     await write.current
@@ -512,26 +594,29 @@ export default function PackStudio({ game, account, online, admin = false, reade
     })
   }
 
-  const puzzle = data.puzzles.find(item => item.levelId === levelId)
   const previous = livePack?.id === draft.id && livePack.revision === draft.published ? livePack : undefined
-  const before = previous?.data.puzzles ?? []
   const beforeLevel = previous ? packLevels(game.id, previous) : []
-  const checkAt = (item: Puzzle) => {
-    const key = game.checkKey(item, data.rules)
-    const known = previous && before.find(old => old.levelId === item.levelId && game.checkKey(old, previous.data.rules) === key)
-    return checks[key] ?? (known && game.verified(known))
+  const checkAt = (item: ChapterPuzzle, rules: Chapter['rules']) => {
+    const key = game.checkKey(item, rules)
+    const prior = previous?.data.chapters.flatMap(chapter => chapter.puzzles.map(entry => ({ entry, rules: chapter.rules })))
+      .find(({ entry, rules: priorRules }) => entry.levelId === item.levelId && game.checkKey(entry, priorRules) === key)
+    return checks[key] ?? (prior ? game.verified(prior.entry) : undefined)
   }
   const preview: PublishedPack = { id: draft.id, revision: (draft.published ?? 0) + 1, builtIn: false,
     history: previous ? [...(previous.history ?? []), ...(previous.history?.some(path => path.revision === previous.revision) ? [] : [packProgressPath(previous)])] : [],
-    data: { ...data, puzzles: data.puzzles.map(item => game.preview(item, data.rules, checkAt(item))) } }
-  preview.data.puzzles = assignPackLevels(preview, previous, game.sameLevel) ?? preview.data.puzzles
-  const oldRetained = beforeLevel.filter(old => data.puzzles.some(item => item.levelId === old.id)).map(level => level.id)
-  const newRetained = data.puzzles.filter(item => oldRetained.includes(item.levelId ?? '')).map(item => item.levelId)
-  const reviews = new Map(data.puzzles.map(item => [item.levelId, checkAt(item)]))
-  const details = new Map(data.puzzles.flatMap(item => {
+    data: { ...data, chapters: data.chapters.map(chapter => ({ ...chapter,
+      puzzles: chapter.puzzles.map(item => game.preview(item, chapter.rules, checkAt(item, chapter.rules))) })) } }
+  preview.data.chapters = assignPackLevels(preview, previous, game.sameLevel) ?? preview.data.chapters
+  const currentPuzzles = data.chapters.flatMap(chapter => chapter.puzzles.map(item => ({ item, rules: chapter.rules })))
+  const currentIds = new Set(currentPuzzles.map(({ item }) => item.levelId ?? ''))
+  const oldRetained = beforeLevel.filter(old => currentIds.has(old.id)).map(level => level.id)
+  const newRetained = currentPuzzles.filter(({ item }) => oldRetained.includes(item.levelId ?? '')).map(({ item }) => item.levelId)
+  const reviews = new Map(currentPuzzles.map(({ item, rules }) => [item.levelId, checkAt(item, rules)]))
+  const details = new Map(currentPuzzles.flatMap(({ item, rules }) => {
     const detail = reviews.get(item.levelId)?.detail
     return item.levelId ? [[item.levelId, detail && t(detail)] as const] : []
   }))
+  const removedLevels = beforeLevel.filter(level => !currentIds.has(level.id))
   const returningCompletions = beforeLevel.map(level => ({ level: level.id, revision: level.revision, packRevision: previous?.revision }))
   async function publish() {
     const current = await syncDraft()
@@ -558,44 +643,63 @@ export default function PackStudio({ game, account, online, admin = false, reade
     setTrial({ level, pack: preview })
   }
 
-  if (trial) return <div className={'app studio-preview studio-test-play' + (mode === 'reader' ? ' reader' : '')}
-    data-theme={mode === 'dark' ? 'dark' : 'light'}>
-    <div className={`game-theme ${game.theme} pack-${trial.pack.data.theme} pack-palette studio-pack-preview`}>
-      <p className="notice">{t('Test play · progress stays in this preview')}</p>
-      <game.Trial key={trial.level.id} {...trial} profile={account.id} reader={mode === 'reader'} leave={leaveTrial}/>
+  if (trial) {
+    const trialLocation = trial.level.pack ? packStopAt(trial.pack, trial.level.pack.stop) : undefined
+    return <div className={'app studio-preview studio-test-play' + (mode === 'reader' ? ' reader' : '')}
+      data-theme={mode === 'dark' ? 'dark' : 'light'}>
+      <div className={`game-theme ${game.theme} pack-${trialLocation?.chapter.theme ?? trial.pack.data.chapters[0]?.theme ?? 'default'} pack-palette studio-pack-preview`}>
+        <p className="notice">{t('Test play · progress stays in this preview')}</p>
+        <game.Trial key={trial.level.id} {...trial} profile={account.id} reader={mode === 'reader'} leave={leaveTrial}/>
+      </div>
     </div>
-  </div>
+  }
 
-  const canPublish = data.puzzles.length > 0 && Boolean(data.title.trim()) &&
-    data.puzzles.every(item => item.title.trim() && checkAt(item)?.ready)
-  const tabs = [{ id: 'levels', title: t('Levels') }, { id: 'appearance', title: t('Appearance') },
-    { id: 'rules', title: t('Rules') }, { id: 'preview', title: t('Preview') }]
+  const canPublish = data.chapters.length > 0 && Boolean(data.title.trim()) &&
+    data.chapters.every(chapter => chapter.title.trim() && chapter.puzzles.length > 0) &&
+    currentPuzzles.every(({ item, rules }) => item.title.trim() && checkAt(item, rules)?.ready)
+  const tabs = [{ id: 'chapters', title: t('Chapters') }, { id: 'levels', title: t('Levels') },
+    { id: 'pack', title: t('Pack') }, { id: 'chapter', title: t('Chapter') }, { id: 'rules', title: t('Rules') },
+    { id: 'preview', title: t('Preview') }]
   function chooseLevel(id: string | undefined) { setLevelId(id); setTab('levels'); setShowLevelList(false) }
+  function chooseChapter(id: string) {
+    const next = chapters.find(item => item.id === id)
+    setChapterId(id); setLevelId(next?.puzzles[0]?.levelId)
+    if (tab !== 'chapter' && tab !== 'rules') setTab('levels')
+    setShowLevelList(false)
+  }
+  const chapterSelect = chapters.length > 1 ? <label className="studio-chapter-select">{t('Chapter')}
+    <select value={chapter?.id ?? ''} onChange={event => chooseChapter(event.target.value)}>
+      {chapters.map((item, index) => <option key={item.id} value={item.id}>
+        {index + 1}. {item.title || t('Untitled chapter')}
+      </option>)}
+    </select>
+  </label> : null
 
-  const sidebar = tab === 'levels' ? <>
+  const sidebar = tab === 'levels' && chapter ? <>
     <div className="section-heading"><h2 className="studio-level-heading">{t('Levels')}</h2>
       <button className="secondary studio-toggle-levels" aria-expanded={showLevelList} onClick={() => setShowLevelList(!showLevelList)}>
         {puzzle ? t('Levels · {position} of {total}', {
-          position: data.puzzles.indexOf(puzzle) + 1, total: data.puzzles.length,
+          position: chapter.puzzles.indexOf(puzzle) + 1, total: chapter.puzzles.length,
         }) : t('Levels')}
       </button>
-      <button className="secondary" disabled={busy || data.puzzles.length >= packLevelLimit} onClick={() => add()}><Plus size={16}/> {t('Add level')}</button>
+      <button className="secondary" disabled={busy || chapter.puzzles.length >= packLevelLimit} onClick={() => add()}><Plus size={16}/> {t('Add level')}</button>
     </div>
+    {chapterSelect}
     <div className={'studio-level-panel' + (showLevelList ? ' is-open' : '')}>
-      <PackLevelList levels={data.puzzles.map(item => {
-        const detail = checkAt(item)?.detail
+      <PackLevelList levels={chapter.puzzles.map(item => {
+        const detail = checkAt(item, chapter.rules)?.detail
         return { id: item.levelId!, title: item.title || t('Untitled puzzle'),
-          detail: [item.chapter, detail ? t(detail) : t('Ungraded')].filter(Boolean).join(' · ') }
-      })} selected={levelId} disabled={busy} canInsert={data.puzzles.length < packLevelLimit}
+          detail: [detail ? t(detail) : t('Ungraded')].filter(Boolean).join(' · ') }
+      })} selected={levelId} disabled={busy} canInsert={chapter.puzzles.length < packLevelLimit}
         select={chooseLevel} move={move} insert={index => add(undefined, index)} remove={id => {
-          const index = data.puzzles.findIndex(item => item.levelId === id)
-          if (!window.confirm(t('Remove {title} from this pack draft?', { title: data.puzzles[index].title }))) return
-          edit(current => ({ ...current, puzzles: current.puzzles.filter(item => item.levelId !== id) }))
-          if (id === levelId) setLevelId(data.puzzles[index + 1]?.levelId ?? data.puzzles[index - 1]?.levelId)
+          const index = chapter.puzzles.findIndex(item => item.levelId === id)
+          if (!window.confirm(t('Remove {title} from this pack draft?', { title: chapter.puzzles[index].title }))) return
+          editChapter(chapter.id, current => ({ ...current, puzzles: current.puzzles.filter(item => item.levelId !== id) }))
+          if (id === levelId) setLevelId(chapter.puzzles[index + 1]?.levelId ?? chapter.puzzles[index - 1]?.levelId)
         }}/>
     </div>
-    {data.puzzles.length === packLevelLimit && <p>{t('Add up to 30 puzzles per pack.')}</p>}
-    {legacy.length > 0 && <label>{t('Bring in a saved puzzle')}<select value="" disabled={busy || data.puzzles.length >= packLevelLimit} onChange={event => {
+    {chapter.puzzles.length === packLevelLimit && <p>{t('Add up to 30 puzzles per chapter.')}</p>}
+    {legacy.length > 0 && <label>{t('Bring in a saved puzzle')}<select value="" disabled={busy || chapter.puzzles.length >= packLevelLimit} onChange={event => {
       const item = legacy.find(draft => draft.levelId === event.target.value)
       if (item) add(item)
     }}><option value="">{t('Saved drafts')}</option>{legacy.map(item => <option key={item.levelId} value={item.levelId}>{item.title}</option>)}</select></label>}
@@ -646,22 +750,84 @@ export default function PackStudio({ game, account, online, admin = false, reade
       }}>{t('Open synced version')}</button>
     </div>}
     <fieldset className="studio-fields" disabled={busy}>
-      {tab === 'levels' && (puzzle ? <game.Editor key={puzzle.levelId} level={puzzle} rules={data.rules} onCheck={onCheck}
-        update={patch => edit(current => ({ ...current, puzzles: current.puzzles.map(item => item.levelId === puzzle.levelId ? { ...item, ...patch } : item) }))}
+      {tab === 'chapters' && <div className="panel padded studio-chapters">
+        <div className="section-heading"><div><h2>{t('Chapters')}</h2>
+          <p>{t('Levels are grouped into chapters. Players choose a chapter before its trail.')}</p></div>
+          <button className="secondary" type="button" disabled={busy || chapters.length >= packChapterLimit} onClick={addChapter}>
+            <Plus size={16}/> {t('Add chapter')}
+          </button></div>
+        {chapters.length === packChapterLimit && <p>{t('Add up to 12 chapters per pack.')}</p>}
+        <div className="chapter-cards studio-chapter-cards">{chapters.map((item, index) => {
+          const art = item.cover ?? item.background
+          const ready = item.puzzles.filter(puzzle => checkAt(puzzle, item.rules)?.ready).length
+          return <article className={`chapter-card pack-${item.theme}`} key={item.id}>
+            <span className="chapter-card-art">
+              {art ? <img className="chapter-cover" src={art} alt=""/> : <span className="chapter-cover chapter-cover-empty"/>}
+              <span className="chapter-number">{index + 1}</span>
+            </span>
+            <span className="chapter-card-body">
+              <span className="eyebrow">{t('Chapter {number}', { number: index + 1 })}</span>
+              <span className="chapter-card-title">{item.title || t('Untitled chapter')}</span>
+              {item.description && <span className="chapter-card-description">{item.description}</span>}
+              <span className="chapter-card-progress">{t('{solved} of {total} levels checked', { solved: ready, total: item.puzzles.length })}</span>
+              <span className="button-bar studio-chapter-actions">
+                <button className="secondary" type="button" disabled={busy}
+                  onClick={() => chooseChapter(item.id)}>{t('Open chapter')}</button>
+                <button className="secondary" type="button" disabled={busy}
+                  onClick={() => { chooseChapter(item.id); setTab('chapter') }}>{t('Chapter settings')}</button>
+                <button className="icon-button" type="button" disabled={busy || index === 0}
+                  aria-label={t('Move {title} up', { title: item.title })} title={t('Move up')}
+                  onClick={() => moveChapter(index, index - 1)}><ArrowUp size={16}/></button>
+                <button className="icon-button" type="button" disabled={busy || index === chapters.length - 1}
+                  aria-label={t('Move {title} down', { title: item.title })} title={t('Move down')}
+                  onClick={() => moveChapter(index, index + 1)}><ArrowDown size={16}/></button>
+                <button className="icon-button" type="button" disabled={busy || chapters.length <= 1}
+                  aria-label={t('Remove {title}', { title: item.title })} title={t('Remove chapter')}
+                  onClick={() => removeChapter(item.id)}><Trash2 size={16}/></button>
+              </span>
+            </span>
+          </article>
+        })}</div>
+      </div>}
+
+      {tab === 'levels' && (puzzle && chapter ? <game.Editor key={puzzle.levelId} level={puzzle} rules={chapter.rules} onCheck={onCheck}
+        update={patch => editChapter(chapter.id, current => ({ ...current,
+          puzzles: current.puzzles.map(item => item.levelId === puzzle.levelId ? { ...item, ...patch } : item) }))}
         trial={() => {
           const level = packLevels(game.id, preview).find(item => item.id === puzzle.levelId)
           if (level) startTrial(level)
-        }}/> : <p className="empty">{t('Add a level to open the level editor.')}</p>)}
-      {tab === 'appearance' && <div className="panel padded pack-form studio-appearance-fields">
+        }}/> : <p className="empty">{chapter ? t('Add a level to open the level editor.') : t('Add a chapter to start building.')}</p>)}
+
+      {tab === 'pack' && <div className="panel padded pack-form studio-pack-fields">
+        <h2>{t('Pack settings')}</h2>
+        <p>{t('These settings describe the whole pack. Chapters have their own settings.')}</p>
         <label>{t('Pack title')}<input value={data.title} maxLength={80} onChange={event => edit(current => ({ ...current, title: event.target.value }))}/></label>
         <label>{t('Description')}<textarea aria-label={t('Description')} rows={3} value={data.description} maxLength={420}
           onChange={event => edit(current => ({ ...current, description: event.target.value }))}/></label>
+        <div className="pack-art-inputs"><div>
+          {data.cover && <img alt="" src={data.cover}/>}
+          <label>{t('Pack cover')}<input type="file" aria-label={t('Pack cover')}
+            accept="image/png,image/jpeg,image/webp" onChange={event => {
+              const file = event.target.files?.[0]; event.target.value = ''
+              if (file) task(async () => { const image = await packArtwork(file); edit(current => ({ ...current, cover: image })) })
+            }}/></label>
+          {data.cover && <button className="text-button" type="button" onClick={() => edit(current => ({ ...current, cover: undefined }))}>{t('Remove')}</button>}
+        </div></div>
+      </div>}
+
+      {tab === 'chapter' && chapter && <div className="panel padded pack-form studio-chapter-fields">
+        <h2>{t('Chapter settings')}</h2>
+        {chapterSelect}
+        <label>{t('Chapter title')}<input value={chapter.title} maxLength={80} onChange={event => editChapter(chapter.id,
+          current => ({ ...current, title: event.target.value }))}/></label>
+        <label>{t('Chapter description')}<textarea aria-label={t('Chapter description')} rows={3} value={chapter.description} maxLength={420}
+          onChange={event => editChapter(chapter.id, current => ({ ...current, description: event.target.value }))}/></label>
         <fieldset className="studio-theme-picker"><legend>{t('Theme')}</legend>
           <div className="studio-theme-options">
             {game.themes.map(({ id, name }) => <label key={id} className="studio-theme-option">
-              <input type="radio" name="pack-theme" value={id} checked={data.theme === id}
-                onChange={() => edit(current => ({ ...current, theme: id }))}/>
-              <span className="studio-theme-name">{t(name)}{data.theme === id && <Check size={16} aria-hidden="true"/>}</span>
+              <input type="radio" name="chapter-theme" value={id} checked={chapter.theme === id}
+                onChange={() => editChapter(chapter.id, current => ({ ...current, theme: id }))}/>
+              <span className="studio-theme-name">{t(name)}{chapter.theme === id && <Check size={16} aria-hidden="true"/>}</span>
               <span className="studio-theme-pair" aria-hidden="true">
                 {(['light', 'dark'] as const).map(mode => <span key={mode} className="studio-theme-sample">
                   <span className="app studio-preview studio-theme-demo" data-theme={mode}>
@@ -676,45 +842,61 @@ export default function PackStudio({ game, account, online, admin = false, reade
           </div>
           <div className="button-bar studio-theme-preview-link">
             <button className="text-button" type="button" onClick={() => setTab('preview')}>{t('Preview theme')}</button>
-            <p>{t('E-reader displays the pack in grayscale.')}</p>
+            <p>{t('E-reader displays the chapter in grayscale.')}</p>
           </div>
         </fieldset>
         <div className="pack-art-inputs">{(['cover', 'background'] as const).map(key => <div key={key}>
-          {data[key] && <img alt="" src={data[key]}/>}
-          <label>{key === 'cover' ? t('Cover image') : t('Background image')}
-            <input type="file" aria-label={key === 'cover' ? t('Cover image') : t('Background image')}
-              accept="image/png,image/jpeg,image/webp"  onChange={event => {
+          {chapter[key] && <img alt="" src={chapter[key]}/>}
+          <label>{key === 'cover' ? t('Chapter cover image') : t('Chapter background image')}
+            <input type="file" aria-label={key === 'cover' ? t('Chapter cover image') : t('Chapter background image')}
+              accept="image/png,image/jpeg,image/webp" onChange={event => {
               const file = event.target.files?.[0]; event.target.value = ''
-              if (file) task(async () => { const image = await packArtwork(file); edit(current => ({ ...current, [key]: image })) })
+              if (file) task(async () => {
+                const image = await packArtwork(file)
+                editChapter(chapter.id, current => ({ ...current, [key]: image }))
+              })
             }}/></label>
-          {data[key] && <button className="text-button" type="button" onClick={() => edit(current => ({ ...current, [key]: undefined }))}>{t('Remove')}</button>}
+          {chapter[key] && <button className="text-button" type="button" onClick={() => editChapter(chapter.id,
+            current => ({ ...current, [key]: undefined }))}>{t('Remove')}</button>}
         </div>)}</div>
       </div>}
-      {tab === 'rules' && <div className="panel padded pack-form"><h2>{t('Pack rules')}</h2>
+
+      {tab === 'rules' && chapter && <div className="panel padded pack-form"><h2>{t('Chapter rules')}</h2>
+        {chapterSelect}
         <p>{t('Levels use these rules unless you override them in the level editor.')}</p>
-        <StudioRuleFields values={data.rules} groups={game.rules} update={patch => edit(current => ({ ...current, rules: { ...current.rules, ...patch } }))}/>
+        <StudioRuleFields values={chapter.rules} groups={game.rules}
+          update={patch => editChapter(chapter.id, current => ({ ...current, rules: { ...current.rules, ...patch } }))}/>
       </div>}
+
       {tab === 'review' && <div className="panel padded pack-form studio-review">
         <h2>{t(draft.visible ? 'Publish update' : 'Publish pack')}</h2>
         <p>{t(draft.visible ? 'This replaces the current version in the {game} catalog on this instance.'
           : 'This makes the pack available to players in the {game} catalog on this instance.', { game: game.title })}</p>
-        {!data.puzzles.length && <p>{t('Add a level to open the level editor.')}</p>}
-        {!data.title.trim() && <button className="text-button" onClick={() => setTab('appearance')}>{t('Enter a pack title')}</button>}
-        <ul>{data.puzzles.map((item, index) => {
-          const oldIndex = beforeLevel.findIndex(level => level.id === item.levelId)
-          const changed = preview.data.puzzles[index].levelRevision === preview.revision
-          const result = checkAt(item)
-          const status = result ? t(result.detail ?? result.status) : t('Checking puzzle…')
-          const moved = oldIndex >= 0 && oldRetained.indexOf(item.levelId ?? '') !== newRetained.indexOf(item.levelId)
-          return <li key={item.levelId}>
-            <button className="text-button" onClick={() => chooseLevel(item.levelId)}>{index + 1}. {item.title || t('Untitled puzzle')}</button>
-            <span>{[!item.title.trim() ? t('Enter a puzzle title') : status, previous &&
-              (oldIndex < 0 ? t('Added') : changed ? t('Changed') : undefined),
-              moved && t('Moved')].filter(Boolean).join(' · ')}</span>
-          </li>
-        })}
-        {beforeLevel.filter(old => !data.puzzles.some(item => item.levelId === old.id)).map(old =>
-          <li key={old.id}><span>{old.title} · {t('Removed')}</span></li>)}</ul>
+        {!data.title.trim() && <button className="text-button" onClick={() => setTab('pack')}>{t('Enter a pack title')}</button>}
+        {data.chapters.map((item, chapterIndex) => <section key={item.id} className="studio-review-chapter">
+          <h3>{t('Chapter {number}', { number: chapterIndex + 1 })}: {item.title || t('Untitled chapter')}</h3>
+          {!item.title.trim() && <button className="text-button" onClick={() => { chooseChapter(item.id); setTab('chapter') }}>{t('Enter a chapter title')}</button>}
+          {!item.puzzles.length && <p>{t('Add at least one level to this chapter.')}</p>}
+          <ul>{item.puzzles.map((entry, index) => {
+            const oldIndex = beforeLevel.findIndex(level => level.id === entry.levelId)
+            const previewEntry = preview.data.chapters.find(previewChapter => previewChapter.id === item.id)?.puzzles[index]
+            const changed = previewEntry?.levelRevision === preview.revision
+            const result = checkAt(entry, item.rules)
+            const status = result ? t(result.detail ?? result.status) : t('Checking puzzle…')
+            const moved = oldIndex >= 0 && oldRetained.indexOf(entry.levelId ?? '') !== newRetained.indexOf(entry.levelId)
+            return <li key={entry.levelId}>
+              <button className="text-button" onClick={() => { chooseChapter(item.id); chooseLevel(entry.levelId) }}>{index + 1}. {entry.title || t('Untitled puzzle')}</button>
+              <span>{[!entry.title.trim() ? t('Enter a puzzle title') : status, previous &&
+                (oldIndex < 0 ? t('Added') : changed ? t('Changed') : undefined),
+                moved && t('Moved')].filter(Boolean).join(' · ')}</span>
+            </li>
+          })}
+          </ul>
+        </section>)}
+        {removedLevels.length > 0 && <section className="studio-review-chapter">
+          <h3>{t('Removed levels')}</h3>
+          <ul>{removedLevels.map(old => <li key={old.id}><span>{old.title} · {t('Removed')}</span></li>)}</ul>
+        </section>}
         {previous && <div>
           <p>{t('See what a player who finished the previous revision can access after this update.')}</p>
           <button className="secondary" onClick={() => { setReturning(true); setTab('preview') }}>{t('Preview returning player')}</button>
@@ -727,23 +909,30 @@ export default function PackStudio({ game, account, online, admin = false, reade
           </button>
         </div>
       </div>}
+
       {tab === 'preview' && <>
         <div className="studio-preview-controls">
           <div className="tabs">{(['light', 'dark', 'reader'] as const).map(value => <button type="button" key={value} aria-pressed={mode === value}
             onClick={() => setMode(value)}>{t(value === 'reader' ? 'E-reader' : value === 'dark' ? 'Dark' : 'Light')}</button>)}</div>
-          {data.puzzles.length > 0 && <button className="text-button" type="button" onClick={() => {
+          {chapter && <button className="text-button" type="button" onClick={() => {
             const trail = trailPreview.current
             trail?.scrollTo({ top: trail.scrollHeight, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
-          }}>{t('Show pack start')}</button>}
+          }}>{t('Show chapter start')}</button>}
         </div>
         {previous && <div className="button-bar">
           <button className="text-button" aria-pressed={!returning} onClick={() => setReturning(false)}>{t('New player')}</button>
           <button className="text-button" aria-pressed={returning} onClick={() => setReturning(true)}>{t('Returning player')}</button>
         </div>}
         <div ref={trailPreview} className={'app studio-preview studio-trail-preview' + (mode === 'reader' ? ' reader' : '')}
-          data-theme={mode === 'dark' ? 'dark' : 'light'} role="region" aria-label={t('Pack trail preview')} tabIndex={0}>
-          <div className={`game-theme ${game.theme} pack-${data.theme} studio-pack-preview`}><PackRoadmap game={game.id} presentation={game.presentation} pack={preview} completed={new Set()} previewCompletions={returning ? returningCompletions : undefined} sessions={[]} canExport={false}
-            canPlay preview previewDetails={details} leave={() => setTab('levels')} play={startTrial}/></div>
+          data-theme={mode === 'dark' ? 'dark' : 'light'} role="region" aria-label={t('Pack preview')} tabIndex={0}>
+          <div className={`game-theme ${game.theme} pack-${data.chapters[0]?.theme ?? 'default'} studio-pack-preview`}>
+            <PackChapters presentation={game.presentation} pack={preview} completed={new Set()} sessions={[]}
+              canExport={false} leave={() => setTab('levels')} preview
+              previewCompletions={returning ? returningCompletions : undefined}/>
+            {chapter && <PackRoadmap game={game.id} presentation={game.presentation} pack={preview} chapterId={chapter.id}
+              completed={new Set()} previewCompletions={returning ? returningCompletions : undefined} sessions={[]}
+              canExport={false} canPlay preview previewDetails={details} leave={() => setTab('levels')} play={startTrial}/>}
+          </div>
         </div>
       </>}
     </fieldset>

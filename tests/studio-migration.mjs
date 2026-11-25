@@ -68,7 +68,7 @@ try {
   assert.deepEqual(packLevels(recovered).map(({ id, revision }) => [id, revision]), [[visibleId, 7]])
   assert.ok(!packs.some(pack => packLevels(pack).some(level => level.id === hiddenId)))
   const drafts = (await app.inject({ url: '/api/pack-drafts', headers })).json()
-  assert.ok(drafts.some(draft => !draft.visible && draft.data.puzzles[0].levelId === hiddenId))
+  assert.ok(drafts.some(draft => !draft.visible && draft.data.chapters[0].puzzles[0].levelId === hiddenId))
   const progress = (await app.inject({ url: '/api/progress', headers })).json()
   assert.deepEqual(progress.completions, [{ level: visibleId, revision: 7 }])
   assert.deepEqual(progress.sessions[0].data, save)
