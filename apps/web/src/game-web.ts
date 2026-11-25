@@ -11,7 +11,8 @@ import type { LocalSession, ProfilePreferences } from './storage.js'
 
 export interface GamePlayerProps {
   /** Present only for a daily-challenge claim. */
-  challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
+  challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string
+    rules?: Record<string, string | number | boolean | null> }
   /** Optional compact standings block rendered inside the after-game overlay. */
   standingsPanel?: ReactNode
   /** Present when a closed challenge seed is being replayed outside the daily board. */

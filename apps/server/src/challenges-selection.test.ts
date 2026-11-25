@@ -5,7 +5,7 @@ import { challengeGames } from './challenges/registry.js'
 import { selectSlate, type OccurrenceRow, type SeriesRow } from './challenges/store.js'
 
 const gameSelections: ChallengeGameSelection[] = [
-  { game: 'sudoku', options: { difficulty: ['Medium'] } },
+  { game: 'sudoku', options: { difficulty: ['Medium'], autoNotes: ['off'], hints: ['on'] } },
   { game: 'nonograms', options: { size: ['5'], difficulty: ['Easy', 'Medium', 'Hard'] } },
   { game: 'nonograms', options: { size: ['10'], difficulty: ['Easy', 'Medium'] } },
 ]
@@ -28,6 +28,10 @@ test('game selections choose distinct games and one profile per game', () => {
   const slate = selectSlate(series, occurrence, challengeGames)
   assert.equal(slate.length, 2)
   assert.equal(new Set(slate.map(item => item.game.id)).size, 2)
+  const sudoku = slate.find(item => item.game.id === 'sudoku')
+  assert.ok(sudoku)
+  assert.equal(sudoku.rules.autoNotes, false)
+  assert.equal(sudoku.rules.hints, true)
   const nonogram = slate.find(item => item.game.id === 'nonograms')
   assert.ok(nonogram)
   const size = Number(nonogram.options.size)

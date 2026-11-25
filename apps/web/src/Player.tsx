@@ -24,7 +24,8 @@ interface Props {
   persist: (data: SudokuSave) => Promise<void>; leave: () => void; finish?: () => void; reset: () => void; openSettings?: () => void; trial?: boolean
   leaderboard?: { open: () => void }
   bestMs?: number; testMode?: boolean
-  challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string }
+  challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string
+    rules?: Record<string, string | number | boolean | null> }
   standingsPanel?: ReactNode
   replay?: { label: string; backLabel?: string }
 }
@@ -34,9 +35,19 @@ function digitUsedUp(entries: readonly number[], digit: number) {
   return entries.filter(value => value === digit).length >= 9
 }
 
-export default function Player({ session, level, preferences, reader, pack, persist, leave, finish, reset, openSettings, trial = false, bestMs, testMode = false, leaderboard, challenge, standingsPanel, replay }: Props) {
+function challengePreferences(rules: Record<string, string | number | boolean | null> | undefined): Partial<Preferences> {
+  const result: Partial<Preferences> = {}
+  for (const key of ['hints', 'autoNotes', 'autoNoteDeletion', 'mistakes', 'timer'] as const) {
+    const value = rules?.[key]
+    if (typeof value === 'boolean') result[key] = value
+  }
+  return result
+}
+
+export default function Player({ session, level, preferences: profilePreferences, reader, pack, persist, leave, finish, reset, openSettings, trial = false, bestMs, testMode = false, leaderboard, challenge, standingsPanel, replay }: Props) {
   const t = useT()
   const challengeMode = Boolean(challenge)
+  const preferences = { ...profilePreferences, ...challengePreferences(challenge?.rules) }
   const givens = useMemo(() => Array.from(level.grid, Number), [level.grid])
   const packRules = pack && level.pack ? effectivePackRules(pack, level.pack.stop) : undefined
   const diagonal = level.ruleset === 2
@@ -44,7 +55,8 @@ export default function Player({ session, level, preferences, reader, pack, pers
   const lifeLimit = packRules?.lives
   const showHints = preferences.hints && packRules?.hints !== false
   const showAutoNotes = preferences.autoNotes && packRules?.autoNotes !== false
-  const showTimer = challengeMode || packRules?.timeTrial || (preferences.timer && !reader)
+  const showTimer = challengeMode ? preferences.timer !== false && !reader
+    : packRules?.timeTrial || (preferences.timer && !reader)
   const solution = useMemo(() => {
     if (!lifeLimit) return undefined
     const result = validate(givens, 65_000, diagonal)

@@ -15,6 +15,12 @@ import {
 
 type NonogramOptions = { size: 5 | 10; difficulty: 'Easy' | 'Medium' | 'Hard' }
 const defaultRules: ProgressionRules = { inOrder: false }
+const settingGroup = (key: string, label: string, on: boolean) => ({
+  key, label, kind: 'rule' as const,
+  choices: [{ id: 'on', label: 'On', value: true }, { id: 'off', label: 'Off', value: false }],
+  defaultEnabled: [on ? 'on' : 'off'],
+})
+const challengeSettingGroups = [settingGroup('nonogramTimer', 'Show timer', true)]
 const sizeGroup = {
   key: 'size',
   label: 'Grid size',
@@ -117,6 +123,6 @@ export const nonogramsGame: GameDefinition<NonogramLevel, NonogramSave, Progress
   challenge: {
     options: { size: 10, difficulty: 'Medium' },
     rules: defaultRules,
-    optionGroups: [sizeGroup, difficultyGroup],
+    optionGroups: [sizeGroup, difficultyGroup, ...challengeSettingGroups],
   },
 }
