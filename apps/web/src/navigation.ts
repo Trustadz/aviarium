@@ -38,7 +38,13 @@ export function routeTrail(pathname: string): string[] {
   const segments = path.split('/').filter(Boolean)
   if (segments[0] === 'games' && segments[1]) {
     const menu = '/games/' + segments[1]
-    return path === menu ? ['/', menu] : ['/', menu, path]
+    if (path === menu) return ['/', menu]
+    if (segments[2] === 'packs' && segments.length >= 5) {
+      const overview = '/games/' + segments[1] + '/packs/' + segments[3] + '/' + segments[4]
+      const chapter = segments[5] === 'chapters' && segments[6]
+      return chapter ? ['/', menu, overview, path] : ['/', menu, overview]
+    }
+    return ['/', menu, path]
   }
   if (segments[0] === 'studio') {
     if (path === '/studio') return ['/', path]

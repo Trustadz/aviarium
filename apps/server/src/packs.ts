@@ -37,21 +37,27 @@ async function publishRevision(db: PoolClient, game: ServerGame, pack: PackRevis
 export async function seedPacks(db: PoolClient, game: ServerGame) {
   for (const definition of game.packs.builtIn) {
     const { id, revision, coverFile } = definition
-    const draft = { ...definition.data }
+    const draft: PackDocument = { ...definition.data,
+      chapters: definition.data.chapters.map(chapter => ({ ...chapter, puzzles: chapter.puzzles.map(puzzle => ({ ...puzzle })) })) }
     if (coverFile) {
       const art = await readFile(new URL('../../../../dist/web/' + coverFile, import.meta.url))
       draft.cover = 'data:image/webp;base64,' + art.toString('base64')
+      if (!draft.chapters[0].cover) draft.chapters[0].cover = draft.cover
     }
     const owner = (await db.query<{ game_id: string; owner_id: string | null }>('SELECT game_id,owner_id FROM packs WHERE id=$1', [id])).rows[0]
     if (owner && (owner.game_id !== game.id || owner.owner_id)) throw new Error('Conflicting built-in pack ID: ' + id)
     if ((await db.query('SELECT 1 FROM pack_revisions WHERE pack_id=$1 AND revision=$2', [id, revision])).rowCount) {
       // Replacing bundled cover art leaves the puzzle revision and existing progress pinned.
       if (draft.cover) {
-        await db.query(`UPDATE pack_revisions r SET data=jsonb_set(r.data,'{cover}',to_jsonb($3::text))
+        await db.query(`UPDATE pack_revisions r SET data=jsonb_set(jsonb_set(r.data,'{cover}',to_jsonb($3::text)),
+          '{chapters,0,cover}',to_jsonb($3::text))
           FROM packs p WHERE p.id=r.pack_id AND p.owner_id IS NULL AND r.pack_id=$1 AND r.revision=$2
-          AND r.data->>'cover' IS DISTINCT FROM $3`, [id, revision, draft.cover])
-        await db.query(`UPDATE packs SET draft=jsonb_set(draft,'{cover}',to_jsonb($3::text))
-          WHERE id=$1 AND owner_id IS NULL AND published_revision=$2 AND draft->>'cover' IS DISTINCT FROM $3`,
+          AND (r.data->>'cover' IS DISTINCT FROM $3 OR r.data->'chapters'->0->>'cover' IS DISTINCT FROM $3)`,
+        [id, revision, draft.cover])
+        await db.query(`UPDATE packs SET draft=jsonb_set(jsonb_set(draft,'{cover}',to_jsonb($3::text)),
+          '{chapters,0,cover}',to_jsonb($3::text))
+          WHERE id=$1 AND owner_id IS NULL AND published_revision=$2
+          AND (draft->>'cover' IS DISTINCT FROM $3 OR draft->'chapters'->0->>'cover' IS DISTINCT FROM $3)`,
         [id, revision, draft.cover])
       }
       continue
@@ -148,7 +154,8 @@ export function registerPacks(app: FastifyInstance, game: ServerGame, prefix: st
     const { content } = z.object({ content: z.string().max(limit).regex(/^[A-Za-z0-9+/]+={0,2}$/) }).parse(request.body)
     const draft = importPack(game.packs, Buffer.from(content, 'base64'))
     // Imported levels get new identities on this installation.
-    draft.puzzles = draft.puzzles.map(({ levelId: _id, levelRevision: _revision, ...level }) => level)
+    draft.chapters = draft.chapters.map(chapter => ({ ...chapter, puzzles: chapter.puzzles.map(
+      ({ levelId: _id, levelRevision: _revision, ...level }) => level) }))
     return newDraft(user.id, await gradeInBackground(game, draft))
   })
   app.put(path('/pack-drafts/:id'), { bodyLimit: limit }, async request => {
@@ -205,9 +212,9 @@ export function registerPacks(app: FastifyInstance, game: ServerGame, prefix: st
       const { rows: [old] } = await db.query<{ data: PackDocument }>(
         'SELECT data FROM pack_revisions WHERE pack_id=$1 AND revision=$2', [id, current.published])
       const pack: PackRevision = { id, revision: next, builtIn: false, data }
-      const levels = assignPackLevels(pack, old && { id, revision: next - 1, builtIn: false, data: old.data }, game.packs.sameLevel)
-      if (!levels) throw new HttpError(422, 'pack_level_identity_invalid')
-      data.puzzles = levels
+      const chapters = assignPackLevels(pack, old && { id, revision: next - 1, builtIn: false, data: old.data }, game.packs.sameLevel)
+      if (!chapters) throw new HttpError(422, 'pack_level_identity_invalid')
+      data.chapters = chapters
       packManifest(game.packs, data)
       if (old && (await db.query('SELECT 1 FROM pack_revisions WHERE pack_id=$1 AND revision=$2 AND data=$3',
         [id, current.published, data])).rowCount) {

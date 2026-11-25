@@ -77,7 +77,9 @@ const studioGame: StudioGame = {
   themes: [{ id: 'default', name: 'Game default' }, { id: 'cockatoos', name: 'Cockatoo sky' }],
   rules: [{ label: 'Roadmap', fields: [{ key: 'inOrder', label: 'In order', kind: 'switch' }] }],
   presentation: nonogramPresentation,
-  createPack: title => ({ format: 1, game: nonogramsId, title, description: '', theme: 'default', rules: { inOrder: true }, puzzles: [] }),
+  createPack: title => ({ format: 2, game: nonogramsId, title, description: '', chapters: [{
+    id: 'chapter-1', title, description: '', theme: 'default', rules: { inOrder: true }, puzzles: [],
+  }] }),
   createLevel(t, previous) {
     const picture = blank(5)
     const entry: NonogramEntry = previous

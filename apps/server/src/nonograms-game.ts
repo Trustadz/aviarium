@@ -8,6 +8,7 @@ import {
   nonogramBoardKey, nonogramLeaderboardRulesVersion, nonogramPuzzleContent, nonogramQuickBoards, parseNonogramBoard,
 } from '../../../packages/nonograms/src/leaderboards.js'
 import { HttpError } from './auth.js'
+import { upgradePackDocument } from '../../../packages/game-sdk/src/packs.js'
 import type { ServerGame } from './game-runtime.js'
 
 export const nonogramsServer: ServerGame = {
@@ -17,11 +18,14 @@ export const nonogramsServer: ServerGame = {
     readManifest: input => nonogramPacks.manifest.parse(input),
     readDraft: input => nonogramPacks.draft.parse(input),
     verify(input) {
-      const draft = nonogramPacks.draft.parse(input)
-      if (!draft.puzzles.length) throw new HttpError(422, 'pack_empty')
-      for (const entry of draft.puzzles)
-        if (!entry.content.rows.some(runs => runs[0] > 0) || !solveByDeduction(entry.content))
-          throw new HttpError(422, 'pack_puzzle_unverified', { title: entry.title })
+      const draft = nonogramPacks.draft.parse(upgradePackDocument(input))
+      if (!draft.chapters.some(chapter => chapter.puzzles.length)) throw new HttpError(422, 'pack_empty')
+      for (const chapter of draft.chapters) {
+        if (!chapter.puzzles.length) throw new HttpError(422, 'pack_chapter_empty', { chapter: chapter.title })
+        for (const entry of chapter.puzzles)
+          if (!entry.content.rows.some(runs => runs[0] > 0) || !solveByDeduction(entry.content))
+            throw new HttpError(422, 'pack_puzzle_unverified', { title: entry.title })
+      }
       return nonogramPacks.published.parse(draft)
     },
     levels: pack => nonogramLevels(pack as NonogramPack),
@@ -29,11 +33,14 @@ export const nonogramsServer: ServerGame = {
     builtIn: [{
       id: 'nonograms-' + starterPack.id, revision: starterPack.revision, coverFile: 'cockatoos-portrait.webp',
       data: {
-        format: 1, game: nonogramsId, title: starterPack.title, description: starterPack.description,
-        theme: 'cockatoos', rules: { inOrder: true },
-        puzzles: starterPack.puzzles.map(({ id, title, puzzle }) => ({
-          levelId: 'nonograms-' + id, title, content: puzzle, ruleset: 1,
-        })),
+        format: 2, game: nonogramsId, title: starterPack.title, description: starterPack.description,
+        chapters: [{
+          id: 'chapter-1', title: starterPack.title, description: starterPack.description,
+          theme: 'cockatoos', rules: { inOrder: true },
+          puzzles: starterPack.puzzles.map(({ id, title, puzzle }) => ({
+            levelId: 'nonograms-' + id, title, content: puzzle, ruleset: 1,
+          })),
+        }],
       },
     }],
   },

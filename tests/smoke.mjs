@@ -68,6 +68,7 @@ assert.equal(launchBanner.status, 200)
 assert.equal(launchBanner.headers.get('content-type'), 'image/webp')
 assert.equal(Buffer.from(await launchBanner.arrayBuffer()).toString('ascii', 8, 12), 'WEBP')
 
+let multiChapterPack
 if (adminToken && playerToken) {
   await request('/api/drafts', { headers: playerHeaders, expected: 403 })
   await request('/api/admin/backup', { headers: playerHeaders, expected: 403 })
@@ -123,8 +124,10 @@ if (adminToken && playerToken) {
   const original = Array.from({ length: 10 }, (_, index) => item('original-' + index))
   const inserted = Array.from({ length: 5 }, (_, index) => item('inserted-' + index))
   const appended = Array.from({ length: 10 }, (_, index) => item('appended-' + index, { rules: { hints: false } }))
-  const form = { localId: packId, format: 1, game: 'sudoku', title: updatedTitle, description: '', theme: 'default',
-    rules: { hints: true, autoNotes: true, inOrder: true, lives: null, timeTrial: false }, puzzles: original }
+  const chapter = puzzles => ({ id: 'chapter-1', title: updatedTitle, description: '', theme: 'default',
+    rules: { hints: true, autoNotes: true, inOrder: true, lives: null, timeTrial: false }, puzzles })
+  const form = { localId: packId, format: 2, game: 'sudoku', title: updatedTitle, description: '',
+    chapters: [chapter(original)] }
   const create = () => request('/api/pack-drafts', { method: 'POST', headers: playerHeaders, body: form })
   let owned = await create()
   assert.equal((await create()).id, owned.id)
@@ -153,13 +156,15 @@ if (adminToken && playerToken) {
     await playPackLevel(firstPack, oldLevel, { complete: true })
     completionEvents.push({ level: oldLevel.id, revision: oldLevel.revision, packRevision: 1 })
   }
-  owned = await replace({ ...owned.data, puzzles: [...owned.data.puzzles.slice(0, 5), ...inserted, ...owned.data.puzzles.slice(5)] })
+  owned = await replace({ ...owned.data, chapters: owned.data.chapters.map((ch, index) => index ? ch :
+    { ...ch, puzzles: [...ch.puzzles.slice(0, 5), ...inserted, ...ch.puzzles.slice(5)] }) })
   owned = await publish()
   const secondPack = await fetchPack(2)
   let progressPath = packProgress(secondPack, completionEvents)
   assert.equal(progressPath.solved.filter(Boolean).length, 10)
   assert.deepEqual(progressPath.playable.slice(5, 10), Array(5).fill(true))
-  owned = await replace({ ...owned.data, puzzles: [...owned.data.puzzles, ...appended] })
+  owned = await replace({ ...owned.data, chapters: owned.data.chapters.map((ch, index) => index ? ch :
+    { ...ch, puzzles: [...ch.puzzles, ...appended] }) })
   owned = await publish()
   const thirdPack = await fetchPack(3)
   const thirdLevels = packLevels(thirdPack)
@@ -175,6 +180,24 @@ if (adminToken && playerToken) {
   await playPackLevel(thirdPack, thirdLevels[16], { expected: 422 })
   await playPackLevel(thirdPack, thirdLevels[15], { complete: true })
   await playPackLevel(thirdPack, thirdLevels[16], { complete: true })
+
+  const multiChapterId = crypto.randomUUID()
+  const multiChapter = (id, title, theme, levelTitle) => ({ id, title, description: '', theme,
+    rules: { hints: true, autoNotes: true, inOrder: true, lives: null, timeTrial: false },
+    puzzles: [{ title: levelTitle, grid: generated.grid, ruleset: 1, levelId: 'pack:' + multiChapterId + ':' + id }] })
+  const multiDraft = await request('/api/pack-drafts', { method: 'POST', headers: playerHeaders, body: {
+    localId: multiChapterId, format: 2, game: 'sudoku', title: 'Multi chapter ' + multiChapterId.slice(0, 8),
+    description: 'Two independent chapters.', chapters: [
+      multiChapter('first-chapter', 'First chapter', 'meadow', 'First chapter level'),
+      multiChapter('second-chapter', 'Second chapter', 'twilight', 'Second chapter level'),
+    ],
+  } })
+  const multiPublished = await request('/api/pack-drafts/' + multiDraft.id + '/publish', {
+    method: 'POST', headers: playerHeaders, body: { version: multiDraft.version },
+  })
+  multiChapterPack = await request('/api/packs/' + multiDraft.id + '/' + multiPublished.published, { headers: playerHeaders })
+  assert.equal(multiChapterPack.data.chapters.length, 2)
+
   await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: editorPatch(false) })
   console.info('Pack update checks passed: permissions, stable level revisions, and 10 → 15 → 25 ordered progression.')
 
@@ -538,12 +561,12 @@ try {
     await adminPage.getByLabel('Grid', { exact: true }).fill(selected.grid)
     await adminPage.getByRole('button', { name: 'Use grid', exact: true }).click()
     await adminPage.getByText(/Unique solution/).waitFor()
-    await adminPage.getByText('Level rules · Uses pack rules', { exact: true }).click()
+    await adminPage.getByText('Level rules · Uses chapter rules', { exact: true }).click()
     const playerAids = adminPage.getByRole('group', { name: 'Player aids' })
     const hintRule = playerAids.getByRole('switch', { name: 'Allow hints', exact: true })
     assert.equal(await hintRule.isEnabled(), true)
     await hintRule.uncheck()
-    await playerAids.getByRole('button', { name: 'Reset Allow hints to pack default', exact: true }).click()
+    await playerAids.getByRole('button', { name: 'Reset Allow hints to chapter default', exact: true }).click()
     assert.equal(await hintRule.isChecked(), true)
     await hintRule.uncheck()
     assert.equal(await adminPage.getByLabel('Level access', { exact: true }).count(), 0)
@@ -606,6 +629,7 @@ try {
     const themedPlayer = await desktop.newPage()
     await themedPlayer.addInitScript(() => localStorage.setItem('aviarium:theme', 'dark'))
     await themedPlayer.goto(origin + '/games/sudoku/packs/' + published.id + '/' + published.revision)
+    await themedPlayer.getByRole('button', { name: 'Open chapter Studio browser check', exact: true }).click()
     await themedPlayer.getByRole('button', { name: 'Play Edited offline', exact: true }).click()
     await themedPlayer.locator('.play-page .board').waitFor()
     const playerBackground = await themedPlayer.locator('.game-frame').evaluate(el => getComputedStyle(el).backgroundColor)
@@ -739,6 +763,7 @@ try {
   const packPage = await packContext.newPage()
   await packPage.goto(origin + '/games/sudoku')
   await packPage.getByRole('button', { name: /^Budgies/ }).click()
+  await packPage.getByRole('button', { name: 'Open chapter Budgies', exact: true }).click()
   const current = packPage.locator('.pack-trail [aria-current=step]')
   await current.getByRole('heading', { name: 'Garden Perch' }).waitFor()
   const locked = packPage.getByRole('button', { name: 'Play Eucalyptus Grove', exact: true })
@@ -756,13 +781,13 @@ try {
     const trail = roadmap.querySelector('.pack-trail').getBoundingClientRect()
     return info.top >= trail.bottom
   }))
-  assert.ok(await packPage.getByRole('button', { name: 'Sudoku menu', exact: true }).evaluate(button =>
+  assert.ok(await packPage.getByRole('button', { name: 'Chapters', exact: true }).evaluate(button =>
     button.getBoundingClientRect().top >= 0 && button.getBoundingClientRect().bottom <= innerHeight))
   assert.equal(await packPage.evaluate(() => document.documentElement.scrollWidth), 320)
 
   const headers = playerToken ? playerHeaders : adminHeaders
   const pack = (await request('/api/packs', { headers })).find(item => item.id === 'budgies')
-  const firstGrid = Array.from(pack.data.puzzles[0].grid, Number)
+  const firstGrid = Array.from(pack.data.chapters[0].puzzles[0].grid, Number)
   const firstSolution = validate(firstGrid).solution
   assert.ok(firstSolution)
   await current.getByRole('button', { name: 'Play Garden Perch', exact: true }).click()
@@ -778,7 +803,21 @@ try {
   }))
   assert.equal(await locked.isEnabled(), true)
   assert.equal(await packPage.getByRole('button', { name: 'Replay Garden Perch', exact: true }).isEnabled(), true)
+
+  assert.ok(multiChapterPack)
+  await packPage.goto(origin + '/games/sudoku/packs/' + multiChapterPack.id + '/' + multiChapterPack.revision)
+  await packPage.locator('.chapter-card').first().waitFor()
+  assert.equal(await packPage.locator('.chapter-card').count(), 2)
+  assert.match(await packPage.locator('.chapter-card').nth(1).innerText(), /Second chapter/)
+  await packPage.locator('.chapter-card').nth(1).click()
+  const secondChapterLevel = packPage.getByRole('button', { name: 'Play Second chapter level', exact: true })
+  await secondChapterLevel.waitFor()
+  assert.equal(await secondChapterLevel.isEnabled(), true)
+  await packPage.getByRole('button', { name: 'Chapters', exact: true }).click()
+  await packPage.locator('.chapter-card').first().click()
+  await packPage.getByRole('button', { name: 'Play First chapter level', exact: true }).waitFor()
   await packContext.close()
+  console.info('Chapter overview checks passed: two chapter cards, independent first stops, and back to the overview.')
   console.info('Pack trail checks passed: bottom-to-top pins, visible next stop, and unlocking the next stop.')
 
   const quickPlayContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
@@ -836,7 +875,7 @@ try {
 
   const nonogramApi = '/api/games/nonograms'
   const [cockatoos] = await request(nonogramApi + '/packs', { headers: playbackHeaders })
-  assert.equal(cockatoos.data.puzzles.length, 5)
+  assert.equal(cockatoos.data.chapters[0].puzzles.length, 5)
   assert.ok(cockatoos.data.cover.startsWith('data:image/webp;base64,'))
   const [egg, nest] = nonogramLevels(cockatoos)
   const submitNonogram = (data, expected) => request('/api/progress', { method: 'POST', headers: playbackHeaders, expected,
@@ -851,6 +890,7 @@ try {
   const nonogramPage = await nonogramContext.newPage()
   await nonogramPage.goto(origin + '/games/nonograms')
   await nonogramPage.getByRole('button', { name: /Sulphur-crested Cockatoos/ }).tap()
+  await nonogramPage.getByRole('button', { name: 'Open chapter Sulphur-crested Cockatoos', exact: true }).tap()
   await nonogramPage.getByRole('button', { name: 'Play Cockatoo Egg' }).tap()
   const squares = nonogramPage.locator('.nonogram-cell')
   assert.deepEqual(await nonogramPage.locator('.pack-play-art').boundingBox(), { x: 0, y: 0, width: 390, height: 844 })
@@ -906,6 +946,7 @@ try {
   await nonogramPage.getByRole('button', { name: 'Play Nest Hollow' }).waitFor()
   await until(async () => (await request('/api/progress', { headers: playbackHeaders })).completions
     .some(item => item.level === egg.id && item.revision === egg.revision), 'synced Nonograms completion')
+  await nonogramPage.getByRole('button', { name: 'Chapters', exact: true }).tap()
   await nonogramPage.getByRole('button', { name: 'Nonograms menu' }).tap()
   await until(() => nonogramPage.evaluate(async () =>
     Boolean(await caches.match('/__aviarium/last-played', { cacheName: 'aviarium-game-nonograms' }))), 'Nonograms offline download')
@@ -956,7 +997,7 @@ try {
     await author.getByRole('button', { name: 'Publish pack', exact: true }).click()
     await author.getByRole('button', { name: 'Publish to catalog', exact: true }).click()
     await until(async () => (await request(nonogramApi + '/packs', { headers: playbackHeaders }))
-      .some(pack => pack.data.title === 'Nonograms browser pack' && pack.data.puzzles[0].title === 'One dot'),
+      .some(pack => pack.data.title === 'Nonograms browser pack' && pack.data.chapters[0].puzzles[0].title === 'One dot'),
     'Nonograms pack published from Studio')
     await author.goBack()
     await author.getByRole('heading', { name: 'My packs' }).waitFor()
@@ -974,11 +1015,14 @@ try {
   await navigationPage.goto(origin)
   await navigationPage.getByRole('button', { name: 'Explore Sudoku' }).click()
   await navigationPage.getByRole('button', { name: /^Budgies/ }).click()
+  await navigationPage.getByRole('button', { name: 'Open chapter Budgies', exact: true }).click()
   await navigationPage.getByRole('button', { name: /^(Play|Replay|Resume) Garden Perch/ }).click()
   await navigationPage.getByLabel('Sudoku board', { exact: true }).waitFor()
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
   await navigationPage.goBack()
+  await navigationPage.getByRole('button', { name: 'Sudoku menu', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
   await navigationPage.getByRole('button', { name: 'Exit to library' }).waitFor()
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Game library' }).waitFor()
@@ -988,6 +1032,8 @@ try {
   await navigationPage.getByLabel('Sudoku board', { exact: true }).waitFor()
   await navigationPage.getByRole('button', { name: 'Back to roadmap', exact: true }).click()
   await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Chapters', exact: true }).click()
+  await navigationPage.getByRole('button', { name: 'Sudoku menu', exact: true }).waitFor()
   await navigationPage.getByRole('button', { name: 'Sudoku menu', exact: true }).click()
   await navigationPage.getByRole('button', { name: 'Exit to library' }).click()
   await navigationPage.getByRole('heading', { name: 'Game library' }).waitFor()
@@ -1000,6 +1046,13 @@ try {
   await navigationPage.getByRole('button', { name: 'Exit to library' }).waitFor()
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Game library' }).waitFor()
+
+  await navigationPage.goto(`${origin}/games/sudoku/packs/budgies/${navigationPack.revision}/chapters/chapter-1`)
+  await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
+  await navigationPage.goBack()
+  await navigationPage.getByRole('button', { name: 'Sudoku menu', exact: true }).waitFor()
+  await navigationPage.goBack()
+  await navigationPage.getByRole('button', { name: 'Exit to library' }).waitFor()
   await navigationContext.close()
   console.info('Layered history checks passed: game, roadmap, menu, and library in both directions.')
 

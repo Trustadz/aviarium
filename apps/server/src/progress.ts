@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { locales } from '../../../packages/game-sdk/src/locales.js'
 import { isResumable, mutationHeader, savedGameLimit, type SavedAttempt } from '../../../packages/game-sdk/src/progress.js'
-import { effectivePackRules, packProgress, packProgressPath, type PackCompletion, type PackDocument, type PackRevision, type ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
+import { effectiveChapterRules, packProgress, packProgressPath, type PackCompletion, type PackDocument, type PackRevision, type ProgressionRules } from '../../../packages/game-sdk/src/packs.js'
 import type { LevelRecord } from './game-runtime.js'
 import { serverGames } from './games.js'
 import { accountRoleSchema, digest, HttpError, requireUser, userFields, withLegacyEditorGames, type User } from './auth.js'
@@ -57,11 +57,14 @@ export function registerProgress(app: FastifyInstance) {
         if (!snapshot) throw new HttpError(422, 'level_version_unavailable')
         const pack: PackRevision = { id: level.pack.id, revision: packRevision, builtIn: false, data: snapshot.data }
         activePack = pack
-        const index = packProgressPath(pack).stops.findIndex(item =>
-          item.id === mutation.data.level && item.revision === mutation.data.levelRevision)
+        const stops = packProgressPath(pack).stops
+        const index = stops.findIndex(item => item.id === mutation.data.level && item.revision === mutation.data.levelRevision)
         if (index < 0) throw new HttpError(422, 'level_version_unavailable')
-        packRules = effectivePackRules(pack, index + 1)
-        if (packRules.inOrder && index) {
+        const stop = stops[index]
+        const chapter = pack.data.chapters.find(item => item.id === stop.chapter)
+        if (!chapter) throw new HttpError(422, 'level_version_unavailable')
+        packRules = effectiveChapterRules(chapter, stop.chapterStop)
+        if (packRules.inOrder && stop.chapterStop > 1) {
           pack.history = (await packHistory(db, [pack])).get(pack.id)
           const { rows } = await db.query<PackCompletion>(`SELECT c.level_id AS level,c.level_revision AS revision,
             (s.data->>'packRevision')::int AS "packRevision"
@@ -69,7 +72,9 @@ export function registerProgress(app: FastifyInstance) {
               AND (s.data->>'levelRevision')::int=c.level_revision AND s.data->>'completed'='true'
             JOIN published_levels l ON l.id=c.level_id AND l.revision=c.level_revision
             WHERE c.owner_id=$1 AND l.pack IS NOT NULL AND l.pack->>'id'=$2`, [user.id, pack.id])
-          if (!packProgress(pack, rows).playable[index]) throw new HttpError(422, 'pack_stop_locked')
+          const chapterIndex = stops.filter(item => item.chapter === stop.chapter)
+            .findIndex(item => item.id === stop.id && item.revision === stop.revision)
+          if (!packProgress(pack, rows, stop.chapter).playable[chapterIndex]) throw new HttpError(422, 'pack_stop_locked')
         }
       } else if (mutation.data.packRevision !== undefined) {
         throw new HttpError(422, 'level_version_unavailable')

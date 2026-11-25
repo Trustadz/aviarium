@@ -20,16 +20,20 @@ function title(t: Translate, level: GameLevel) {
 
 export const nonogramPresentation: PackPresentation = {
   menuLabel: 'Nonograms menu',
-  levels: pack => nonogramLevels(pack as NonogramPack),
+  levels: (pack, chapter) => nonogramLevels(pack as NonogramPack).filter(level =>
+    !chapter || level.pack?.chapter === chapter.id),
   title: (t, pack) => pack.builtIn ? knownMessage(t, pack.data.title) : pack.data.title,
   description: (t, pack) => pack.builtIn ? knownMessage(t, pack.data.description) : pack.data.description,
+  chapterTitle: (t, pack, chapter) => pack.builtIn ? knownMessage(t, chapter.title) : chapter.title,
+  chapterDescription: (t, pack, chapter) => pack.builtIn ? knownMessage(t, chapter.description) : chapter.description,
   levelTitle: title,
   detail: (_t, level) => {
     const { rows, columns } = (level as NonogramLevel).content
     return rows.length + ' × ' + columns.length
   },
   details: () => undefined,
-  ruleLabels: (t, pack) => [t(pack.data.rules.inOrder ? 'In order' : 'Pick & choose')],
+  chapterDetails: () => undefined,
+  ruleLabels: (t, _pack, chapter) => [t(chapter.rules.inOrder ? 'In order' : 'Pick & choose')],
   challenge: () => '',
 }
 

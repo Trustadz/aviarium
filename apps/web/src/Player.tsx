@@ -1,6 +1,6 @@
 import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
 import { errorMessage } from './api.js'
-import { levelTitle, packTitle, technique } from './sudoku-copy.js'
+import { levelTitle, packChapterTitle, packTitle, technique } from './sudoku-copy.js'
 import type { Message } from './messages.js'
 import { knownMessage, useT } from './i18n.js'
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
@@ -8,7 +8,8 @@ import { ArrowLeft, Eraser, Heart, Lightbulb, Pause, Pencil, Play, Redo2, Rotate
 import type { Preferences, SudokuSave } from '../../../packages/sudoku/src/contracts.js'
 import { bit, candidateMasks, column, conflicts, row, rules, rulesFor, type Board } from '../../../packages/sudoku/src/rules.js'
 import { logicalHint, type LogicalStep } from '../../../packages/sudoku/src/logic.js'
-import { effectivePackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import type { PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { effectiveChapterRules, packStopAt, packTheme } from '../../../packages/game-sdk/src/packs.js'
 import { validate } from '../../../packages/sudoku/src/solver.js'
 import { Grid } from './Grid.js'
 import { displayTime, PuzzleShare } from './SudokuMenu.js'
@@ -18,10 +19,11 @@ import type { LocalSession } from './storage.js'
 export { createQuickPlayLevel } from './quick-play.js'
 
 export function createSave(level: PublishedLevel, pack?: PublishedPack): SudokuSave {
+  const location = pack && level.pack ? packStopAt(pack, level.pack.stop) : undefined
   return { game: 'sudoku', level: level.id, levelRevision: level.revision, ruleset: level.ruleset === 2 ? 2 : 1, format: 1,
     board: rules.create(Array.from(level.grid, Number)), undo: [], redo: [], elapsedMs: 0, completed: false,
     packRevision: pack?.revision,
-    lives: pack && level.pack ? effectivePackRules(pack, level.pack.stop).lives ?? undefined : undefined }
+    lives: location ? effectiveChapterRules(location.chapter, location.chapterStop).lives ?? undefined : undefined }
 }
 
 interface Props {
@@ -39,7 +41,9 @@ function digitUsedUp(entries: readonly number[], digit: number) {
 export default function Player({ session, level, preferences, reader, pack, persist, leave, reset, openSettings, trial = false, bestMs, testMode = false, leaderboard }: Props) {
   const t = useT()
   const givens = useMemo(() => Array.from(level.grid, Number), [level.grid])
-  const packRules = pack && level.pack ? effectivePackRules(pack, level.pack.stop) : undefined
+  const packLocation = pack && level.pack ? packStopAt(pack, level.pack.stop) : undefined
+  const chapter = packLocation?.chapter
+  const packRules = packLocation ? effectiveChapterRules(packLocation.chapter, packLocation.chapterStop) : undefined
   const diagonal = level.ruleset === 2
   const boardRules = rulesFor(diagonal)
   const lifeLimit = packRules?.lives
@@ -233,11 +237,15 @@ export default function Player({ session, level, preferences, reader, pack, pers
     return [techniqueText, explanation, prompt].filter(Boolean).join(' ')
   }
   const seconds = Math.floor(display / 1000)
-  const packArt = pack?.data.background ?? pack?.data.cover
+  const packArt = chapter?.background ?? chapter?.cover
+  const packTitleText = pack ? packTitle(t, pack) : ''
+  const chapterTitleText = pack && chapter ? packChapterTitle(t, pack as PublishedPack, chapter) : ''
+  const packName = chapterTitleText && chapterTitleText !== packTitleText
+    ? packTitleText + ' · ' + chapterTitleText : packTitleText
   const celebrationStats = celebration !== undefined ? [
     { label: t('Difficulty'), value: t(level.difficulty) },
-    ...(pack && level.pack ? [{ label: t('Pack'), value: packTitle(t, pack) + ' · ' +
-      t('Stop {stop} of {total}', { stop: level.pack.stop, total: pack.data.puzzles.length }) }] : []),
+    ...(pack && packLocation ? [{ label: t('Pack'), value: packName + ' · ' +
+      t('Stop {stop} of {total}', { stop: packLocation.chapterStop, total: chapter?.puzzles.length ?? 0 }) }] : []),
     ...(data.lives !== undefined && lifeLimit ? [{ label: t('Lives left'), value: data.lives + ' / ' + lifeLimit }] : []),
   ] : []
   const celebrationActions: CelebrationAction[] = celebration !== undefined ? [
@@ -246,7 +254,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
     ...(leaderboard ? [{ kind: 'secondary' as const, label: t('View leaderboard'), onClick: leaderboard.open }] : []),
     { kind: 'text', label: t('View solved puzzle'), onClick: () => setCelebration(undefined) },
   ] : []
-  return <div className={pack ? `play-page pack-play pack-${pack.data.theme}` : 'play-page'}>
+  return <div className={pack ? `play-page pack-play pack-${chapter?.theme ?? packTheme(pack)}` : 'play-page'}>
     {packArt && <img className="pack-play-art" alt="" src={packArt}/>}
     <div className="game-navigation">
       <button className="text-button back" onClick={() => { void snapshot().then(leave) }}><ArrowLeft size={17}/>{" "}{t(trial ? "Back to editor" : pack ? "Back to roadmap" : "Game menu")}</button>
@@ -256,7 +264,7 @@ export default function Player({ session, level, preferences, reader, pack, pers
         {openSettings && <button className="icon-button" title={t("Sudoku settings")} aria-label={t("Sudoku settings")} onClick={openSettings}><Settings2 size={18}/></button>}
       </div>
     </div>
-    <div className="play-heading"><div><div className="eyebrow">{pack ? packTitle(t, pack) : 'Sudoku'}</div><h1>{levelTitle(t, level)}</h1></div>
+    <div className="play-heading"><div><div className="eyebrow">{pack ? packName : 'Sudoku'}</div><h1>{levelTitle(t, level)}</h1></div>
       <div className="play-meta"><span className={'badge ' + level.difficulty.toLowerCase()}>{t(level.difficulty)}</span>
         {data.lives !== undefined && <span className="clock" aria-label={t('{count, plural, one {# life remaining} other {# lives remaining}}', { count: data.lives })}><Heart size={16}/>{data.lives}/{lifeLimit}</span>}
         {showTimer && <span className="clock"><Timer size={17}/>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}

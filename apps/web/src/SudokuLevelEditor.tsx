@@ -11,7 +11,7 @@ import { StudioDisclosure } from './StudioDisclosure.js'
 import { sudokuRuleGroups } from './sudoku-studio-rules.js'
 import { StudioRuleFields } from './StudioRuleFields.js'
 
-type Puzzle = PackDraftData['puzzles'][number]
+type Puzzle = PackDraftData['chapters'][number]['puzzles'][number]
 export type StudioCheck = { kind: 'invalid' | 'unsolvable' | 'multiple' | 'unique' | 'inconclusive'; difficulty?: Difficulty }
 
 export function SudokuLevelEditor({ puzzle, rules, update, trial, onCheck }: {
@@ -109,11 +109,10 @@ export function SudokuLevelEditor({ puzzle, rules, update, trial, onCheck }: {
       initiallyOpen={matchMedia('(min-width: 1121px)').matches}>
       <div className="studio-level-fields pack-form">
         <label>{t('Puzzle title')}<input maxLength={100} value={puzzle.title} onChange={event => update({ title: event.target.value })}/></label>
-        <label>{t('Chapter')}<input maxLength={80} value={puzzle.chapter ?? ''} onChange={event => update({ chapter: event.target.value })}/></label>
         <label>{t('Level introduction')}<textarea aria-label={t('Level introduction')} rows={3} maxLength={300} value={puzzle.introduction ?? ''}
           onChange={event => update({ introduction: event.target.value })}/></label>
         <StudioDisclosure className="studio-level-rules" label={t('Level rules') + ' · ' + (overrides
-          ? t('Overrides: {count}', { count: overrides }) : t('Uses pack rules'))}>
+          ? t('Overrides: {count}', { count: overrides }) : t('Uses chapter rules'))}>
           <StudioRuleFields values={puzzle.rules ?? {}} defaults={rules} groups={sudokuRuleGroups}
             update={next => update({ rules: next as Partial<PackRules> })}/>
         </StudioDisclosure>

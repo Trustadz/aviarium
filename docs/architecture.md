@@ -26,22 +26,26 @@ an origin.
 ## Design choices and compatibility
 
 - **A shared, versioned puzzle library.** Published puzzle and pack revisions
-  are immutable because saved attempts refer to exact level versions. Pack
-  revisions track changes to the published pack. Level revisions advance
-  independently when a level's puzzle or effective gameplay rules change.
+  are immutable because saved attempts refer to exact level versions. A pack
+  contains ordered chapters, and each chapter owns its metadata, artwork,
+  rules, and ordered levels. Pack revisions track changes across the pack,
+  including chapter order and chapter settings. Level revisions advance
+  independently when a level's puzzle or effective chapter rules change.
   Draft edits and catalog visibility can change independently of saved
   attempts. Keep the referenced level revisions available.
-- **Back follows the visible screen hierarchy.** Gameplay, Studio pack
-  editing, and Studio test play are history layers. Browser, hardware, and
-  in-app back move a game to its level selector (or game menu), a selector to
-  the game menu, a game menu to the library, test play to the pack editor,
-  the pack editor to **My packs**, and My packs to Studio or to the game menu
-  it was opened from. In-app back actions pop the current layer
-  rather than pushing a duplicate. Opening a game from a shortcut such as
-  Continue, History, or a shared puzzle lays down the missing menu and
-  level-selector layers first. A directly opened deep link is seeded with its
-  parent layers so back stays inside the app. Keep this hierarchy when adding
-  screens that sit under a game or Studio.
+- **Back follows the visible screen hierarchy.** Gameplay, chapter trails,
+  chapter overviews, Studio pack editing, and Studio test play are history
+  layers. Browser, hardware, and in-app back move a game to its chapter trail,
+  a trail to the chapter overview, an overview to the game menu, a game menu
+  to the library, test play to the pack editor, the pack editor to **My
+  packs**, and My packs to Studio or to the game menu it was opened from.
+  In-app back actions pop the current layer rather than pushing a duplicate.
+  Opening a game from a shortcut such as Continue, History, or a shared puzzle
+  lays down the missing menu, chapter overview, and chapter trail first. A
+  directly opened deep link is seeded with its parent layers so back stays
+  inside the app. Keep this hierarchy when adding screens that sit under a
+  game or Studio.
+
 - **Shared game contracts with game-specific logic.** The renderer-neutral SDK
   defines common types. Each game owns its codecs, rules, and generation. A
   stable ruleset, save format, and generator version let the browser and
@@ -89,10 +93,10 @@ an origin.
   overflow.
   Standings also expose an **All records** view that pages through every
   active result, including multiple results from one player, without the
-  best-per-player cap. Pack cards aggregate entire packs: a player's total is
-  the sum of their best active time on every level, ranked only when every
-  level is present, with avatars in the pack table, mini top-three lists, and
-  each level's best row. On phones the profile sits in the upper-right header
+  best-per-player cap. Pack cards aggregate entire packs across their
+  chapters: a player's total is the sum of their best active time on every
+  level, ranked only when every level is present, with avatars in the pack
+  table, mini top-three lists, and each level's best row. On phones the profile sits in the upper-right header
   so the remaining bottom destinations keep their labels. Studio is not a
   destination: editors reach it from the library heading or a game menu.
 - **The server owns permissions.** Pocket ID supplies identity in the normal
@@ -140,13 +144,13 @@ New Sudoku publications use a deterministic, easiest-first logical solver. Easy 
 
 ## Packs and Studio
 
-Open Studio from the library heading (editors and admins only) or from a game menu, choose a game, then work in **My packs**. Authored levels belong to a pack. The shared workspace provides pack navigation, level ordering, appearance, rule controls, and trail preview. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
+Open Studio from the library heading (editors and admins only) or from a game menu, choose a game, then work in **My packs**. Authored levels belong to a chapter, and chapters belong to a pack. The shared workspace provides chapter navigation, level ordering, appearance, rule controls, and previews of both the chapter overview and the chapter trail. The registered game supplies its presets, rule definitions, level editor, checks, and test player. Pack, chapter, and level drafts autosave in IndexedDB. After the Studio assets are downloaded, editors can change levels and test-play them within a cached session offline. Sync uses the saved server draft version and keeps local changes available if the server reports a conflict.
 
 Owners manage their packs. Admins use **Administration → Packs → Edit as admin** to enter another creator’s workspace. Server permissions and draft version checks apply to both modes. The package records the last editor and logs admin publications. Publish verifies the exact draft in a server worker and atomically replaces the visible pack revision. Legacy standalone publications appear in recovered packs without changing their existing level or save keys.
 
-A pack revision determines order, rules and presentation. Stable level IDs survive changes in order, and each level has an independent revision. Changes to givens or play rules create a new level revision. Level access lives on the pack. Levels inherit gameplay defaults and may override the controls supplied by the game. Ordered packs preserve access earned on earlier snapshots, count inserted levels toward completion, and allow players to continue from the next new stop. The shared pack trail opens at that next stop and begins above the information card.
+A pack revision determines chapter order, chapter metadata, and each chapter's rules, artwork, and level order. Stable level IDs survive changes in order and movement between chapters, and each level has an independent revision. Changes to givens or effective chapter rules create a new level revision. Level access lives on the chapter. Levels inherit gameplay defaults and may override the controls supplied by the game. Ordered chapters preserve access earned on earlier snapshots, count inserted levels toward completion, and allow players to continue from the next new stop. Chapters are independent: the pack overview shows one card per chapter with its own image, and each chapter trail opens at that chapter's next stop above the information card.
 
-Each game registers its built-in packs and bundled artwork lives in `apps/web/public`. Sudoku registers Budgies and Nonograms registers Sulphur-crested Cockatoos. Nonograms also uses the shared Studio with a drawing grid and verifies publication by logical deduction. Admins and a pack’s owner can export published packs as `.aviarium-pack` ZIP archives with a versioned manifest and optional artwork. Import requires editor rights and makes a separate draft with new level identities. Archives carry content and rules.
+Each game registers its built-in packs and bundled artwork lives in `apps/web/public`. Sudoku registers Budgies and Nonograms registers Sulphur-crested Cockatoos. Existing and built-in packs are single-chapter packs, so their current trail and progress behavior is preserved; a pack may contain one level in one chapter. Nonograms also uses the shared Studio with a drawing grid and verifies publication by logical deduction. Admins and a pack’s owner can export published packs as `.aviarium-pack` ZIP archives with a versioned manifest and optional artwork. Import requires editor rights and makes a separate draft with new level identities. Archives carry content and rules.
 
 ## Saves and offline storage
 
@@ -160,7 +164,7 @@ The production service worker caches the library shell and installs game assets 
 
 ## Current scope
 
-The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships Sudoku packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges are planned. Scheduling and rankings belong to Aviarium, while each game supplies challenge content, completion validation, and how to interpret its results.
+The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships chaptered Sudoku and Nonograms packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges are planned. Scheduling and rankings belong to Aviarium, while each game supplies challenge content, completion validation, and how to interpret its results.
 
 ## Release announcements
 

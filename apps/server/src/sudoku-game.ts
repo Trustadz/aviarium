@@ -6,6 +6,7 @@ import { gradePuzzle } from '../../../packages/sudoku/src/logic.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import { authoringPack, gradedPackSchema, packDraftSchema, packLevels, packManifestSchema, packRuleset, sameSudokuLevel } from '../../../packages/sudoku/src/packs.js'
 import type { PackDraftData, PackRules, PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { effectiveChapterRules, upgradePackDocument } from '../../../packages/game-sdk/src/packs.js'
 import { rulesFor } from '../../../packages/sudoku/src/rules.js'
 import { quickPlayId } from '../../../packages/sudoku/src/seed-code.js'
 import { validate } from '../../../packages/sudoku/src/solver.js'
@@ -19,26 +20,30 @@ import { registerLevels } from './levels.js'
 import { getQuickPlayLevel } from './quick-play.js'
 
 export function verifySudokuPack(input: unknown, prior: readonly LevelRecord[] = []) {
-  const draft = authoringPack(packDraftSchema.parse(input))
+  const draft = authoringPack(packDraftSchema.parse(upgradePackDocument(input)))
   const known = new Map(prior.map(level => [level.id, level]))
-  if (!draft.puzzles.length) throw new HttpError(422, 'pack_empty')
-  const puzzles = draft.puzzles.map(puzzle => {
-    const ruleset = packRuleset({ ...draft.rules, ...puzzle.rules })
-    const diagonal = ruleset === 2
-    const previous = puzzle.levelId && known.get(puzzle.levelId)
-    if (previous && previous.grid === puzzle.grid && previous.ruleset === ruleset)
-      return { ...puzzle, ruleset, difficulty: previous.difficulty }
-    const grid = Array.from(puzzle.grid, Number)
-    if (validate(grid, 65_000, diagonal).kind !== 'unique')
-      throw new HttpError(422, 'pack_puzzle_unverified', { title: puzzle.title })
-    const { difficulty } = gradePuzzle(grid, diagonal)
-    if (!difficulty) throw new HttpError(422, 'pack_puzzle_review', { title: puzzle.title })
-    return { ...puzzle, ruleset, difficulty }
+  if (!draft.chapters.some(chapter => chapter.puzzles.length)) throw new HttpError(422, 'pack_empty')
+  const chapters = draft.chapters.map(chapter => {
+    if (!chapter.puzzles.length) throw new HttpError(422, 'pack_chapter_empty', { chapter: chapter.title })
+    const puzzles = chapter.puzzles.map((puzzle, index) => {
+      const ruleset = packRuleset(effectiveChapterRules(chapter, index + 1))
+      const diagonal = ruleset === 2
+      const previous = puzzle.levelId && known.get(puzzle.levelId)
+      if (previous && previous.grid === puzzle.grid && previous.ruleset === ruleset)
+        return { ...puzzle, ruleset, difficulty: previous.difficulty }
+      const grid = Array.from(puzzle.grid, Number)
+      if (validate(grid, 65_000, diagonal).kind !== 'unique')
+        throw new HttpError(422, 'pack_puzzle_unverified', { title: puzzle.title })
+      const { difficulty } = gradePuzzle(grid, diagonal)
+      if (!difficulty) throw new HttpError(422, 'pack_puzzle_review', { title: puzzle.title })
+      return { ...puzzle, ruleset, difficulty }
+    })
+    return { ...chapter, puzzles }
   })
-  return gradedPackSchema.parse({ ...draft, puzzles })
+  return gradedPackSchema.parse({ ...draft, chapters })
 }
 
-type SudokuEntry = PackDraftData['puzzles'][number]
+type SudokuEntry = PackDraftData['chapters'][number]['puzzles'][number]
 export const sudokuServer: ServerGame = {
   id: sudoku.id,
   preferences: preferenceSchema,

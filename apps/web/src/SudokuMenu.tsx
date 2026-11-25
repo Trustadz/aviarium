@@ -1,14 +1,15 @@
 import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
-import { levelTitle, packDescription, packTitle } from './sudoku-copy.js'
+import { levelTitle, packChapterDescription, packChapterTitle, packDescription, packTitle } from './sudoku-copy.js'
 import { knownMessage, useT, type Translate } from './i18n.js'
 import { useState } from 'react'
 import { Share2, Shuffle } from 'lucide-react'
 import { difficulties, type Difficulty } from '../../../packages/game-sdk/src/index.js'
-import { effectivePackRules, packLevels, type PackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
+import { packLevels, type GradedPack, type PackRules, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { quickPlayVersion } from '../../../packages/sudoku/src/contracts.js'
 import { formatSeedCode, parseSeedCode } from '../../../packages/sudoku/src/seed-code.js'
 import { errorMessage } from './api.js'
 import type { PackPresentation } from './GamePacks.js'
+import { effectiveChapterRules, type PackChapter, type PackEntry } from '../../../packages/game-sdk/src/packs.js'
 
 const sudokuPath = '/games/sudoku'
 
@@ -97,8 +98,11 @@ export function QuickPlay({ canPlay, profile, generate }: {
   </section>
 }
 
-function gradeRange(t: Translate, pack: PublishedPack) {
-  const tiers = pack.data.puzzles.map(puzzle => difficulties.indexOf(puzzle.difficulty))
+type GradedChapter = GradedPack['chapters'][number]
+
+function gradeRange(t: Translate, chapters: readonly GradedChapter[]) {
+  const tiers = chapters.flatMap(chapter => chapter.puzzles.map(puzzle => difficulties.indexOf(puzzle.difficulty)))
+  if (!tiers.length) return undefined
   const min = Math.min(...tiers), max = Math.max(...tiers)
   return min === max ? t(difficulties[min]) : t(difficulties[min]) + '–' + t(difficulties[max])
 }
@@ -116,16 +120,20 @@ function ruleLabels(t: Translate, rules: PackRules) {
 
 export const sudokuPackPresentation: PackPresentation = {
   menuLabel: 'Sudoku menu',
-  levels: pack => packLevels(pack as PublishedPack),
+  levels: (pack, chapter) => packLevels(pack as PublishedPack).filter(level =>
+    !chapter || level.pack?.chapter === chapter.id),
   title: (t, pack) => packTitle(t, pack as PublishedPack),
   description: (t, pack) => packDescription(t, pack as PublishedPack),
+  chapterTitle: (t, pack, chapter) => packChapterTitle(t, pack as PublishedPack, chapter),
+  chapterDescription: (t, pack, chapter) => packChapterDescription(t, pack as PublishedPack, chapter),
   levelTitle: (t, level) => levelTitle(t, level as PublishedLevel),
   detail: (t, level) => t((level as PublishedLevel).difficulty),
-  details: (t, pack) => gradeRange(t, pack as PublishedPack),
-  ruleLabels: (t, pack) => ruleLabels(t, pack.data.rules as PackRules),
-  challenge(t, pack, stop) {
-    const defaults = pack.data.rules as PackRules
-    const rules = effectivePackRules(pack as PublishedPack, stop)
+  details: (t, pack) => gradeRange(t, (pack as PublishedPack).data.chapters),
+  chapterDetails: (t, _pack, chapter) => gradeRange(t, [chapter as GradedChapter]),
+  ruleLabels: (t, _pack, chapter) => ruleLabels(t, chapter.rules as PackRules),
+  challenge(t, _pack, chapter, stop) {
+    const defaults = chapter.rules as PackRules
+    const rules = effectiveChapterRules(chapter as PackChapter<PackEntry, PackRules>, stop)
     return [
       rules.inOrder !== defaults.inOrder && t(rules.inOrder ? 'In order' : 'Pick & choose'),
       rules.hints !== defaults.hints && t(rules.hints ? 'Hints available' : 'No hints'),
@@ -136,8 +144,8 @@ export const sudokuPackPresentation: PackPresentation = {
         ? t('{count, plural, one {# life} other {# lives}}', { count: rules.lives }) : t('Unlimited lives')),
     ].filter(Boolean).join(' · ')
   },
-  bestTime(t, pack, stop, completions) {
-    if (effectivePackRules(pack as PublishedPack, stop).timeTrial && completions.length)
+  bestTime(t, _pack, chapter, stop, completions) {
+    if (effectiveChapterRules(chapter as PackChapter<PackEntry, PackRules>, stop).timeTrial && completions.length)
       return t('Best {time}', { time: displayTime(Math.min(...completions.map(save => save.elapsedMs))) })
   },
 }

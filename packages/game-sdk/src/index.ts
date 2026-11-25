@@ -33,7 +33,7 @@ export interface GameLevel {
   source: 'Built-in' | 'Generated' | 'Creator'
   seed?: string | null
   generatorVersion?: number | null
-  pack?: { id: string; revision: number; stop: number; legacyStandalone?: boolean }
+  pack?: { id: string; revision: number; stop: number; chapter?: string; legacyStandalone?: boolean }
 }
 
 export interface SaveEnvelope {

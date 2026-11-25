@@ -34,8 +34,8 @@ export function StudioRuleFields({ values, defaults, groups, update }: {
   function reset(key: string, label: string, fallback: Value, showStatus = true) {
     if (!inherited || chosen[key] === undefined) return
     return <span className="studio-rule-changed">{showStatus && status(key, fallback)}
-      <button className="icon-button" type="button" aria-label={t('Reset {rule} to pack default', { rule: label })}
-        title={t('Reset {rule} to pack default', { rule: label })} onClick={event => {
+      <button className="icon-button" type="button" aria-label={t('Reset {rule} to chapter default', { rule: label })}
+        title={t('Reset {rule} to chapter default', { rule: label })} onClick={event => {
           const row = event.currentTarget.closest('.studio-rule-line')
           set(key, undefined, fallback)
           row?.querySelector<HTMLElement>('input, select')?.focus()

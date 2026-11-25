@@ -7,7 +7,6 @@ export interface PackTrailStop {
   detail?: string
   state: 'available' | 'next' | 'solved' | 'locked'
   statusLabel?: string
-  chapter?: string
   introduction?: string
   challenge?: string
   actionLabel: string
@@ -38,7 +37,6 @@ export function PackTrail({ stops, canPlay, scrollToStop = true }: {
         {stop.state === 'solved' ? <Check size={23}/> : stop.state === 'locked' ? <LockKeyhole size={19}/> : index + 1}
       </span>
       <div className="pack-stop-card">
-        {stop.chapter && <p className="eyebrow">{stop.chapter}</p>}
         <h2>{stop.title}</h2>
         {stop.introduction && <p>{stop.introduction}</p>}
         {stop.detail && <p>{stop.detail}</p>}

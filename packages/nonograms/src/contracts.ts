@@ -42,11 +42,18 @@ export interface NonogramLevel extends GameLevel {
 }
 
 export function nonogramLevels(pack: NonogramPack): NonogramLevel[] {
-  return pack.data.puzzles.map((entry, index) => ({
-    game: nonogramsId, id: entry.levelId ?? packLevelId(pack.id, index + 1), revision: entry.levelRevision ?? pack.revision,
-    title: entry.title, ruleset: entry.ruleset, content: entry.content, source: pack.builtIn ? 'Built-in' : 'Creator',
-    pack: { id: pack.id, revision: pack.revision, stop: index + 1 },
-  }))
+  const levels: NonogramLevel[] = []
+  for (const chapter of pack.data.chapters) {
+    for (const [index, entry] of chapter.puzzles.entries()) {
+      levels.push({
+        game: nonogramsId, id: entry.levelId ?? packLevelId(pack.id, chapter.id, index + 1),
+        revision: entry.levelRevision ?? pack.revision,
+        title: entry.title, ruleset: entry.ruleset, content: entry.content, source: pack.builtIn ? 'Built-in' : 'Creator',
+        pack: { id: pack.id, revision: pack.revision, stop: levels.length + 1, chapter: chapter.id },
+      })
+    }
+  }
+  return levels
 }
 
 export function sameNonogramLevel(entry: NonogramEntry, previous: NonogramEntry) {
