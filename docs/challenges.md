@@ -65,6 +65,10 @@ extension.
 - A completion posts only if the server verifies and receives it before
   `ends_at`. Late or offline completions are saved but not posted to the closed
   challenge leaderboard; the client is told the run was not ranked.
+- The client posts the verified completion as soon as the attempt is saved,
+  rather than waiting for navigation. The after-game standings and **View
+  leaderboard** therefore show the run without a refresh, and a completion
+  near the reset is received as early as possible.
 - Running out of lives (when a future rules variant enables them) or an invalid
   completion closes the attempt without a result.
 - Challenge levels are hidden from the catalog, Studio and published-puzzles
@@ -197,8 +201,9 @@ offline sync retry.
   cooldowns, player summaries or the busiest board; a challenge completion also
   appears on the matching Quick Play board with the right difficulty/size. The browser suite now runs
   `tests/challenges-smoke.mjs`, which covers two slots, one claim, the second
-  start rejection, the server time floor, a late close, history, replay and the
-  nav badge using the test clock.
+  start rejection, the server time floor, a late close, history, replay, the
+  nav badge using the test clock, and that **View leaderboard** waits for a
+  delayed completion post before showing the player's row.
 - Manual browser: nav/badge, today/day/closed/replay, start/resume, input-only reset,
   leaderboard, after-game panel, Continue daily card, Completed section,
   admin settings, en/nl, 360/393/200%, offline/error states.

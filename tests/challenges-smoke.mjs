@@ -21,6 +21,7 @@ const app = spawn(process.execPath, ['dist/apps/server/src/app.js'], {
 const digest = value => createHash('sha256').update(value).digest('hex')
 const token1 = randomUUID()
 const token2 = randomUUID()
+const token3 = randomUUID()
 const headers1 = { Cookie: 'aviarium-test=' + token1 }
 const headers2 = { Cookie: 'aviarium-test=' + token2 }
 const clock = { day: '2026-11-24T12:00:00.000Z', done: '2026-11-24T12:00:10.000Z',
@@ -74,7 +75,8 @@ try {
         sudoku: { difficulty: ['Medium'] },
         nonograms: { size: ['10'], difficulty: ['Easy', 'Medium', 'Hard'] },
       })])
-    for (const [role, name, token] of [['admin', 'Challenge Admin', token1], ['user', 'Challenge Player', token2]]) {
+    for (const [role, name, token] of [['admin', 'Challenge Admin', token1], ['user', 'Challenge Player', token2],
+      ['user', 'Challenge Finisher', token3]]) {
       const { rows: [user] } = await db.query(
         "INSERT INTO users(issuer,subject,name,role) VALUES ('aviarium:test',$1,$2,$3) RETURNING id", [token, name, role])
       await db.query("INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval '1 hour')",
@@ -178,6 +180,33 @@ try {
     assert.equal(await page.locator('.challenge-slot').count(), 2)
     await page.locator('.nav-badge').first().waitFor()
     assert.equal((await page.locator('.nav-badge').first().innerText()).trim(), '1')
+
+    // Completing a challenge used to navigate to the leaderboard before the
+    // completion had been posted, so the board opened without the player's
+    // time. Delay the progress POST and check that View leaderboard still
+    // waits for the result and shows the viewer's row.
+    const finishContext = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 844 },
+      extraHTTPHeaders: { 'X-Aviarium-Test-Now': clock.day } })
+    await finishContext.addCookies([{ name: 'aviarium-test', value: token3, url: origin }])
+    const finishPage = await finishContext.newPage()
+    await finishPage.route('**/api/progress', async route => {
+      if (route.request().method() === 'POST') await delay(3000)
+      await route.continue()
+    })
+    await finishPage.goto(origin + '/challenges', { waitUntil: 'networkidle' })
+    const finishSlot = finishPage.locator('.challenge-slot').filter({ hasText: 'Sudoku' })
+    await finishSlot.getByRole('button', { name: /Start Sudoku challenge/ }).click()
+    await finishPage.waitForURL(/\/challenges\/[^/]+\/sudoku\/play$/, { timeout: 10000 })
+    await finishPage.getByRole('button', { name: /Auto solve/ }).click()
+    const viewLeaderboard = finishPage.getByRole('button', { name: 'View leaderboard' })
+    await viewLeaderboard.waitFor({ state: 'visible', timeout: 10000 })
+    await viewLeaderboard.click()
+    await finishPage.waitForURL(/\/challenges\/[^/]+\/sudoku$/, { timeout: 10000 })
+    const youRow = finishPage.locator('.challenge-board .leaderboard-table tr[data-you="true"]')
+    await youRow.waitFor({ timeout: 5000 })
+    assert.match(await youRow.innerText(), /\d+:\d{2}/, 'the completed challenge time appears on its leaderboard')
+    await finishContext.close()
+
     if (process.env.AVIARIUM_SCREENSHOTS)
       await page.screenshot({ path: process.env.AVIARIUM_SCREENSHOTS + '/challenges-smoke.png', fullPage: true })
   } finally {
