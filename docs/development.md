@@ -152,12 +152,15 @@ gh pr create --draft --base main --head agent/short-description \
 
 Record the approved local handoff in the draft PR. Include the requested
 behavior and why it changed, relevant design choices, the current commit, check
-commands and outcomes, and remaining manual scenarios with expected results. If a preview is running,
-give its URL, branch or commit, and setup steps. A loopback URL is usable only
-on its host, so include reproduction steps for a reviewer with a different
-checkout. Link the issue if there is one. Use `enhancement` or `feature` for
-features and `bug` or `fix` for fixes. State the fragment filename, or why the
-pull request has the `changelog-not-required` label.
+commands and outcomes, and remaining manual scenarios with expected results. Do
+not put a preview URL in the pull request body or comments. A loopback or LAN
+address is reachable only from the review host, and the preview is usually
+stopped by the time the pull request exists, so it is dead information for a
+reviewer. Record how to reproduce the preview instead: the branch or commit,
+build and run commands, test-mode settings, and seed data. Link the issue if
+there is one. Use `enhancement` or `feature` for features and `bug` or `fix`
+for fixes. State the fragment filename, or why the pull request has the
+`changelog-not-required` label.
 
 Read the PR thread and check results with `gh pr view NUMBER --comments` and
 `gh pr checks NUMBER`. GitHub runs **Verify** and **Changelog** on drafts and
