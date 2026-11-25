@@ -67,10 +67,10 @@ export function PackCards({ game, presentation, packs, completed, status, retry,
 }
 
 export function PackChapters({ presentation, pack, completed, sessions, canExport, leave, open, preview = false,
-  previewCompletions, tools, header }: {
+  previewCompletions, tools, header, navigation }: {
   presentation: PackPresentation; pack: PackRevision; completed: ReadonlySet<string>; sessions: readonly SavedAttempt[]
   canExport: boolean; leave: () => void; open?: (chapterId: string) => void; preview?: boolean
-  previewCompletions?: readonly PackCompletion[]; tools?: ReactNode; header?: ReactNode
+  previewCompletions?: readonly PackCompletion[]; tools?: ReactNode; header?: ReactNode; navigation?: ReactNode
 }) {
   const t = useT()
   const completions = previewCompletions ?? packCompletionEvents(completed, sessions)
@@ -79,7 +79,7 @@ export function PackChapters({ presentation, pack, completed, sessions, canExpor
   const art = packCover(pack)
   const description = presentation.description(t, pack)
   return <section className={`catalog pack-roadmap pack-chapters pack-${packTheme(pack)}`}>
-    {header ?? <div className="game-navigation">
+    {navigation ? <div className="pack-screen-navigation">{navigation}</div> : <div className="game-navigation">
       {!preview && <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t('Back')}</button>}
       <div className="game-nav-tools">
         {tools}
@@ -87,6 +87,7 @@ export function PackChapters({ presentation, pack, completed, sessions, canExpor
           aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a>}
       </div>
     </div>}
+    {header}
     <header className="pack-banner pack-screen-summary">
       {art && <img className="pack-backdrop" src={art} alt=""/>}
       <div className="pack-intro">{!header && <h1>{presentation.title(t, pack)}</h1>}
@@ -130,11 +131,11 @@ export function PackChapters({ presentation, pack, completed, sessions, canExpor
 }
 
 export function PackRoadmap({ game, presentation, pack, chapterId, completed, sessions, canPlay, canExport, leave, play, preview = false,
-  previewDetails, previewCompletions, tools, header }: {
+  previewDetails, previewCompletions, tools, header, navigation }: {
   game: string; presentation: PackPresentation; pack: PackRevision; chapterId: string; completed: ReadonlySet<string>
   sessions: readonly SavedAttempt[]; canPlay: boolean; canExport: boolean; leave: () => void; play: (level: GameLevel) => void
   preview?: boolean; previewDetails?: ReadonlyMap<string, string | undefined>; previewCompletions?: readonly PackCompletion[]
-  tools?: ReactNode; header?: ReactNode
+  tools?: ReactNode; header?: ReactNode; navigation?: ReactNode
 }) {
   const t = useT()
   const chapter = pack.data.chapters.find(item => item.id === chapterId) ?? pack.data.chapters[0]
@@ -162,7 +163,7 @@ export function PackRoadmap({ game, presentation, pack, chapterId, completed, se
         matching.filter(item => item.data.completed).map(item => item.data)) }
   })
   return <section className={`catalog pack-roadmap pack-trail-screen pack-${chapter?.theme ?? packTheme(pack)}`}>
-    {header ?? <div className="game-navigation">
+    {navigation ? <div className="pack-screen-navigation">{navigation}</div> : <div className="game-navigation">
       <button className="text-button back" onClick={leave}><ArrowLeft size={17}/> {t(preview ? 'Back to editor' : 'Back')}</button>
       <div className="game-nav-tools">
         {tools}
@@ -170,6 +171,7 @@ export function PackRoadmap({ game, presentation, pack, chapterId, completed, se
           aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a>}
       </div>
     </div>}
+    {header}
     {chapter && <header className="pack-banner pack-screen-summary">
       {art && <img className="pack-backdrop" src={art} alt=""/>}
       <div className="pack-intro">{!header && <h1>{presentation.chapterTitle(t, pack, chapter)}</h1>}

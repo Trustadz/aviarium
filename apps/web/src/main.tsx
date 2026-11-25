@@ -21,7 +21,7 @@ import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, formatChallengeDate, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
-import { GameHeader, GameMenu } from './GameMenu.js'
+import { GameHeading, GameMenu, GameNavigation } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
 import { CelebrationOverlay } from './CelebrationOverlay.js'
 import { registerOffline, useGameDownloads } from './offline.js'
@@ -703,17 +703,18 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     : undefined
   const canExportViewedPack = Boolean(viewedPack && online && canEdit &&
     (account?.role === 'admin' || viewedPack.ownedByViewer))
-  const packHeader = inPackRoutes && openGame && viewedPack
-    ? (title: string, leave: () => void) => <GameHeader title={title} gameTitle={openGame.title} sticky
-      leave={leave}
-      guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}
+  const packNavigation = inPackRoutes && openGame && viewedPack
+    ? (leave: () => void) => <GameNavigation leave={leave}
       leaderboard={openGame.leaderboards && { href: openGame.url + '/leaderboards',
         open: event => link(event, openGame.url + '/leaderboards') }}
       history={openGame.history ? () => go(openGame.url + '/history') : undefined}
       settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
-      editor={canEdit ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
       extraTools={canExportViewedPack ? <a className="icon-button" href={packExportUrl(viewedPack)} download
         aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a> : undefined}/>
+    : undefined
+  const packHeading = inPackRoutes && openGame
+    ? (title: string) => <GameHeading title={title} gameTitle={openGame.title}
+      editor={canEdit ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}/>
     : undefined
   useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
     [reader, surface, theme, themeGame?.id, playTheme])
@@ -832,8 +833,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           path === chapterPath(viewedPack, viewedChapterId)
         ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} chapterId={viewedChapterId}
           completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
-          canExport={false} header={packHeader?.(viewedPack && viewedChapter
-            ? openGame.packs.chapterTitle(t, viewedPack, viewedChapter) : t('Chapters'), () => back(packPath(viewedPack)))}
+          canExport={false} navigation={packNavigation?.(() => back(packPath(viewedPack)))}
+          header={packHeading?.(viewedPack && viewedChapter
+            ? openGame.packs.chapterTitle(t, viewedPack, viewedChapter) : t('Chapters'))}
           leave={() => back(packPath(viewedPack))} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
               item.data.level === level.id && item.data.levelRevision === level.revision)
@@ -841,7 +843,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           })}/>
         : viewedPack && path === packPath(viewedPack)
           ? <PackChapters presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions}
-            canExport={false} header={packHeader?.(openGame.packs.title(t, viewedPack), () => back(openGame.url))}
+            canExport={false} navigation={packNavigation?.(() => back(openGame.url))}
+            header={packHeading?.(openGame.packs.title(t, viewedPack))}
             leave={() => back(openGame.url)} open={chapterId => go(chapterPath(viewedPack, chapterId))}/>
           : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
             <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>

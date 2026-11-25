@@ -751,12 +751,14 @@ button.chapter-card:focus-visible { outline: 3px solid var(--accent); outline-of
 .pack-roadmap.pack-trail-screen > .pack-banner { order: 0; }
 .pack-roadmap > .pack-trail { width: 100%; }
 .pack-roadmap > .game-navigation { margin-block-end: 14px; background: transparent; }
-.main-frame.game-content > .catalog.pack-roadmap > :is(.game-navigation, .game-menu-heading) {
+.pack-roadmap > .pack-screen-navigation {
   position: sticky;
   top: 0;
   z-index: 3;
+  margin-block-end: 9px;
   background: var(--game-page, var(--surface));
 }
+.pack-roadmap > .game-menu-heading-body { margin-block-end: 18px; }
 .pack-screen-summary { grid-template-columns: minmax(0,1fr) minmax(0, min(30%, 220px)); }
 .pack-screen-summary .pack-intro { padding: clamp(16px, 3vw, 26px); }
 .pack-screen-summary .pack-intro h1 { font-size: clamp(1.8rem, 3.8vw, 2.7rem); }

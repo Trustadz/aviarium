@@ -40,10 +40,11 @@ an origin.
   sidebar with the brand, destinations, account, and offline status; there is
   no top header. On phones a non-sticky header carries the brand, account, and
   offline status, and a fixed bottom destination bar stays visible. Pack screens
-  reuse the game menu header, including Back, its title area, How to play, My
-  packs, and the game tools. That header stays pinned while a long chapter trail
-  scrolls. Back returns to the game menu from the pack overview and to the pack
-  overview from a chapter trail. Browser, hardware, and in-app back pop the screen the player actually
+  reuse the game menu header structure: Back and the game tools, a title block,
+  and My packs. How to play stays on the game menu. The Back/tools row stays
+  pinned while a long chapter trail scrolls; the title scrolls with the page.
+  Back returns to the game menu from the pack overview and to the pack overview
+  from a chapter trail. Browser, hardware, and in-app back pop the screen the player actually
   visited. Opening a game from Continue, History, or a leaderboard returns to
   that screen; a directly opened URL is seeded with its canonical parents,
   including a pack overview and chapter trail. Back never starts or resumes a
