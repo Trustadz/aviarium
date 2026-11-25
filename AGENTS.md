@@ -35,8 +35,8 @@ it specifies a narrower scope or a different workflow.
   opening or updating a PR. Wait for approval. If the user asks for revisions,
   run the affected checks and request approval of the revised local changes.
 - After approval, push the reviewed changes and open or update a draft PR
-  against `main`. Include the local preview and verification results. GitHub
-  checks run for both draft and ready PRs.
+  against `main`. Include the verification results and reproduction steps, not
+  the preview URL. GitHub checks run for both draft and ready PRs.
 - Let the user test and approve before merging. A request to review or test
   does not authorize merging or publishing. A request to publish the change
   authorizes merging its passing PR and running the release workflow.
