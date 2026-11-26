@@ -208,7 +208,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [removalNotices, setRemovalNotices] = useState<LeaderboardRemovalNotice[]>([])
   const openGame = games.find(game => path === game.url || path.startsWith(game.url + '/'))
   const studioMatch = /^\/studio\/([a-z0-9-]+)(\/admin)?$/.exec(path)
-  const studioGame = path === '/studio/packs' ? games.find(game => game.packs) : studioMatch && findGame(studioMatch[1])
+  const studioCandidate = path === '/studio/packs' ? games.find(game => game.packs && game.Studio) : studioMatch && findGame(studioMatch[1])
+  const studioGame = studioCandidate?.Studio ? studioCandidate : undefined
+  const inStudioRoute = path === '/studio' || path.startsWith('/studio/')
   const adminPackStudio = Boolean(studioMatch?.[2])
   const { installed, remove, recordActivity } = useGameDownloads(studioGame?.id ?? openGame?.id, online)
   const canPlay = (game: WebGame) => online || installed.includes(game.id)
@@ -658,7 +660,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const catalogCategories = ['All games', ...new Set(games.flatMap(game => game.tags)), 'Favorites']
   const catalogPage = (game: (typeof games)[number]) => inStudioCatalog ? '/studio/' + game.id : game.url
   const inNews = path === '/news'
-  const inStudio = path === '/studio' || Boolean(studioGame)
+  const inStudio = path === '/studio' || Boolean(studioGame) || inStudioRoute
   const studioOrigin = navigationLayer(history.state)?.studioOrigin
   const studioLeaveLabel = studioOrigin === 'game' && studioGame ? t('{game} menu', { game: studioGame.title }) : t('Studio')
   const inAdmin = path === '/admin'
@@ -716,13 +718,18 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     : undefined
   const packHeading = inPackRoutes && openGame
     ? (title: string) => <GameHeading title={title} gameTitle={openGame.title}
-      editor={canEdit ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}/>
+      editor={canEdit && openGame.Studio ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}/>
     : undefined
   useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
     [reader, surface, theme, themeGame?.id, playTheme])
   const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
     item.data.game === playing.game.id && item.data.level === playing.level.id &&
     item.data.levelRevision === playing.level.revision && item.data.completed).map(item => item.data.elapsedMs)) : Number.POSITIVE_INFINITY
+  const bestScore = playing ? sessions.reduce((best, item) => {
+    if (item.id === playing.session.id || item.data.game !== playing.game.id || !item.data.completed) return best
+    const score = (item.data as { score?: unknown }).score
+    return typeof score === 'number' && Number.isFinite(score) ? Math.max(best, score) : best
+  }, 0) : 0
 
   return <div ref={app} className={'app' + (reader ? ' reader' : '') + (inShell ? ' app-shell' : '')} data-theme={theme} data-surface={surface}>
     {inShell && <>
@@ -776,7 +783,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         <GameCatalog studio={inStudioCatalog}
           action={inLibrary && canEdit && <a className="secondary studio-door" href="/studio"
             onClick={event => link(event, '/studio')}><Pencil size={16} aria-hidden="true"/> {t('Studio')}</a>}
-          games={games.filter(game => !reader || game.eReader).map(game => ({
+          games={games.filter(game => (!inStudioCatalog || game.Studio) && (!reader || game.eReader)).map(game => ({
             ...game, description: t(inStudioCatalog ? game.studioDescription ?? game.description : game.description), href: catalogPage(game),
             artClass: game.theme, art: game.preview(game.sample?.(packs)),
             favorite: Boolean(game.favorite && prefs[game.favorite]),
@@ -787,7 +794,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : inLeaderboards ? <LeaderboardCatalog games={games} sessions={sessions} accountId={account?.id} online={online} link={link}/>
       : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
         preferences={prefs} reader={reader} bestMs={playing.challenge ? undefined : Number.isFinite(bestMs) ? bestMs : undefined}
+        bestScore={playing.challenge ? undefined : bestScore || undefined}
         testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
+        launch={playing.challenge || playing.replay ? undefined : level => perform(async () => {
+          await saves.current.catch(() => undefined)
+          try { await refreshLocal() } finally { await open(playing.game, level) }
+        })}
+        sync={() => saves.current.catch(() => undefined).then(() => sync(profile, mutationExtras))}
         challenge={playing.challenge ? { occurrenceId: playing.challenge.occurrenceId, slotId: playing.challenge.slotId,
           game: playing.challenge.game, attemptId: playing.challenge.attemptId, endsAt: playing.challenge.endsAt,
           rules: playing.challenge.rules } : undefined}
@@ -854,7 +867,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
         leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
           open: event => link(event, openGame.url + '/leaderboards') } : undefined}
-        editor={canEdit ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
+        editor={canEdit && openGame.Studio ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
         history={openGame.history ? () => go(openGame.url + '/history') : undefined}
         settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
         guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
@@ -870,15 +883,19 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         <h1 id="about-heading">{t("About Aviarium")}</h1>
         <p>{t('Version {version}', { version: import.meta.env.VITE_AVIARIUM_VERSION })}</p>
         <p>{t('Aviarium is a self-hosted puzzle library. Start with Sudoku, play the same published puzzles as everyone else, and pick up where you left off. You can download games to play offline, and creators can use Studio to build and share their own puzzles.')}</p>
+        <p>{t('2048 is based on the original game by Gabriele Cirulli, released under the MIT license.')} <a href="https://github.com/gabrielecirulli/2048">{t('Original 2048')}</a></p>
         <a className="secondary" href="https://github.com/Trustadz/aviarium">{t("Aviarium on GitHub")}</a>
       </section>
-      : studioGame && account && canEdit && (!adminPackStudio || (online && account.role === 'admin')) ? <>
+      : studioGame?.Studio && account && canEdit && (!adminPackStudio || (online && account.role === 'admin')) ? <>
         <studioGame.Studio key={account.id + ':' + studioGame.id + (adminPackStudio ? ':admin' : '')} account={account} online={online}
           admin={adminPackStudio} reader={reader} theme={theme} packs={packs.filter(pack => pack.data.game === studioGame.id)}
           leaveLabel={studioLeaveLabel}
           leave={() => back(adminPackStudio ? '/admin' : '/studio')} onPublish={() => perform(() => refreshPacks())}/>
       </>
       : studioGame && canEdit ? <section className="panel"><h1>{t('Access required')}</h1>
+        <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio')}</a></section>
+      : inStudioRoute ? <section className="panel"><h1>{t('Studio')}</h1>
+        <p>{t('This game has no Studio editor.')}</p>
         <a className="secondary" href="/studio" onClick={event => link(event, '/studio')}>{t('Studio')}</a></section>
       : inAdmin && online && account?.role === 'admin' ? <>
         <Admin key={account.id} account={account} openPackStudio={game => go('/studio/' + game + '/admin')}/>

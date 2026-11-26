@@ -60,7 +60,7 @@ export function ResultStandingsPanel({ game, level, accountId, online }: {
       <strong>{formatLeaderboardValue(row.value, row.unit)}</strong>
       </li>)}
     </Fragment>)}</ol>
-    {!rows.length && !data.you && attempts >= 5 && <p className="challenge-panel-note">{t('No posted times yet.')}</p>}
+    {!rows.length && !data.you && attempts >= 5 && <p className="challenge-panel-note">{t('No posted results yet.')}</p>}
     {!data.you && attempts < 5 && <p className="challenge-panel-note" role="status">{t('Syncing your result…')}</p>}
     {!data.you && attempts >= 5 && <p className="challenge-panel-note">{t('Your result is not on this board.')}</p>}
     {level.pack && <a className="text-button challenge-other" href={'/games/' + game.id + '/leaderboards/pack/' +

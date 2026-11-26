@@ -56,9 +56,10 @@ platform supplies everything around it.
   `generation` and a `leaderboard` is what makes the game eligible for the
   challenge scheduler.
 
-The browser additionally supplies a `Player` and a level `Studio` component, a
-preview and presentation metadata; those are the gameplay/editor surface, not
-platform plumbing.
+The browser additionally supplies a `Player`, an optional level `Studio`
+component, a preview and presentation metadata; those are the gameplay/editor
+surface, not platform plumbing. A Quick Play-only game omits `Studio` and is
+hidden from authoring.
 
 ## What the platform owns
 
@@ -87,7 +88,8 @@ const registry = createGameRegistry([sudokuGame, nonogramsGame])
 
 `validateGameRegistry` fails startup for duplicate ids, a contract version
 mismatch, a missing save contract, or a built-in pack whose game id does not
-match. `challengeCapable()` returns games with a `generation` declaration.
+match. `challengeCapable()` returns games with both a `generation` declaration
+and a leaderboard result, because daily challenges need a comparable result.
 
 A package-backed third game in `packages/game-fixture` is the proof: it is
 discovered, becomes challenge-capable, and reaches the server compatibility map
@@ -104,7 +106,8 @@ challenge board.
 2. Add the `GameDefinition` (see `packages/sudoku/src/game.ts` for the adapter
    pattern). Keep existing save formats, level ids, board keys and puzzle
    digests so old attempts and leaderboard rows stay valid.
-3. Add the browser `Player`, level `Studio`, preview and presentation metadata.
+3. Add the browser `Player`, optional level `Studio`, preview and presentation
+   metadata. Omit `Studio` for a game with no authored content.
 4. Register the definition in the server `GameRegistry` and the browser
    `GameRegistry`; add the offline asset entries.
 5. Run the game-contract tests, the parity tests and the browser suite.

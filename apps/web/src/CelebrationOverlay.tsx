@@ -17,9 +17,20 @@ export interface CelebrationAction {
   kind?: 'primary' | 'secondary' | 'text'
 }
 
+export interface CelebrationValue {
+  label: string
+  value: string
+  /** Formatted previous best, when the game has one. */
+  best?: string
+  newBest?: boolean
+}
+
 export interface CelebrationResult {
-  elapsedMs: number
+  /** Time games pass elapsedMs; score games pass a primary value instead. */
+  elapsedMs?: number
   bestMs?: number
+  primary?: CelebrationValue
+  description?: string
   stats: readonly CelebrationStat[]
   saveNote?: string
   saveError?: boolean
@@ -27,25 +38,32 @@ export interface CelebrationResult {
 
 const resultsLeadMs = 2500
 
-export function CelebrationOverlay({ result, actions, onClose, reader, preview = false, children, heading }: {
+export function CelebrationOverlay({ result, actions, onClose, reader, preview = false, celebrate = true, children, heading }: {
   result: CelebrationResult
   actions: readonly CelebrationAction[]
   onClose: () => void
   reader: boolean
   preview?: boolean
+  /** A loss may show the result card without the flock and confetti. */
+  celebrate?: boolean
   children?: ReactNode
   heading?: string
 }) {
   const t = useT()
   const [reduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
-  const [celebrating, setCelebrating] = useState(() => !reduced)
+  const [celebrating, setCelebrating] = useState(() => celebrate && !reduced)
   const overlay = useRef<HTMLDivElement>(null)
   const results = useRef<HTMLElement>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
   const duration = reader ? 3200 : 3600
   const title = heading ?? t(preview ? 'Celebration preview' : 'Puzzle solved')
-  const newBest = result.bestMs !== undefined && result.elapsedMs < result.bestMs
+  const newBest = result.primary?.newBest ?? (result.bestMs !== undefined && result.elapsedMs !== undefined && result.elapsedMs < result.bestMs)
+  const primary = result.primary ?? (result.elapsedMs !== undefined ? {
+    label: t('Time'), value: displayTime(result.elapsedMs),
+    best: result.bestMs !== undefined ? displayTime(result.bestMs) : undefined,
+    newBest,
+  } : undefined)
 
   useEffect(() => {
     if (!celebrating) return
@@ -115,13 +133,14 @@ export function CelebrationOverlay({ result, actions, onClose, reader, preview =
         <div className="celebration-result-head">
           <h2 id="celebration-result-title">{title}</h2>
         </div>
-        {!preview && <div className="celebration-time">
-          <span>{t('Time')}</span>
-          <strong>{displayTime(result.elapsedMs)}</strong>
-          {newBest ? <span className="celebration-best is-new">{t('New best time')}</span>
-            : result.bestMs !== undefined ? <span className="celebration-best">{t('Best {time}', { time: displayTime(result.bestMs) })}</span>
+        {!preview && primary && <div className="celebration-time">
+          <span>{primary.label}</span>
+          <strong>{primary.value}</strong>
+          {primary.newBest ? <span className="celebration-best is-new">{result.primary ? t('New best') : t('New best time')}</span>
+            : primary.best !== undefined ? <span className="celebration-best">{result.primary ? t('Best {value}', { value: primary.best }) : t('Best {time}', { time: primary.best })}</span>
               : null}
         </div>}
+        {result.description && <p className="celebration-line">{result.description}</p>}
         <dl className="celebration-stats">
           {result.stats.map(stat => <div key={stat.label}>
             <dt>{stat.label}</dt>

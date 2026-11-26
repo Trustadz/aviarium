@@ -14,6 +14,24 @@ than once with different option sets, but a day still uses each game at most
 once. Pack-rule variants (hints, lives, timer, diagonal) are deliberately
 deferred and remain a future option-group extension.
 
+
+## How a game becomes challenge-capable
+
+There is no per-game challenge script. A game declares normal generation
+(`generation.options` and `generation.generate`) and a comparable
+`leaderboard.result`. `GameRegistry.challengeCapable()` derives the eligible
+set from those declarations, and `challengeGameFromDefinition` reads the
+generation option fields and the optional `challenge.optionGroups` for the
+admin UI. The scheduler then calls the same pure generator and result hooks a
+normal Quick Play run uses.
+
+Adding a capable game makes it visible in **Administration → Challenge
+settings** and available for a selection. It does **not** silently replace the
+live rotation: the rotation is the stored `challenge_series.game_selections`
+list. A result can be a time (`ms`, lower is better) or a score (`score`,
+higher is better); the challenge board and the normal game board use the same
+unit.
+
 ## Entities
 
 - **Series** (`challenge_series`): the configured daily challenge. One row,

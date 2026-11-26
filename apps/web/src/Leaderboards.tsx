@@ -121,7 +121,7 @@ export function LeaderboardPlayerPanel({ player, game, compact = false, link }: 
 
 function MiniTop({ rows }: { rows: readonly LeaderboardStanding[] }) {
   const t = useT()
-  if (!rows.length) return <p className="leaderboard-empty-line">{t('No posted times')}</p>
+  if (!rows.length) return <p className="leaderboard-empty-line">{t('No posted results')}</p>
   return <ol className="leaderboard-mini">{rows.slice(0, 3).map((row, index) => <li key={row.rank + ':' + index}
     data-you={row.you || undefined}>
     <span>{row.rank}</span><Avatar name={row.name} url={row.avatarUrl}/><span>{row.name}</span>
@@ -382,7 +382,7 @@ function StandingsTable({ rows, total, board, game, play, title, label = 'top' }
       <table className="leaderboard-table">
         <caption className="visually-hidden">{t('Standings for {board}', { board: title })}</caption>
         <thead><tr><th scope="col">{t('Rank')}</th><th scope="col">{t('Player')}</th>
-          <th scope="col">{t('Time')}</th>{showBoard && <th scope="col">{t('Board')}</th>}</tr></thead>
+          <th scope="col">{t(rows[0]?.unit === 'score' ? 'Score' : 'Time')}</th>{showBoard && <th scope="col">{t('Board')}</th>}</tr></thead>
         <tbody>{visible.map(row => {
           const tags = game.leaderboards?.tags?.(t, row) ?? []
           return <tr key={row.rank + ':' + row.name + ':' + row.recordedAt}
@@ -442,7 +442,7 @@ function PlayerBestStrip({ you, cooldown, total, play, playLabel }: {
     </div>
   }
   return <div className="leaderboard-you panel">
-    <span className="eyebrow">{t('No posted time')}</span>
+    <span className="eyebrow">{t('No posted result')}</span>
     {play && <button className="text-button" onClick={play}>{playLabel ?? t('Play this board')}</button>}
   </div>
 }
@@ -526,7 +526,7 @@ export function LeaderboardBoardView({ game, boardKey, accountId, online, back, 
       {mode === 'best' ? (detail.top.length ? <StandingsTable rows={detail.top} total={detail.total} board={detail.board}
         game={game} play={play} title={title}/> : <div className="empty leaderboard-empty">
         <Trophy size={28} aria-hidden="true"/>
-        <h2>{t('No posted times')}</h2>
+        <h2>{t('No posted results')}</h2>
         {detail.level
           ? <button className="primary" onClick={() => play(detail.level!)}>{t('Play this board')}</button>
           : <button className="primary" onClick={openGame}>{t('Play a puzzle')}</button>}
@@ -642,7 +642,7 @@ export function LeaderboardNotice({ notice, onAcknowledge }: {
       <h2 id="leaderboard-removal-title">{t('Result removed')}</h2>
       <dl id="leaderboard-removal-details" className="leaderboard-notice-details">
         <dt>{t('Board')}</dt><dd>{leaderboardBoardTitle(t, notice.board, game)}</dd>
-        <dt>{t('Time')}</dt><dd>{formatLeaderboardValue(notice.value, notice.unit)}</dd>
+        <dt>{t(notice.unit === 'score' ? 'Score' : 'Time')}</dt><dd>{formatLeaderboardValue(notice.value, notice.unit)}</dd>
         <dt>{t('Removed by')}</dt><dd>{notice.adminName}</dd>
         <dt>{t('Removed')}</dt><dd>{fullDate(intl, notice.removedAt)}</dd>
         <dt>{t('Reason')}</dt><dd>{notice.reason}</dd>

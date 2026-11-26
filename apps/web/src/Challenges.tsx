@@ -36,7 +36,7 @@ export interface ChallengeSlotView {
     attemptId?: string
     sessionId?: string
     startedAt?: string
-    result?: { id: string; status: 'active' | 'removed'; rank: number | null; total: number; value: number; unit: 'ms' } | null
+    result?: { id: string; status: 'active' | 'removed'; rank: number | null; total: number; value: number; unit: LeaderboardStanding['unit'] } | null
   }
   standings: { top: LeaderboardStanding[]; you: LeaderboardStanding | null; total: number }
   replay?: ChallengeReplayView
@@ -110,7 +110,7 @@ function statusLabel(t: ReturnType<typeof useT>, slot: ChallengeSlotView, past: 
 
 function MiniTop({ rows, total, href, link }: { rows: LeaderboardStanding[]; total: number; href?: string; link: Link }) {
   const t = useT()
-  if (!rows.length) return <p className="muted challenge-empty">{t('No posted times yet.')}</p>
+  if (!rows.length) return <p className="muted challenge-empty">{t('No posted results yet.')}</p>
   const visible = rows.slice(0, 3)
   return <ol className="challenge-mini">
     {visible.map(row => <li key={row.rank + ':' + row.name} data-you={row.you || undefined}>
@@ -317,13 +317,13 @@ export function ChallengeBoard({ occurrenceId, gameId, accountId, online, back }
     {!data && !problem && online && <p role="status">{t('Loading…')}</p>}
     {data && (rows.length ? <div className="leaderboard-table-wrap"><table className="leaderboard-table">
       <caption className="visually-hidden">{t('Standings for {board}', { board: date + ' · ' + title })}</caption>
-      <thead><tr><th scope="col">{t('Rank')}</th><th scope="col">{t('Player')}</th><th scope="col">{t('Time')}</th></tr></thead>
+      <thead><tr><th scope="col">{t('Rank')}</th><th scope="col">{t('Player')}</th><th scope="col">{t(rows[0]?.unit === 'score' ? 'Score' : 'Time')}</th></tr></thead>
       <tbody>{rows.map(row => <tr key={row.rank + ':' + row.name} data-you={row.you || undefined}>
         <td className="leaderboard-rank"><span className="leaderboard-rank-value">{row.rank}</span></td>
         <td className="leaderboard-player-cell"><div className="leaderboard-player-inner"><Avatar name={row.name} url={row.avatarUrl}/><span className="leaderboard-name">{row.name}{row.you && <span className="badge you-badge">{t('You')}</span>}</span></div></td>
         <td className="leaderboard-time">{formatLeaderboardValue(row.value, row.unit)}</td>
       </tr>)}</tbody>
-    </table></div> : <div className="empty challenge-empty-state"><Trophy size={28}/><h2>{t('No posted times yet.')}</h2></div>)}
+    </table></div> : <div className="empty challenge-empty-state"><Trophy size={28}/><h2>{t('No posted results yet.')}</h2></div>)}
     {data?.board.challenge?.closed && <p className="muted challenge-foot">{t('This daily leaderboard is closed.')}</p>}
   </section>
 }
@@ -366,8 +366,8 @@ export function ChallengeStandingsPanel({ occurrenceId, gameId, accountId, onlin
       </li>)}
     </Fragment>)}</ol>
     {!rows.length && <p className="challenge-panel-note">
-      {data.you ? t('You’re first — no other times yet.')
-        : attempts < 4 ? t('Syncing your result…') : t('No posted times yet.')}</p>}
+      {data.you ? t('You’re first — no other results yet.')
+        : attempts < 4 ? t('Syncing your result…') : t('No posted results yet.')}</p>}
     {!data.you && attempts < 4 && <p className="challenge-panel-note" role="status">{t('Syncing your result…')}</p>}
     {!data.you && attempts >= 4 && <p className="challenge-panel-note">{t('This run did not post to the leaderboard.')}</p>}
   </section>

@@ -132,7 +132,7 @@ export function LeaderboardChallenges({ accountId, online, link }: {
           <span className="leaderboard-challenge-games-list">{slots.map(slot => gameTitle(slot.game)).join(' · ')}</span>
           <span className="muted leaderboard-challenge-winner">{winners.length
             ? winners.map(({ game, row }) => `${game}: ${row.name} · ${formatLeaderboardValue(row.value, row.unit)}`).join(' · ')
-            : t('No posted times yet.')}</span>
+            : t('No posted results yet.')}</span>
           <ChevronRight size={17} aria-hidden="true"/>
         </a>
       })}

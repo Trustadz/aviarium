@@ -15,9 +15,8 @@ const nonogramRecipe = {
 }
 
 test('the challenge registry is derived from the game registry', () => {
-  assert.deepEqual(challengeGames.map(game => game.id), ['sudoku', 'nonograms'])
+  assert.deepEqual(challengeGames.map(game => game.id), ['sudoku', 'nonograms', '2048'])
   for (const game of challengeGames) {
-    assert.ok(game.optionGroups.length > 0)
     for (const group of game.optionGroups) {
       assert.ok(group.choices.length > 0)
       assert.ok(group.defaultEnabled.length > 0)
@@ -60,4 +59,31 @@ test('Nonograms challenge generation is deterministic and records elapsed time',
   assert.equal(result.value, 4321)
   assert.equal(result.unit, 'ms')
   assert.ok(result.puzzleContent.includes(';'))
+})
+
+test('2048 challenge generation uses the score result', async () => {
+  const game = challengeGames.find(item => item.id === '2048')!
+  const recipe = {
+    seriesId: 'daily', occurrenceId: '00000000-0000-4000-8000-000000000000', periodKey: '2026-11-24',
+    game: '2048', seed,
+    selection: { groups: {}, options: {}, rules: {} },
+  }
+  const first = await game.generate(recipe)
+  const second = await game.generate(recipe)
+  assert.deepEqual(first.content, second.content)
+  assert.equal(first.difficulty, 'Classic')
+  const level = {
+    id: 'challenge-2048', revision: 1, ruleset: 1, title: 'Daily challenge',
+    source: 'Challenge' as const, seed, generatorVersion: 1,
+    content: first.content,
+  }
+  const save = {
+    game: '2048', level: level.id, levelRevision: 1, ruleset: 1, format: 1,
+    board: (first.content as { start: number[] }).start, score: 512, moves: [], elapsedMs: 1000,
+    completed: false,
+  }
+  const result = game.record(level, save, {})
+  assert.equal(result.value, 512)
+  assert.equal(result.unit, 'score')
+  assert.equal(result.lowerIsBetter, false)
 })

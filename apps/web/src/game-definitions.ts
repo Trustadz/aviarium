@@ -3,6 +3,7 @@ import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
 import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { nonogramsGame } from '../../../packages/nonograms/src/game.js'
+import { twenty48Game } from '../../../packages/game-2048/src/game.js'
 import { sudokuGame } from '../../../packages/sudoku/src/game.js'
 
 /**
@@ -12,6 +13,7 @@ import { sudokuGame } from '../../../packages/sudoku/src/game.js'
 export const webGameDefinitions = new Map<string, GameDefinition<any, any, any, any>>([
   [sudokuGame.id, sudokuGame],
   [nonogramsGame.id, nonogramsGame],
+  [twenty48Game.id, twenty48Game],
 ])
 
 export function gameDefinition(gameId: string) {
