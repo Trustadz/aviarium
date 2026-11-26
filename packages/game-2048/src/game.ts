@@ -120,9 +120,6 @@ export const twenty48Game: GameDefinition<Twenty48Level, Twenty48Save, Record<st
       }
     },
   },
-  challenge: {
-    options: {},
-    rules: {},
-    optionGroups: [],
-  },
+  // Keep 2048 out of Daily Challenges for now; the score board is independent.
+  challenge: false,
 }

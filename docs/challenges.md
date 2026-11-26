@@ -28,9 +28,9 @@ normal Quick Play run uses.
 Adding a capable game makes it visible in **Administration → Challenge
 settings** and available for a selection. It does **not** silently replace the
 live rotation: the rotation is the stored `challenge_series.game_selections`
-list. A result can be a time (`ms`, lower is better) or a score (`score`,
-higher is better); the challenge board and the normal game board use the same
-unit.
+list. A game can stay out entirely with `challenge: false`; 2048 does this for
+now. A result can be a time (`ms`, lower is better) or a score (`score`, higher
+is better); the challenge board and the normal game board use the same unit.
 
 ## Entities
 

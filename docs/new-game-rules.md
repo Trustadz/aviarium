@@ -150,8 +150,10 @@ Daily challenges are platform-owned. There is no per-game scheduler or
 per-game challenge route.
 
 - A game is challenge-capable when it declares both `generation` and
-  `leaderboard`. `GameRegistry.challengeCapable()` derives this; do not add a
-  challenge adapter.
+  `leaderboard`, and has not set `challenge: false`. `GameRegistry.challengeCapable()`
+  derives this; do not add a challenge adapter. Use `challenge: false` when a
+  game should stay out of Daily Challenges for now even though it has a
+  generator and leaderboard; 2048 does this.
 - The platform builds the challenge capability with
   `challengeGameFromDefinition`. It reads:
   - `generation.options.fields` for the admin option groups;

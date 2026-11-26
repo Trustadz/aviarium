@@ -53,8 +53,8 @@ platform supplies everything around it.
     `rulesVersion`, `puzzleContent` and an optional seed code.
 - `preferences` (optional) — the game's preference schema.
 - `challenge` (optional) — daily defaults and future option groups. Supplying
-  `generation` and a `leaderboard` is what makes the game eligible for the
-  challenge scheduler.
+  `generation` and a `leaderboard` makes the game eligible for the challenge
+  scheduler unless it sets `challenge: false`, which opts out explicitly.
 
 The browser additionally supplies a `Player`, an optional level `Studio`
 component, a preview and presentation metadata; those are the gameplay/editor
@@ -89,7 +89,8 @@ const registry = createGameRegistry([sudokuGame, nonogramsGame])
 `validateGameRegistry` fails startup for duplicate ids, a contract version
 mismatch, a missing save contract, or a built-in pack whose game id does not
 match. `challengeCapable()` returns games with both a `generation` declaration
-and a leaderboard result, because daily challenges need a comparable result.
+and a leaderboard result, and without `challenge: false`, because daily
+challenges need a comparable result and an explicit opt-in/opt-out.
 
 A package-backed third game in `packages/game-fixture` is the proof: it is
 discovered, becomes challenge-capable, and reaches the server compatibility map

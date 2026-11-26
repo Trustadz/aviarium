@@ -146,8 +146,11 @@ export interface GameDefinition<
   /** Optional: default elapsedMs, lower-is-better, level boards. */
   leaderboard?: GameLeaderboard<Level, Attempt, Rules>
   preferences?: z.ZodObject
-  /** Optional overrides. Usually omitted. */
-  challenge?: {
+  /**
+   * Optional daily-challenge declaration. Omit it to use the generator
+   * defaults; set `false` to keep a game out of Daily Challenges entirely.
+   */
+  challenge?: false | {
     /** Daily default generation options; defaults to generation.options.defaults. */
     options?: Options
     /** Daily default rules; defaults to play.rules.defaults. */
