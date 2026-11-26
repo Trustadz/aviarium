@@ -8,6 +8,8 @@ test('formats duration results as minutes and seconds', () => {
   assert.equal(formatLeaderboardValue(245_000, 'ms'), '4:05')
   assert.equal(formatLeaderboardValue(0, 'ms'), '0:00')
   assert.equal(formatLeaderboardValue(3_600_000, 'ms'), '60:00')
+  assert.equal(formatLeaderboardValue(20_480, 'score'), '20480')
+  assert.equal(formatLeaderboardValue(12.6, 'score'), '13')
 })
 
 test('keeps the cooldown scoped to the configured window', () => {

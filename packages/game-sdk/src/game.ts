@@ -15,7 +15,7 @@
 import type { z } from 'zod'
 import type { GameLevel, GameMetadata } from './index.js'
 import type { GameAttempt } from './progress.js'
-import type { LeaderboardBoardKey } from './leaderboards.js'
+import type { LeaderboardBoardKey, LeaderboardValueUnit } from './leaderboards.js'
 import type { PackDocument, PackEntry, PackRevision } from './packs.js'
 
 export const gameContractVersion = 1
@@ -111,7 +111,7 @@ export interface GamePacks<Level extends GameLevel, Rules extends GameRuleValues
 /** One completed, already-validated attempt. Board identity is not here. */
 export interface GameResult {
   value: number
-  unit: 'ms'
+  unit: LeaderboardValueUnit
   lowerIsBetter: boolean
   aids?: unknown
   rulesVersion: number

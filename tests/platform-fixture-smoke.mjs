@@ -53,10 +53,15 @@ try {
     [token])
   await db.query("INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval '1 hour')",
     [digest(token), user.id])
+  // Keep the current challenge window open for at least two hours whenever
+  // this smoke runs. A reset at UTC midnight would otherwise make the fixture
+  // unavailable during the last two hours of the UTC day.
+  const now = new Date()
+  const resetMinute = (now.getUTCHours() * 60 + now.getUTCMinutes() + 180) % 1440
   await db.query(`UPDATE challenge_series SET enabled=true, game_limit=1, eligible_games='{"fixture"}'::text[],
     game_options='{"fixture":{"difficulty":["normal"]}}'::jsonb,
     game_selections='[{"game":"fixture","options":{"difficulty":["normal"]}}]'::jsonb,
-    reset_minute=0, timezone='UTC' WHERE id='daily'`)
+    reset_minute=$1, timezone='UTC' WHERE id='daily'`, [resetMinute])
 
   const quick = await request('/api/games/fixture/quick-play', { method: 'POST',
     body: { difficulty: 'normal', seed: 'fixture-smoke' } })

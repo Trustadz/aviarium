@@ -139,7 +139,7 @@ async function slotView(occurrence: OccurrenceRow, slot: SlotRow, viewer: string
       rank: playerResult.status === 'active' ? standings.you?.rank ?? null : null,
       total: standings.total,
       value: Number(playerResult.score_value),
-      unit: 'ms',
+      unit: playerResult.value_unit as LeaderboardStanding['unit'],
     }
   }
   const past = now >= Date.parse(iso(occurrence.ends_at))

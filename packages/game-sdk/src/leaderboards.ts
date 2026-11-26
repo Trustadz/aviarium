@@ -13,7 +13,7 @@ export type LeaderboardResultStatus = typeof leaderboardResultStatuses[number]
  * and for the "play this board" action on a result row.
  */
 export type LeaderboardBoardKind = 'quick' | 'level'
-export type LeaderboardValueUnit = 'ms'
+export type LeaderboardValueUnit = 'ms' | 'score'
 
 export interface LeaderboardBoardKey {
   key: string
@@ -158,7 +158,7 @@ export function formatLeaderboardValue(value: number, unit: LeaderboardValueUnit
     const seconds = Math.floor(Math.max(0, value) / 1000)
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
   }
-  return String(value)
+  return String(Math.max(0, Math.round(value)))
 }
 
 export function withinLeaderboardCooldown(recordedAt: number | Date, now = Date.now()) {

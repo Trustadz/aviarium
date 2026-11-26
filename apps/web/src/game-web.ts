@@ -24,8 +24,14 @@ export interface GamePlayerProps {
   preferences: ProfilePreferences
   reader: boolean
   bestMs?: number
+  /** Highest completed score for this game, when the game is score-based. */
+  bestScore?: number
   testMode?: boolean
   persist: (data: GameAttempt) => Promise<void>
+  /** Start a new attempt at a newly generated level, such as "Play again". */
+  launch?: (level: GameLevel) => Promise<void> | void
+  /** Flush local completions to the server, e.g. before opening the leaderboard. */
+  sync?: () => Promise<void>
   leave: () => void
   /** Leave through the canonical progress action (roadmap, menu, or editor). */
   finish?: () => void
@@ -58,7 +64,8 @@ export interface WebGame extends GameMetadata {
   theme: string
   guide?: Parameters<typeof GameGuide>[0]['sections']
   packs?: PackPresentation
-  Studio: ComponentType<PackStudioProps>
+  /** Omit for games with no authorable packs; such games are hidden from Studio. */
+  Studio?: ComponentType<PackStudioProps>
   Player: ComponentType<GamePlayerProps>
   menu?(context: GameMenuContext): ReactNode
   sample?(packs: readonly PackRevision[]): GameLevel | undefined

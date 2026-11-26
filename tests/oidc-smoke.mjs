@@ -419,7 +419,7 @@ try {
   const testEditor = await who()
   assert.equal(testEditor.id, testUser.id)
   assert.equal(testEditor.role, 'editor')
-  assert.deepEqual(testEditor.editorGames, ['sudoku', 'nonograms'])
+  assert.deepEqual(testEditor.editorGames, ['sudoku', 'nonograms', '2048'])
   assert.equal((await get('/api/games/nonograms/pack-drafts')).status(), 200)
   assert.equal((await get('/api/drafts')).status(), 200)
   assert.equal((await get('/api/admin/users')).status(), 403)

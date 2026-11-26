@@ -90,6 +90,50 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
   --easy-bg: #1d4a3b; --easy-fg: var(--sudoku-mist); --medium-bg: #544025; --medium-fg: #fae0af; --hard-bg: #55363d; --hard-fg: #fed0d5;
   --card-art: linear-gradient(128deg, #29473b, #395c4d);
 }
+.twenty48-theme {
+  --game-page: #f3e7c8;
+  --surface: #fffaf0; --text: #3d2f1b; --muted: #6b5638;
+  --accent: #b87308; --accent-strong: #8a5200; --button-text: #fffaf0;
+  --tint: #f6e5b8; --border: #d8c08e;
+  --error-background: #f8e1d2; --error-text: #8a3d1d; --feedback: #6b4a16;
+  --twenty48-board: #e7d4a9; --twenty48-empty: #f1e2c0;
+  --tile-2-bg: #fbf1d8; --tile-2-fg: #4a3820;
+  --tile-4-bg: #f3e3b9; --tile-4-fg: #4a3820;
+  --tile-8-bg: #efc97a; --tile-8-fg: #3d2a10;
+  --tile-16-bg: #e8b45c; --tile-16-fg: #3d2a10;
+  --tile-32-bg: #df9a3d; --tile-32-fg: #2d1c08;
+  --tile-64-bg: #d47f25; --tile-64-fg: #fffaf0;
+  --tile-128-bg: #c66512; --tile-128-fg: #fffaf0;
+  --tile-256-bg: #b2530d; --tile-256-fg: #fffaf0;
+  --tile-512-bg: #9c4209; --tile-512-fg: #fffaf0;
+  --tile-1024-bg: #833406; --tile-1024-fg: #fffaf0;
+  --tile-2048-bg: #f2b705; --tile-2048-fg: #3a2500;
+  --tile-super-bg: #4a2c0a; --tile-super-fg: #ffe9ad;
+  --card-art: linear-gradient(135deg, #f3e0b0, #d9a44c);
+  color: var(--text);
+}
+.app[data-theme=dark] .twenty48-theme {
+  --game-page: #1f1710;
+  --surface: #2c2117; --text: #f8ecd8; --muted: #d4c1a2;
+  --accent: #f0b429; --accent-strong: #ffd166; --button-text: #2a1d0e;
+  --tint: #3d2d1e; --border: #5c4630;
+  --error-background: #542f24; --error-text: #ffc8b0; --feedback: #f5d9a3;
+  --twenty48-board: #2a1f15; --twenty48-empty: #3a2c1e;
+  --tile-2-bg: #4a3828; --tile-2-fg: #f8ecd8;
+  --tile-4-bg: #5d452d; --tile-4-fg: #fff4de;
+  --tile-8-bg: #8a6224; --tile-8-fg: #fff4de;
+  --tile-16-bg: #a97722; --tile-16-fg: #2a1d0e;
+  --tile-32-bg: #c78b20; --tile-32-fg: #2a1d0e;
+  --tile-64-bg: #e0a026; --tile-64-fg: #2a1d0e;
+  --tile-128-bg: #f0b429; --tile-128-fg: #2a1d0e;
+  --tile-256-bg: #ffd166; --tile-256-fg: #2a1d0e;
+  --tile-512-bg: #ffe19a; --tile-512-fg: #2a1d0e;
+  --tile-1024-bg: #fff0c2; --tile-1024-fg: #2a1d0e;
+  --tile-2048-bg: #f2b705; --tile-2048-fg: #2a1d0e;
+  --tile-super-bg: #7a4d12; --tile-super-fg: #fff4de;
+  --card-art: linear-gradient(135deg, #3a2a18, #6b4a1c);
+  color: var(--text);
+}
 .nonogram-theme {
   --game-page: #e5edf3;
   --surface: #fffbf0; --text: #17374b; --muted: #455c6d;
@@ -1858,6 +1902,16 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
   .leaderboard-challenge-day { flex-wrap: wrap; }
 }
 
+/* Reader mode keeps every rank in plain ink; medals must not carry color. */
+.app.reader .leaderboard-rank-value,
+.app.reader .leaderboard-rank-medal { color: var(--text); }
+.app.reader .leaderboard-rank-medal,
+.app.reader .leaderboard-rank-medal.medal-1,
+.app.reader .leaderboard-rank-medal.medal-2,
+.app.reader .leaderboard-rank-medal.medal-3 { background: transparent; }
+.app.reader .leaderboard-rank-value { font-size: 1.02rem; min-width: 2rem; height: 2rem; }
+.app.reader .you-badge { background: transparent; color: var(--text); border: 1px solid var(--text); }
+
 /* Current player is easy to spot in every leaderboard surface. */
 .leaderboard-mini li[data-you=true], .challenge-mini li[data-you=true] {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
@@ -1941,6 +1995,4 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
   .challenge-add-choices { grid-template-columns: minmax(0, 1fr); }
   .challenge-selection { align-items: start; }
   .challenge-selection > .text-button { padding-inline: 4px; }
-}
-
 }

@@ -14,7 +14,8 @@ an origin.
 | --- | --- | --- |
 | Navigation and library | [main.tsx](../apps/web/src/main.tsx), [GameCatalog.tsx](../apps/web/src/GameCatalog.tsx), [registry.ts](../apps/web/src/registry.ts) | Check direct navigation, refresh, signed-out and offline states. Check route handling in React, Fastify's HTML fallback, and the service worker. |
 | Sudoku play | [Player.tsx](../apps/web/src/Player.tsx), [Grid.tsx](../apps/web/src/Grid.tsx), [rules.ts](../packages/sudoku/src/rules.ts), [contracts.ts](../packages/sudoku/src/contracts.ts) | Keep the client, server verification, and persisted saves aligned. Exercise touch and keyboard play for input changes. |
-| Nonograms play | [Nonograms.tsx](../apps/web/src/Nonograms.tsx), [puzzles.ts](../packages/nonograms/src/puzzles.ts), [nonograms-game.ts](../apps/server/src/nonograms-game.ts) | Keep clue validation, saved marks, and seeded Quick Play aligned across the browser and server. |
+| Nonograms play | [Nonograms.tsx](../apps/web/src/Nonograms.tsx), [puzzles.ts](../packages/nonograms/src/puzzles.ts), [contracts.ts](../packages/nonograms/src/contracts.ts) | Keep clue validation, saved marks, and seeded Quick Play aligned across the browser and server. |
+| 2048 play | [Twenty48.tsx](../apps/web/src/Twenty48.tsx), [rules.ts](../packages/game-2048/src/rules.ts), [contracts.ts](../packages/game-2048/src/contracts.ts) | Keep seed reproduction, move replay, score verification, and the 2048 milestone aligned across the browser and server. |
 | Local and synced progress | [storage.ts](../apps/web/src/storage.ts), [progress.ts](../apps/server/src/progress.ts) | Check account isolation, reconnect and retry, concurrent edits, and old saves. |
 | Leaderboards | [leaderboards.ts](../apps/server/src/leaderboards.ts), [Leaderboards.tsx](../apps/web/src/Leaderboards.tsx), [leaderboards.ts](../packages/game-sdk/src/leaderboards.ts) | Check board grouping, the per-exact-puzzle cooldown, tie ranks, moderation notices, and that a completion still syncs when its result is suppressed. |
 | Catalog and creation | [PackStudio.tsx](../apps/web/src/PackStudio.tsx), [SudokuStudio.tsx](../apps/web/src/SudokuStudio.tsx), [NonogramsStudio.tsx](../apps/web/src/NonogramsStudio.tsx), [packs.ts](../apps/server/src/packs.ts) | Preserve draft ownership, offline edits, publication revisions, visibility, and the ability to resume a prior revision. |
@@ -51,12 +52,13 @@ an origin.
   level, and the completion screen's roadmap or choose-another action is a
   separate forward action. Studio pack editing and test play keep their
   existing layers. Keep this rule when adding screens under a game or Studio.
-- **Game play fits the viewport.** The Sudoku and Nonograms play screens fill
+- **Game play fits the viewport.** The Sudoku, Nonograms, and 2048 play screens fill
   the dynamic viewport and size their boards from the space left by the header
   and controls, so the board, inputs, tools, and result actions stay visible
   without page scrolling from phone portrait through ultrawide desktop. Short
-  viewports compact the heading and controls, and Nonograms derive their cell
-  size from both available dimensions. Menus, catalogs, and long lists may
+  viewports compact the heading and controls, Nonograms derive their cell
+  size from both available dimensions, and 2048 sizes its square board from
+  the shorter viewport dimension. Menus, catalogs, and long lists may
   still scroll because their content is not a fixed play surface. A new game
   should follow the same rule or explain why its play surface needs to scroll.
 - **Shared game contracts with game-specific logic.** The renderer-neutral SDK
@@ -227,7 +229,7 @@ player/studio/presentation, pack presentation labels and Quick Play extras.
 
 ## Current scope
 
-The platform ships Sudoku and Nonograms, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships chaptered Sudoku and Nonograms packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision. Daily challenges use the platform-owned scheduling and ranking model described above; Sudoku and Nonograms are eligible, X is configured by an admin (1–2), and the feature is disabled until enabled.
+The platform ships Sudoku, Nonograms, and 2048, player accounts and roles, draft review and publishing, local and server progress, completion history, leaderboards, and scheduled PostgreSQL backups. It also ships chaptered Sudoku and Nonograms packs and seeded Quick Play. Every completed game with a leaderboard declaration posts a result; Sudoku and Nonograms group their boards by difficulty, size, or level revision, while 2048 groups completed runs on one Classic score board and records the exact seed for its cooldown. Results can be times (lower is better) or scores (higher is better); the shared leaderboard and challenge UI label the unit. Daily challenges use the platform-owned scheduling and ranking model described above; Sudoku and Nonograms are in the default rotation, 2048 is challenge-capable and can be added through the normal game-selection settings, X is configured by an admin (1–2), and the feature is disabled until enabled.
 
 ## Release announcements
 

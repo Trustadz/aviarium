@@ -2,6 +2,7 @@ import {
   validateGameRegistry, type GameDefinition, type GameRegistry, type RegisteredGame,
 } from '../../../packages/game-sdk/src/game.js'
 import { nonogramsGame } from '../../../packages/nonograms/src/game.js'
+import { twenty48Game } from '../../../packages/game-2048/src/game.js'
 import { sudokuGame } from '../../../packages/sudoku/src/game.js'
 
 /**
@@ -23,5 +24,5 @@ export function createGameRegistry(definitions: readonly GameDefinition<any, any
 }
 
 /** The installed game definitions. Adding a game starts here. */
-export const builtInGameDefinitions = [sudokuGame, nonogramsGame] as const
+export const builtInGameDefinitions = [sudokuGame, nonogramsGame, twenty48Game] as const
 export const gameRegistry = createGameRegistry(builtInGameDefinitions)

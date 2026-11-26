@@ -99,7 +99,7 @@ if (adminToken && playerToken) {
   await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: { role: 'unknown' }, expected: 400 })
   const editor = await request(accessPath, { method: 'PATCH', headers: adminHeaders, body: editorPatch(true) })
   assert.equal(editor.role, 'editor')
-  assert.deepEqual(editor.editorGames, ['sudoku', 'nonograms'])
+  assert.deepEqual(editor.editorGames, ['sudoku', 'nonograms', '2048'])
   await request('/api/drafts', { headers: playerHeaders })
   await request('/api/games/nonograms/pack-drafts', { headers: playerHeaders })
   await request('/api/admin/users', { headers: playerHeaders, expected: 403 })
