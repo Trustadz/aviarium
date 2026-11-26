@@ -14,7 +14,7 @@ import type { ChallengeGameRuntime } from './types.js'
 export function challengeGameFromDefinition(
   definition: GameDefinition<any, any, any, any>,
 ): ChallengeGameRuntime | undefined {
-  if (!definition.generation || !definition.leaderboard) return undefined
+  if (!definition.generation || !definition.leaderboard || definition.challenge === false) return undefined
   const generation = definition.generation
   const generationGroups: ChallengeOptionGroup[] = generation.options.fields.map(field => ({
     key: field.key, label: field.label, kind: 'generation' as const,
