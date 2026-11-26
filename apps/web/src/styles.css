@@ -320,18 +320,22 @@ input[type=checkbox] { accent-color: var(--accent); width: 19px; height: 19px; }
 .tabs button[aria-pressed=true] { background: var(--tint); color: var(--accent-strong); border-color: var(--accent); }
 .game-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px,100%),1fr)); gap: 18px; }
 .game-card, .panel, .continue-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
-.game-card { overflow: hidden; }
+.game-card { display: flex; flex-direction: column; overflow: hidden; }
 .game-card-image {
-  display: grid; place-items: center; min-height: 184px;
-  background: var(--card-art, var(--tint)); border-bottom: 1px solid var(--border);
+  display: grid; place-items: center; flex: 0 0 184px; height: 184px; min-height: 0;
+  overflow: hidden; background: var(--card-art, var(--tint)); border-bottom: 1px solid var(--border);
 }
 .game-card-image .board { width: 150px; box-shadow: 0 8px 18px #142c2633; }
-.game-card-body { padding: 14px 17px; }
+.game-card-body { display: flex; flex: 1; flex-direction: column; padding: 14px 17px; }
 .card-title { display: flex; align-items: center; justify-content: space-between; }
 .card-title h3 { font-size: 1.3rem; }
-.card-footer, .button-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.card-footer { margin-top: 12px; }
-.card-footer > a { margin-left: auto; }
+.button-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card-footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end;
+  gap: 8px 10px; margin-top: auto; padding-top: 12px;
+}
+.card-tags { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.card-play { justify-self: end; align-self: end; white-space: nowrap; font-weight: 750; }
 .game-download { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .game-download span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: .8rem; }

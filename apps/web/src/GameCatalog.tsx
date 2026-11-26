@@ -49,18 +49,20 @@ export function GameCatalog({ studio = false, action, games, categories, query, 
             aria-pressed={game.favorite} onClick={game.toggleFavorite}><Heart size={19} fill={game.favorite ? 'currentColor' : 'none'}/></button>}
         </div>
         <p>{game.description}</p>
-        <div className="card-footer">
-          {game.tags.map(tag => <span className="badge" key={tag}>{knownMessage(t, tag)}</span>)}
-          {game.eReader && <span className="badge e-ink"><BookOpen size={13}/> {t('E-reader')}</span>}
-          <a className="text-button" href={game.href} onClick={event => link(event, game.href)}>
-            {t(studio ? 'Edit' : 'Play')} <ArrowRight size={16}/>
-          </a>
-        </div>
         {game.removeDownload && <div className="game-download">
           <span><Check size={15}/> {t('Installed on this device')}</span>
           <button className="secondary" aria-label={t('Remove {game} download', { game: game.title })}
             onClick={game.removeDownload}><Trash2 size={15}/> {t('Remove download')}</button>
         </div>}
+        <div className="card-footer">
+          <div className="card-tags">
+            {game.tags.map(tag => <span className="badge" key={tag}>{knownMessage(t, tag)}</span>)}
+            {game.eReader && <span className="badge e-ink"><BookOpen size={13}/> {t('E-reader')}</span>}
+          </div>
+          <a className="text-button card-play" href={game.href} onClick={event => link(event, game.href)}>
+            {t(studio ? 'Edit' : 'Play')} <ArrowRight size={16}/>
+          </a>
+        </div>
       </div>
     </article>)}</div>
     {!matches.length && <p className="empty">{t('No games match this view.')}</p>}

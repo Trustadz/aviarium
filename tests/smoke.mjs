@@ -335,6 +335,19 @@ try {
   await cardPreview.waitFor()
   assert.equal(await cardPreview.locator('.cell').count(), 81)
   assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
+  const cardMetrics = await page.locator('.game-card').evaluateAll(cards => cards.map(card => {
+    const image = card.querySelector('.game-card-image')?.getBoundingClientRect()
+    const play = card.querySelector('.card-play')?.getBoundingClientRect()
+    const bounds = card.getBoundingClientRect()
+    return image && play ? { image: image.height, playRight: play.right, playBottom: play.bottom,
+      right: bounds.right, bottom: bounds.bottom } : null
+  }))
+  assert.ok(cardMetrics.length >= 2 && cardMetrics.every(Boolean), 'every card has an image and a Play action')
+  assert.equal(new Set(cardMetrics.map(card => card.image)).size, 1, 'card images share one height')
+  for (const card of cardMetrics) {
+    assert.ok(card.right - card.playRight < 30, 'Play sits at the card’s right edge')
+    assert.ok(card.bottom - card.playBottom < 30, 'Play sits at the card’s bottom edge')
+  }
   const featured = page.getByRole('region', { name: 'Featured', exact: true })
   const dailyDot = featured.getByRole('button', { name: 'Show Daily challenges' })
   await dailyDot.waitFor()
