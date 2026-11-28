@@ -8,6 +8,8 @@ import { randomDifficulties, randomSizes, type RandomOptions } from '../../../pa
 import { nonogramBoardKey } from '../../../packages/nonograms/src/leaderboards.js'
 import { knownMessage, useT, type Translate } from './i18n.js'
 import { randomId } from './random.js'
+import nonogramsCardArt from './art/game-menu/library-cards/nonograms-card-art.svg'
+import nonogramsMascot from './art/game-menu/mascots/nonograms-mascot.svg'
 import type { GameMenuContext, WebGame } from './game-web.js'
 import type { PackPresentation } from './GamePacks.js'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
@@ -90,6 +92,7 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
   id: nonogramsId, title: 'Nonograms', description: 'Use row and column clues to reveal a picture.',
   studioDescription: 'Draw Nonograms and publish them in puzzle packs.',
   tags: ['Logic', 'Picross'], eReader: true, input: ['keyboard', 'pointer', 'touch'], theme: 'nonogram-theme',
+  mascot: nonogramsMascot, cardArt: nonogramsCardArt,
   connectMessage: 'Connect to install Nonograms on this device.',
   guide: [
     { title: 'The goal', paragraphs: [

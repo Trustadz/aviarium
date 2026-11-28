@@ -40,10 +40,11 @@
   user-select: none;
 }
 
-/* The bird touches the title edge without covering the lettering. */
-.game-menu-mascot-sudoku { left: 105px; top: -45px; width: 63px; height: 87px; }
+/* The bird touches the title edge without covering the lettering. The budgie
+   also shifts with the root text size so enlarged back labels stay clear. */
+.game-menu-mascot-sudoku { left: calc(73px + 2rem); top: -45px; width: 63px; height: 87px; }
 .game-menu-mascot-nonograms { left: 184px; top: -48px; width: 82px; height: 77px; }
-.game-menu-mascot-2048 { left: 88px; top: -16px; width: 113px; height: 53px; }
+.game-menu-mascot-2048 { left: 82px; top: -16px; width: 113px; height: 53px; }
 
 .game-menu-links {
   margin-top: 20px;
@@ -94,7 +95,7 @@
 
 @media (max-width: 359px) {
   .game-menu-title-row h1 { max-width: calc(100% - 12px); font-size: 34px; }
-  .game-menu-mascot-sudoku { left: 88px; top: -39px; width: 56px; height: 78px; }
+  .game-menu-mascot-sudoku { left: calc(40px + 3rem); top: -39px; width: 56px; height: 78px; }
   .game-menu-mascot-nonograms { left: 152px; top: -41px; width: 71px; height: 67px; }
   .game-menu-mascot-2048 { left: 72px; top: -13px; width: 96px; height: 45px; }
   .game-menu-link { min-height: 46px; font-size: .9rem; }
