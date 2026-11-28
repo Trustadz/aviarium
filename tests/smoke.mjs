@@ -955,7 +955,16 @@ try {
   const solutionValues = validate(Array.from(quickGrid, Number)).solution
   const blank = quickGrid.indexOf('0')
   const quickCell = `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, `
-  await quickPlayPage.goto(`${origin}/games/sudoku/seed?code=${encodeURIComponent(sudokuSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version))}`)
+  const offlineSeedUrl = `${origin}/games/sudoku/seed?code=${encodeURIComponent(sudokuSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version))}`
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await quickPlayPage.goto(offlineSeedUrl, { waitUntil: 'domcontentloaded' })
+      break
+    } catch (error) {
+      if (attempt >= 2) throw error
+      await new Promise(resolve => setTimeout(resolve, 400))
+    }
+  }
   await quickPlayPage.getByText('Review the puzzle and adjust its options.', { exact: true }).waitFor()
   await quickPlayPage.getByText('Sudoku · Medium', { exact: true }).waitFor()
   await quickPlayPage.getByRole('button', { name: 'Start puzzle', exact: true }).click()
