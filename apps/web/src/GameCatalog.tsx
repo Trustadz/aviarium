@@ -2,12 +2,15 @@ import { ArrowRight, BookOpen, Check, Heart, Search, Trash2 } from 'lucide-react
 import type { MouseEvent, ReactNode } from 'react'
 import type { GameMetadata } from '../../../packages/game-sdk/src/index.js'
 import { knownMessage, useT } from './i18n.js'
+import './game-catalog.css'
 
 interface CatalogCard extends Pick<GameMetadata, 'id' | 'title' | 'tags' | 'eReader'> {
   description: string
   href: string
   artClass: string
   art: ReactNode
+  /** Player-facing 184px Library card illustration. Studio keeps `art`. */
+  cardArt?: string
   favorite: boolean
   toggleFavorite?: () => void
   removeDownload?: () => void
@@ -41,7 +44,11 @@ export function GameCatalog({ studio = false, action, games, categories, query, 
       <button key={name} aria-pressed={name === category} onClick={() => setCategory(name)}>{knownMessage(t, name)}</button>)}</div>
     <div className="game-list">{matches.map(game => <article className="game-card" key={game.id}>
       <a className={'game-card-image ' + game.artClass} href={game.href} onClick={event => link(event, game.href)}
-        aria-label={t(studio ? 'Create for {game}' : 'Open {game}', { game: game.title })}>{game.art}</a>
+        aria-label={t(studio ? 'Create for {game}' : 'Open {game}', { game: game.title })}>
+        {!studio && game.cardArt
+          ? <img className="game-card-art" src={game.cardArt} alt="" aria-hidden="true"/>
+          : game.art}
+      </a>
       <div className="game-card-body">
         <div className="card-title">
           <h3><a href={game.href} onClick={event => link(event, game.href)}>{game.title}</a></h3>

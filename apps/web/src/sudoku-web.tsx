@@ -5,6 +5,8 @@ import { difficulties, type Difficulty } from '../../../packages/game-sdk/src/in
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import { effectivePackRules, packLevels, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { sudokuBoardKey } from '../../../packages/sudoku/src/leaderboards.js'
+import sudokuCardArt from './art/game-menu/library-cards/sudoku-card-art.svg'
+import sudokuMascot from './art/game-menu/mascots/sudoku-mascot.svg'
 import type { GuideSection } from './GameGuide.js'
 import type { GamePlayerProps, WebGame } from './game-web.js'
 import { SudokuPreview } from './Grid.js'
@@ -63,7 +65,7 @@ function SudokuMenuOptions(context: GameMenuContext) {
 
 export const sudokuWeb: Omit<WebGame, 'url'> = {
   ...sudoku, studioDescription: 'Design Sudoku puzzles, arrange them in packs, and test how they play.',
-  theme: 'sudoku-theme', guide: sudokuGuide,
+  theme: 'sudoku-theme', mascot: sudokuMascot, cardArt: sudokuCardArt, guide: sudokuGuide,
   Studio: lazy(() => import('./SudokuStudio.js')), Player: SudokuPlayer, packs: sudokuPackPresentation,
   menu: context => <SudokuMenuOptions {...context}/>,
   playOptions: [

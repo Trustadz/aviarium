@@ -12,6 +12,8 @@ import { knownMessage, useT, type Translate } from './i18n.js'
 import type { GameMenuContext, WebGame } from './game-web.js'
 import { QuickPlayCard } from './QuickPlay.js'
 import { Twenty48Preview } from './Twenty48Preview.js'
+import twenty48CardArt from './art/game-menu/library-cards/2048-card-art.svg'
+import twenty48Mascot from './art/game-menu/mascots/2048-mascot.svg'
 
 function title(t: Translate, level: GameLevel) {
   return level.source === 'Generated' || level.source === 'Challenge'
@@ -48,7 +50,7 @@ function twenty48Tags(t: Translate, row: LeaderboardStanding) {
 export const twenty48Web: Omit<WebGame, 'url'> = {
   ...twenty48,
   description: 'Slide tiles, merge equal numbers, and reach 2048.',
-  theme: 'twenty48-theme',
+  theme: 'twenty48-theme', mascot: twenty48Mascot, cardArt: twenty48CardArt,
   connectMessage: 'Connect to install 2048 on this device.',
   guide: [
     { title: 'The goal', paragraphs: [
