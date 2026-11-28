@@ -31,7 +31,7 @@ import { registerOffline, useGameDownloads } from './offline.js'
 import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
-import { PackCatalog, PackChapters, PackRoadmap, chapterPath, packApi, packExportUrl, packPath } from './GamePacks.js'
+import { PackCatalog, PackChapters, PackRoadmap, PacksPrimary, chapterPath, packApi, packExportUrl, packPath } from './GamePacks.js'
 import { packLevels } from './game-definitions.js'
 import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory, type ScreenRef } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
@@ -949,6 +949,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             updatePreferences: changePrefs, params: new URLSearchParams(location.search),
             launch: (level, launchOptions) => open(openGame, level, undefined, undefined,
               { playOptions: launchOptions?.playOptions }), perform })}
+          {!openGame.menu && openGame.packs && <PacksPrimary gameTitle={openGame.title}
+            packs={packs.filter(pack => pack.data.game === openGame.id)}
+            status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)}
+            open={() => go(openGame.url + '/packs')}/>}
           <GameMenuLinks items={menuItems} label={t('{game} menu', { game: openGame.title })}/>
         </GameMenu>
       })()

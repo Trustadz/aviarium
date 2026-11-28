@@ -380,3 +380,8 @@
 @media (prefers-reduced-motion: reduce) {
   .pack-catalog-card, .pack-progress-track > span { transition: none; }
 }
+
+.pack-primary { display: grid; gap: 10px; padding: 16px; }
+.pack-primary h2 { margin: 0; }
+.pack-primary p { margin: 0; }
+.pack-primary .primary { width: 100%; min-height: 44px; }

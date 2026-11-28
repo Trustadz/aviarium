@@ -21,6 +21,8 @@ export const dutch = {
   "Nonogram settings": "Nonogram-instellingen",
   "Grid size": "Roostergrootte",
   "Play a seed": "Speel een seed",
+  "Play hand-built puzzles in {game}.": "Speel handgemaakte puzzels in {game}.",
+  "Browse packs": "Pakketten bekijken",
   "Load seed": "Seed laden",
   "Paste or enter a code": "Plak of voer een code in",
   "Use a code shared by another player.": "Gebruik een code die een andere speler heeft gedeeld.",

@@ -102,6 +102,24 @@ export function PackCatalog({ gameTitle, presentation, packs, completed, session
  * A pack's illustrated chapter overview. Chapters stay locked in order, so a
  * locked card never presents a follow action and explains the requirement.
  */
+/** Authored-only games use Packs as their primary starting action. */
+export function PacksPrimary({ gameTitle, packs, status, retry, open }: {
+  gameTitle: string; packs: readonly PackRevision[]; status: 'loading' | 'ready' | 'failed'
+  retry: () => void; open: () => void
+}) {
+  const t = useT()
+  return <section className="pack-primary panel" aria-labelledby="pack-primary-title">
+    <h2 id="pack-primary-title">{t('Packs')}</h2>
+    <p>{t('Play hand-built puzzles in {game}.', { game: gameTitle })}</p>
+    {packs.length
+      ? <button className="primary" onClick={open}>{t('Browse packs')}</button>
+      : status === 'loading' ? <p role="status">{t('Loading packs…')}</p>
+        : status === 'failed' ? <><p role="status">{t('Could not load packs.')}</p>
+          <button className="text-button" onClick={retry}>{t('Retry loading packs')}</button></>
+          : <p>{t('No packs available on this device yet.')}</p>}
+  </section>
+}
+
 export function PackChapters({ presentation, pack, completed, sessions, canExport, leave, open, preview = false,
   previewCompletions, tools, header, navigation }: {
   presentation: PackPresentation; pack: PackRevision; completed: ReadonlySet<string>; sessions: readonly SavedAttempt[]
