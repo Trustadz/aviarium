@@ -207,7 +207,9 @@ posts to the general board, not the closed daily board. Challenge levels use
 `source='Challenge'`, `catalog_visible=false`, and are rejected by normal
 progress mutations. Challenge results use `board_kind='challenge'` and
 `board_key='challenge:<slotId>'` and are excluded from general cooldowns,
-player summaries and board selection. The pure boundary helper is
+player summaries and board selection. The leaderboard time is the game's active
+elapsed time, the same value the in-game timer shows; time away from the game
+does not count. The pure boundary helper is
 [`challenges/time.ts`](../apps/server/src/challenges/time.ts); the API and
 product rules are documented in [daily challenges](challenges.md).
 ## Game contract

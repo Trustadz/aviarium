@@ -22,9 +22,12 @@ const digest = value => createHash('sha256').update(value).digest('hex')
 const token1 = randomUUID()
 const token2 = randomUUID()
 const token3 = randomUUID()
+const token4 = randomUUID()
 const headers1 = { Cookie: 'aviarium-test=' + token1 }
 const headers2 = { Cookie: 'aviarium-test=' + token2 }
+const headers4 = { Cookie: 'aviarium-test=' + token4 }
 const clock = { day: '2026-11-24T12:00:00.000Z', done: '2026-11-24T12:00:10.000Z',
+  awayCheckpoint: '2026-11-24T12:03:40.000Z', awayDone: '2026-11-24T12:09:49.000Z',
   late: '2026-11-24T23:59:00.000Z', after: '2026-11-25T00:01:00.000Z' }
 
 async function request(path, { method = 'GET', body, headers = {}, expected = 200, now } = {}) {
@@ -59,6 +62,20 @@ function completion(start, solution, elapsedMs, now) {
   }
 }
 
+function checkpoint(start, elapsedMs, now) {
+  return {
+    sessionId: start.sessionId, mutationId: randomUUID(), baseRevision: 0, archived: false,
+    updatedAt: Date.parse(now),
+    data: {
+      game: 'sudoku', level: start.slot.level.id, levelRevision: start.slot.level.revision,
+      ruleset: start.slot.level.ruleset, format: 1,
+      board: { entries: Array(81).fill(0), notes: Array(81).fill(0) }, undo: [], redo: [],
+      elapsedMs, completed: false,
+    },
+    challenge: { attemptId: start.attemptId },
+  }
+}
+
 let browser
 try {
   for (let attempt = 0; ; attempt++) {
@@ -78,7 +95,7 @@ try {
         nonograms: { size: ['10'], difficulty: ['Easy', 'Medium', 'Hard'] },
       })])
     for (const [role, name, token] of [['admin', 'Challenge Admin', token1], ['user', 'Challenge Player', token2],
-      ['user', 'Challenge Finisher', token3]]) {
+      ['user', 'Challenge Finisher', token3], ['user', 'Challenge Returner', token4]]) {
       const { rows: [user] } = await db.query(
         "INSERT INTO users(issuer,subject,name,role) VALUES ('aviarium:test',$1,$2,$3) RETURNING id", [token, name, role])
       await db.query("INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval '1 hour')",
@@ -133,7 +150,7 @@ try {
     assert.equal(board.board.kind, 'challenge')
     assert.equal(board.total, 1)
     assert.equal(board.you.rank, 1)
-    assert.ok(board.you.value >= 10000, 'the server time is a floor')
+    assert.equal(board.you.value, 1000, 'the active time is used, not the wall clock')
 
     const general = await request('/api/leaderboards/games/sudoku/boards/' + encodeURIComponent('quick:Medium'),
       { headers: headers1, now: clock.day })
@@ -141,7 +158,7 @@ try {
     assert.equal(general.board.difficulty, 'Medium')
     assert.equal(general.total, 1, 'the challenge also posts to the game board')
     assert.equal(general.you.rank, 1)
-    assert.ok(general.you.value >= 10000, 'the game result uses the same authoritative time')
+    assert.equal(general.you.value, 1000, 'the game result uses the same active time')
 
     const lateStart = await request('/api/challenges/slots/' + sudoku.id + '/start',
       { method: 'POST', headers: headers2, body: {}, now: clock.late })
@@ -158,6 +175,25 @@ try {
     const lateGeneral = await request('/api/leaderboards/games/sudoku/boards/' + encodeURIComponent('quick:Medium'),
       { headers: headers1, now: clock.after })
     assert.equal(lateGeneral.total, 1, 'a late completion does not post to the game board either')
+
+    // Solving in 3:40 and returning to finish later must keep 3:40. The server
+    // start time is nine minutes earlier, but time away is not play time.
+    const awayStart = await request('/api/challenges/slots/' + sudoku.id + '/start',
+      { method: 'POST', headers: headers4, body: {}, now: clock.day })
+    const awaySolution = solve(awayStart.slot.level)
+    await request('/api/progress', { method: 'POST', headers: headers4, now: clock.awayCheckpoint,
+      body: checkpoint(awayStart, 220000, clock.awayCheckpoint) })
+    const awayDone = await request('/api/progress', {
+      method: 'POST', headers: headers4, now: clock.awayDone,
+      body: completion(awayStart, awaySolution, 220000, clock.awayDone),
+    })
+    assert.equal(awayDone.challenge.status, 'completed')
+    const awayBoard = await request('/api/challenges/' + day.occurrence.id + '/slots/sudoku/board',
+      { headers: headers4, now: clock.awayDone })
+    assert.equal(awayBoard.you.value, 220000, 'time away from the game does not count')
+    const awayGeneral = await request('/api/leaderboards/games/sudoku/boards/' + encodeURIComponent('quick:Medium'),
+      { headers: headers4, now: clock.awayDone })
+    assert.equal(awayGeneral.you.value, 220000, 'the game result also keeps the active time')
 
     const history = await request('/api/challenges/history', { headers: headers1, now: clock.after })
     const closed = history.occurrences.find(item => item.occurrence.id === day.occurrence.id)
@@ -240,4 +276,4 @@ try {
     await exited
   }
 }
-console.log('Challenge lifecycle checks passed: two slots, one attempt, server time, late close, history, replay and badge.')
+console.log('Challenge lifecycle checks passed: two slots, one attempt, active time, late close, history, replay and badge.')

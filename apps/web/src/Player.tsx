@@ -157,8 +157,9 @@ export default function Player({ session, level, preferences: profilePreferences
       void persistRef.current(updated).catch(error => setProblem(errorMessage(error)))
     }, 5000)
     const pauseHidden = () => {
-      // A daily challenge is timed; hiding the tab must not stop the clock.
-      if (!document.hidden || challengeMode) return
+      // The clock records active play in every mode. Hiding the tab or leaving
+      // the app pauses it, so time away never reaches the leaderboard.
+      if (!document.hidden) return
       const now = Date.now()
       const updated = { ...latest.current, elapsedMs: latest.current.elapsedMs + now - started.current }
       started.current = now
@@ -170,7 +171,7 @@ export default function Player({ session, level, preferences: profilePreferences
     }
     document.addEventListener('visibilitychange', pauseHidden)
     return () => { clearInterval(timer); clearInterval(checkpoint); document.removeEventListener('visibilitychange', pauseHidden) }
-  }, [challengeMode, paused, finished, showTimer])
+  }, [paused, finished, showTimer])
 
   function saveBoard(board: Board) {
     const current = latest.current
