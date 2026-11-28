@@ -52,7 +52,7 @@ const keyDirections: Record<string, Direction> = {
 }
 
 export default function Twenty48({ session, level, persist, leave, finish, launch, leaderboard, bestScore,
-  challenge, standingsPanel, replay, reader, sync }: GamePlayerProps) {
+  challenge, standingsPanel, replay, reader, sync, seedShare }: GamePlayerProps) {
   const t = useT()
   const gameLevel = level as Twenty48Level
   const [save, setSave] = useState(() => session.data as Twenty48Save)
@@ -265,6 +265,7 @@ export default function Twenty48({ session, level, persist, leave, finish, launc
         leave()
       }}><ArrowLeft size={17}/> {replay?.backLabel ?? t(challenge ? 'Back to challenges' : 'Back')}</button>
       <div className="game-nav-tools">
+        {seedShare}
         {leaderboard && <button className="icon-button" aria-label={t('Leaderboard')} title={t('Leaderboard')}
           onClick={leaderboard.open}><Trophy size={18}/></button>}
       </div>

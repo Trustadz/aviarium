@@ -1,0 +1,1 @@
+**Shared game menu layout.** Sudoku, Nonograms, and 2048 now use the same single-column game menu, with a title slot for mascot artwork and capability-driven links to the game's supported destinations.

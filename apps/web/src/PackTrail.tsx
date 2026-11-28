@@ -27,7 +27,9 @@ export function PackTrail({ stops, canPlay, scrollToStop = true }: {
     const anchor = location.hash.slice(1)
     const linked = /^stop-\d+$/.test(anchor) ? list.querySelector('#' + anchor) : null
     const stop = linked ?? list.querySelector('[aria-current="step"]') ?? list.lastElementChild
-    stop?.scrollIntoView({ block: 'center' })
+    // Keep the title and chapter line in view when the trail already fits;
+    // only scroll the minimum needed to reveal the current stop.
+    stop?.scrollIntoView({ block: 'nearest' })
   }, [scrollToStop])
 
   return <ol className="pack-trail" ref={trail} role="list">
@@ -43,10 +45,10 @@ export function PackTrail({ stops, canPlay, scrollToStop = true }: {
         {stop.challenge && <p>{stop.challenge}</p>}
         {stop.statusLabel && <p className="pack-stop-status">{stop.statusLabel}</p>}
         {stop.bestTime && <p className="pack-best"><Timer size={14} aria-hidden="true"/> {stop.bestTime}</p>}
-        <button className={stop.state === 'next' ? 'primary' : 'secondary'}
-          disabled={!canPlay || stop.state === 'locked'} onClick={stop.play} aria-label={stop.actionName}>
+        {stop.state !== 'locked' && <button className={stop.state === 'next' ? 'primary' : 'secondary'}
+          disabled={!canPlay} onClick={stop.play} aria-label={stop.actionName}>
           {stop.actionLabel}
-        </button>
+        </button>}
       </div>
     </li>)}
   </ol>

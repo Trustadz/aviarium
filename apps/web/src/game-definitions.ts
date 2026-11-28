@@ -1,5 +1,5 @@
 import type { GameDefinition } from '../../../packages/game-sdk/src/game.js'
-import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
+import type { GameAttempt, PlayOptions } from '../../../packages/game-sdk/src/progress.js'
 import type { PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { nonogramsGame } from '../../../packages/nonograms/src/game.js'
@@ -34,12 +34,14 @@ export function gameBoardHref(gameId: string, level: GameLevel): string | undefi
   return '/games/' + gameId + '/leaderboards/board/' + encodeURIComponent(board.key)
 }
 
-export function createGameAttempt(gameId: string, level: GameLevel, pack?: PackRevision): GameAttempt {
+export function createGameAttempt(gameId: string, level: GameLevel, pack?: PackRevision,
+  playOptions?: PlayOptions): GameAttempt {
   const definition = gameDefinition(gameId)
   if (!definition) throw new Error('This game is not available in this version.')
   return definition.play.save.create(level as never, {
     pack: pack as never,
     rules: definition.play.rules.defaults as never,
+    playOptions,
   }) as GameAttempt
 }
 

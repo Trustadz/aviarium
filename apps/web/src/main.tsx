@@ -5,12 +5,13 @@ import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { useIntl } from 'react-intl'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, BookOpen, CalendarDays, Download, History, LogIn, LogOut, Newspaper,
-  Pencil, Settings2, Trophy, Users, WifiOff } from 'lucide-react'
+import { ArrowLeft, BookOpen, CalendarDays, CircleHelp, Download, History, KeyRound, LogIn, LogOut, Newspaper,
+  Package, Pencil, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
+import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { chapterProgress, packProgress, packStopAt, packTheme, upgradePackRevision, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
-import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
+import type { GameAttempt, PlayOptions } from '../../../packages/game-sdk/src/progress.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
 import { AccountMenu, ProfileForm } from './AccountSettings.js'
 import { News } from './News.js'
@@ -21,14 +22,16 @@ import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, formatChallengeDate, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
-import { GameHeading, GameMenu, GameNavigation } from './GameMenu.js'
+import { GameHeading, GameMenu, GameMenuLinks, type GameMenuItem } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
+import { SeedScreen, SeedShare } from './SeedScreen.js'
+import { seedCode } from './seed.js'
 import { CelebrationOverlay } from './CelebrationOverlay.js'
 import { registerOffline, useGameDownloads } from './offline.js'
 import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
-import { PackCards, PackChapters, PackRoadmap, chapterPath, packApi, packExportUrl, packPath } from './GamePacks.js'
+import { PackCatalog, PackChapters, PackRoadmap, PacksPrimary, chapterPath, packApi, packExportUrl, packPath } from './GamePacks.js'
 import { packLevels } from './game-definitions.js'
 import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory, type ScreenRef } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
@@ -207,6 +210,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [networkNotice, setNetworkNotice] = useState('')
   const [removalNotices, setRemovalNotices] = useState<LeaderboardRemovalNotice[]>([])
   const openGame = games.find(game => path === game.url || path.startsWith(game.url + '/'))
+  // The library and a game's top-level menu show Continue; subpages do not.
+  const continueMenu = path === '/' || Boolean(openGame && path === openGame.url)
   const studioMatch = /^\/studio\/([a-z0-9-]+)(\/admin)?$/.exec(path)
   const studioCandidate = path === '/studio/packs' ? games.find(game => game.packs && game.Studio) : studioMatch && findGame(studioMatch[1])
   const studioGame = studioCandidate?.Studio ? studioCandidate : undefined
@@ -328,13 +333,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     return () => { current = false }
   }, [accountId, online, path, challengeRefresh])
   useEffect(() => {
-    if (!accountId || !online || path !== '/') { setChallengeDay(undefined); return }
+    if (!accountId || !online || !continueMenu) { setChallengeDay(undefined); return }
     let current = true
     void api<ChallengeDayView>('/challenges', undefined, accountId).then(
       value => { if (current) setChallengeDay(value) },
       () => { if (current) setChallengeDay(undefined) })
     return () => { current = false }
-  }, [accountId, online, path, challengeRefresh])
+  }, [accountId, online, continueMenu, path, challengeRefresh])
   useEffect(() => {
     if (!accountId || !online) return
     let current = true
@@ -414,7 +419,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     return result
   }
   async function open(game: WebGame, level: GameLevel, existing?: LocalSession, suppliedPack?: PackRevision,
-    options: { replace?: boolean; parent?: string; replay?: { label: string; backLabel?: string } } = {}) {
+    options: { replace?: boolean; parent?: string; replay?: { label: string; backLabel?: string };
+      playOptions?: PlayOptions } = {}) {
     if (!canPlay(game)) throw new Error(game.connectMessage)
     if (level.source === 'Challenge' && !existing?.challenge)
       throw new Error('Open this from Challenges.')
@@ -427,7 +433,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (!existing && pack && location && chapterId &&
         !packProgress(pack, completionEvents, chapterId).playable[location.chapterStop - 1])
       throw new Error('Solve the previous stop in this chapter first.')
-    const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
+    const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack, options.playOptions),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     const parent = options.parent ?? (pack && chapterId ? chapterPath(pack, chapterId) : pack ? packPath(pack) : game.url)
@@ -599,6 +605,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       }
     })
   }
+  // listSessions orders saves by their latest update, so the row stays newest first.
   const continueCards = sessions.flatMap(session => {
     if (!isResumable(session) || session.challenge) return []
     const game = games.find(game => game.id === session.data.game)
@@ -610,31 +617,70 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       title: level ? game.levelTitle(t, level) : game.title,
       details: [game.title, level && game.packs?.detail(t, level), session.parentId && t("Conflict copy")].filter(Boolean).join(' · '),
       progress: game.progress(t, session.data),
-      preview: game.preview(level, session.data),
+      preview: game.preview(level, session.data, true),
       canResume: Boolean(level) && canPlay(game),
     }]
   })
-  const dailySlot = challengeDay?.enabled
-    ? challengeDay.slots.find(slot => slot.player.status === 'started') ??
-      challengeDay.slots.find(slot => slot.player.status === 'available')
-    : undefined
-  const dailyGame = dailySlot ? games.find(game => game.id === dailySlot.game) : undefined
-  const dailyCards: ContinueGame[] = dailySlot && dailyGame && challengeDay?.occurrence ? [{
-    id: 'daily:' + dailySlot.id,
-    title: dailyGame.title,
-    details: t('Daily challenge · {date}', {
-      date: formatChallengeDate(intl, challengeDay.occurrence.startsAt, challengeDay.occurrence.timezone) }),
-    progress: dailySlot.player.status === 'started' ? t('In progress') : t('Ready'),
-    preview: <span className="continue-daily-art"><CalendarDays size={24}/></span>,
-    canResume: online,
-    removable: false,
-    daily: true,
-  }] : []
+  // Daily cards prefer a started attempt, then an available challenge, then a
+  // completed one whose result can be reopened. A game menu chooses from that
+  // game's slots so it always shows its own challenge; the library shows one.
+  const playableDailySlots = challengeDay?.enabled
+    ? challengeDay.slots.filter(slot => slot.status === 'ready' &&
+        (slot.player.status === 'started' || slot.player.status === 'available' || slot.player.status === 'completed'))
+    : []
+  const dailyEndsAt = challengeDay?.occurrence?.endsAt
+  const dailyRemaining = (() => {
+    if (!dailyEndsAt) return undefined
+    const minutes = Math.ceil(Math.max(0, Date.parse(dailyEndsAt) - Date.now()) / 60_000)
+    if (minutes <= 0) return t('Closed')
+    const hours = Math.floor(minutes / 60)
+    return hours > 0 ? t('{hours}h left', { hours }) : t('{minutes}m left', { minutes })
+  })()
+  function dailySlotFor(gameId?: string) {
+    const slots = gameId ? playableDailySlots.filter(slot => slot.game === gameId) : playableDailySlots
+    return slots.find(slot => slot.player.status === 'started') ??
+      slots.find(slot => slot.player.status === 'available') ??
+      slots.find(slot => slot.player.status === 'completed')
+  }
+  function dailyCard(slot: ChallengeSlotView): ContinueGame | undefined {
+    const game = games.find(item => item.id === slot.game)
+    const status = slot.player.status
+    if (!game || !challengeDay?.occurrence ||
+      (status !== 'started' && status !== 'available' && status !== 'completed')) return undefined
+    const result = slot.player.result
+      ? [formatLeaderboardValue(slot.player.result.value, slot.player.result.unit),
+        slot.player.result.rank ? '#' + slot.player.result.rank + ' / ' + slot.player.result.total : undefined,
+      ].filter(Boolean).join(' · ')
+      : undefined
+    return {
+      id: 'daily:' + slot.id,
+      game: slot.game,
+      title: game.title,
+      details: status === 'completed'
+        ? t('Completed')
+        : [status === 'started' ? t('In progress') : t('Ready'), dailyRemaining].filter(Boolean).join(' · '),
+      result: status === 'completed' ? result : undefined,
+      canResume: online,
+      removable: false,
+      daily: true,
+      dailyStatus: status,
+    }
+  }
   function continueRow(gameId?: string) {
-    const cards = gameId ? continueCards.filter(card => card.game === gameId) : [...dailyCards, ...continueCards]
+    const slot = dailySlotFor(gameId)
+    const daily = slot && dailyCard(slot)
+    const cards = [...(daily ? [daily] : []), ...continueCards.filter(card => !gameId || card.game === gameId)]
     return <ContinueGames games={cards}
       resume={id => {
-        if (id.startsWith('daily:') && challengeDay && dailySlot) { perform(() => startChallenge(challengeDay, dailySlot)); return }
+        if (id.startsWith('daily:') && challengeDay) {
+          const clicked = challengeDay.slots.find(slot => 'daily:' + slot.id === id)
+          if (!clicked) return
+          if (clicked.player.status === 'completed' && challengeDay.occurrence) {
+            go('/challenges/' + challengeDay.occurrence.id + '/' + clicked.game)
+            return
+          }
+          perform(() => startChallenge(challengeDay, clicked)); return
+        }
         perform(() => resume(id))
       }} remove={id => {
         if (id.startsWith('daily:')) return
@@ -668,6 +714,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const challengeParts = path.split('/').filter(Boolean)
   const inChallenges = challengeParts[0] === 'challenges'
   const challengeOccurrence = inChallenges ? challengeParts[1] : undefined
+  const seedCodeParam = new URLSearchParams(location.search).get('code') ??
+    new URLSearchParams(location.search).get('sharedSeed') ?? undefined
   const challengeBoard = Boolean(inChallenges && challengeOccurrence && challengeParts.length === 3)
   const challengeGame = challengeBoard ? challengeParts[2] : undefined
   const playingNow = active && path === (active.playerPath ?? active.game.url) ? active : undefined
@@ -701,30 +749,31 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const app = useRef<HTMLDivElement>(null)
   const gameSurface = useRef<HTMLElement>(null)
   const themeGame = openGame ?? playing?.game ?? studioGame
-  const settings = (openGame ?? playing?.game)?.settings
   const viewedChapter = viewedPack && viewedChapterId
     ? viewedPack.data.chapters.find(chapter => chapter.id === viewedChapterId)
     : undefined
   const canExportViewedPack = Boolean(viewedPack && online && canEdit &&
     (account?.role === 'admin' || viewedPack.ownedByViewer))
   const packNavigation = inPackRoutes && openGame && viewedPack
-    ? (leave: () => void) => <GameNavigation leave={leave}
-      leaderboard={openGame.leaderboards && { href: openGame.url + '/leaderboards',
-        open: event => link(event, openGame.url + '/leaderboards') }}
-      history={openGame.history ? () => go(openGame.url + '/history') : undefined}
-      settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
-      extraTools={canExportViewedPack ? <a className="icon-button" href={packExportUrl(viewedPack)} download
-        aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a> : undefined}/>
+    ? (label: string, leave: () => void) => <div className="game-navigation">
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17} aria-hidden="true"/>
+        <span className="sr-only">{t('Back')} </span>{label}</button>
+      <div className="game-nav-tools">
+        {canExportViewedPack && <a className="icon-button" href={packExportUrl(viewedPack)} download
+          aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a>}
+      </div>
+    </div>
     : undefined
   const packHeading = inPackRoutes && openGame
-    ? (title: string) => <GameHeading title={title} gameTitle={openGame.title}
-      editor={canEdit && openGame.Studio ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}/>
+    ? (title: string) => <GameHeading title={title} gameTitle={openGame.title}/>
     : undefined
   useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
     [reader, surface, theme, themeGame?.id, playTheme])
   const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
     item.data.game === playing.game.id && item.data.level === playing.level.id &&
     item.data.levelRevision === playing.level.revision && item.data.completed).map(item => item.data.elapsedMs)) : Number.POSITIVE_INFINITY
+  const playedSeedCode = playing ? seedCode(playing.game, playing.level,
+    { ...prefs, ...playing.session.data.playOptions }) : undefined
   const bestScore = playing ? sessions.reduce((best, item) => {
     if (item.id === playing.session.id || item.data.game !== playing.game.id || !item.data.completed) return best
     const score = (item.data as { score?: unknown }).score
@@ -793,7 +842,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       </>
       : inLeaderboards ? <LeaderboardCatalog games={games} sessions={sessions} accountId={account?.id} online={online} link={link}/>
       : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
-        preferences={prefs} reader={reader} bestMs={playing.challenge ? undefined : Number.isFinite(bestMs) ? bestMs : undefined}
+        preferences={{ ...prefs, ...playing.session.data.playOptions }} reader={reader} seedShare={playedSeedCode ? <SeedShare code={playedSeedCode}/> : undefined}
+        bestMs={playing.challenge ? undefined : Number.isFinite(bestMs) ? bestMs : undefined}
         bestScore={playing.challenge ? undefined : bestScore || undefined}
         testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
         launch={playing.challenge || playing.replay ? undefined : level => perform(async () => {
@@ -810,7 +860,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         leaderboard={playing.challenge
           ? { open: () => viewLeaderboard('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
           : playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
-        openSettings={settings && !playing.challenge ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
           try { await refreshLocal() }
@@ -832,6 +881,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         replay={replay => perform(() => playReplay(replay))}
         openDay={occurrenceId => go('/challenges/' + occurrenceId)}
         openToday={() => go('/challenges')}/>
+      : openGame?.seed && path === openGame.url + '/seed' ? <SeedScreen key={openGame.id + ':' + (seedCodeParam ?? '')}
+        game={openGame} initialCode={seedCodeParam}
+        launch={(level, options) => open(openGame, level, undefined, undefined, { playOptions: options?.playOptions })}
+        back={() => back(openGame.url)}/>
       : openGame?.leaderboards && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
         accountId={account?.id} online={online} link={link} back={() => back(openGame.url)}/>
       : openGame?.leaderboards && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
@@ -845,13 +898,21 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         sections={openGame.guide} leave={event => backLink(event, openGame.url)}/>
       : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
         leave={() => back(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
+      : openGame?.packs && path === openGame.url + '/packs' ? <PackCatalog gameTitle={openGame.title}
+        presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
+        completed={completed} sessions={sessions} status={packStatuses[openGame.id] ?? 'loading'}
+        retry={() => setPackRetry(attempt => attempt + 1)} leave={() => back(openGame.url)}
+        open={pack => go(packPath(pack))}/>
       : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && viewedChapterId &&
           path === chapterPath(viewedPack, viewedChapterId)
         ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} chapterId={viewedChapterId}
           completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
-          canExport={false} navigation={packNavigation?.(() => back(packPath(viewedPack)))}
-          header={packHeading?.(viewedPack && viewedChapter
-            ? openGame.packs.chapterTitle(t, viewedPack, viewedChapter) : t('Chapters'))}
+          canExport={false}
+          navigation={packNavigation?.(t('{pack} pack', { pack: openGame.packs.title(t, viewedPack) }),
+            () => back(packPath(viewedPack)))}
+          header={packHeading?.(viewedChapter
+            ? t('{chapter} trail', { chapter: openGame.packs.chapterTitle(t, viewedPack, viewedChapter) })
+            : t('Chapters'))}
           leave={() => back(packPath(viewedPack))} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
               item.data.level === level.id && item.data.levelRevision === level.revision)
@@ -859,25 +920,42 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           })}/>
         : viewedPack && path === packPath(viewedPack)
           ? <PackChapters presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions}
-            canExport={false} navigation={packNavigation?.(() => back(openGame.url))}
+            canExport={false} navigation={packNavigation?.(t('Packs'), () => back(openGame.url))}
             header={packHeading?.(openGame.packs.title(t, viewedPack))}
             leave={() => back(openGame.url)} open={chapterId => go(chapterPath(viewedPack, chapterId))}/>
           : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
             <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
-      : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
-        leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
-          open: event => link(event, openGame.url + '/leaderboards') } : undefined}
-        editor={canEdit && openGame.Studio ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
-        history={openGame.history ? () => go(openGame.url + '/history') : undefined}
-        settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
-        guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
-        {continueRow(openGame.id)}
-        {!canPlay(openGame) && <p className="notice">{t(openGame.connectMessage)}</p>}
-        {openGame.menu?.({ canPlay: canPlay(openGame), online, profile, params: new URLSearchParams(location.search),
-          launch: level => open(openGame, level), perform })}
-        {openGame.packs && <PackCards game={openGame.id} presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
-          completed={completed} status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>}
-      </GameMenu>
+      : openGame && path === openGame.url ? (() => {
+        const menuItems: GameMenuItem[] = []
+        if (openGame.seed) menuItems.push({ key: 'seed', label: t('Play a seed'),
+          icon: <KeyRound size={24}/>, href: openGame.url + '/seed',
+          open: event => link(event, openGame.url + '/seed') })
+        if (openGame.packs) menuItems.push({ key: 'packs', label: t('Packs'),
+          icon: <Package size={24}/>, href: openGame.url + '/packs',
+          open: event => link(event, openGame.url + '/packs') })
+        if (openGame.leaderboards) menuItems.push({ key: 'leaderboards', label: t('Leaderboards'),
+          icon: <Trophy size={24}/>, href: openGame.url + '/leaderboards',
+          open: event => link(event, openGame.url + '/leaderboards') })
+        if (openGame.history) menuItems.push({ key: 'history', label: t('History'),
+          icon: <History size={24}/>, href: openGame.url + '/history',
+          open: event => link(event, openGame.url + '/history') })
+        if (openGame.guide) menuItems.push({ key: 'guide', label: t('How to play'),
+          icon: <CircleHelp size={24}/>, href: openGame.url + '/how-to',
+          open: event => link(event, openGame.url + '/how-to') })
+        return <GameMenu title={openGame.title} gameId={openGame.id} mascot={openGame.mascot} leave={() => back('/')}>
+          {continueRow(openGame.id)}
+          {!canPlay(openGame) && <p className="notice">{t(openGame.connectMessage)}</p>}
+          {openGame.menu?.({ canPlay: canPlay(openGame), online, profile, preferences: prefs,
+            updatePreferences: changePrefs, params: new URLSearchParams(location.search),
+            launch: (level, launchOptions) => open(openGame, level, undefined, undefined,
+              { playOptions: launchOptions?.playOptions }), perform })}
+          {!openGame.menu && openGame.packs && <PacksPrimary gameTitle={openGame.title}
+            packs={packs.filter(pack => pack.data.game === openGame.id)}
+            status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)}
+            open={() => go(openGame.url + '/packs')}/>}
+          <GameMenuLinks items={menuItems} label={t('{game} menu', { game: openGame.title })}/>
+        </GameMenu>
+      })()
       : inNews ? <News account={account} online={online}/>
       : inAbout ? <section className="panel about-page" aria-labelledby="about-heading">
         <h1 id="about-heading">{t("About Aviarium")}</h1>
@@ -909,8 +987,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         (playPack ? ` pack-palette pack-${playTheme}` : '') : '')}
         role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={event => event.stopPropagation()}>
         <div className="section-heading"><h2 id="settings-title">
-          {dialog === 'display' ? t('Device settings') : dialog === 'game' && settings ? t(settings.title)
-            : t(account ? 'Account settings' : 'Player settings')}
+          {dialog === 'display' ? t('Device settings') : t(account ? 'Account settings' : 'Player settings')}
         </h2><button autoFocus className="secondary" onClick={() => showDialog(undefined)}>{t("Close")}</button></div>
         {dialog === 'display' && <>
           <label className="setting-row">{t("Theme")}<select value={preference}
@@ -938,10 +1015,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             </div>
           </>}
         </>}
-        {dialog === 'game' && settings?.toggles.map(setting => <label className="setting-row" key={setting.key}>
-          {t(setting.label)}<input type="checkbox" checked={Boolean(prefs[setting.key] ?? setting.default)}
-            onChange={event => changePrefs({ [setting.key]: event.target.checked })}/>
-        </label>)}
         {dialog === 'account' && <>
           <LanguageSelector/>
           {languageError && <p role="status" className="error">{knownMessage(t, languageError)}</p>}

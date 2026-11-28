@@ -4,7 +4,7 @@ import {
   definePackSchemas, packLevelFields, progressionRules, type PackDocument,
 } from '../../game-sdk/src/packs.js'
 import {
-  attemptIdentity, attemptOutcome, packRevisionField,
+  attemptIdentity, attemptOutcome, attemptPlayOptions, packRevisionField, type PlayOptions,
 } from '../../game-sdk/src/progress.js'
 import { GameRuleError } from '../../game-sdk/src/game.js'
 import { applyMove, boardSize, cellCount, maxTile, noMoves, startBoard } from './rules.js'
@@ -22,7 +22,7 @@ export const boardSchema = z.array(z.number().int().min(0).max(1_000_000_000)).l
 
 export const twenty48SaveSchema = z.object({
   ...attemptIdentity,
-  ...attemptOutcome,
+  ...attemptOutcome, ...attemptPlayOptions,
   packRevision: packRevisionField,
   game: z.literal(twenty48Id),
   ruleset: z.literal(twenty48RulesVersion),
@@ -78,7 +78,7 @@ export function quickTwenty48(seed: string, version = quickPlayVersion): Twenty4
   }
 }
 
-export function createTwenty48Attempt(level: Twenty48Level): Twenty48Save {
+export function createTwenty48Attempt(level: Twenty48Level, playOptions?: PlayOptions): Twenty48Save {
   return {
     game: twenty48Id,
     level: level.id,
@@ -90,6 +90,7 @@ export function createTwenty48Attempt(level: Twenty48Level): Twenty48Save {
     board: [...level.content.start],
     score: 0,
     moves: [],
+    ...(playOptions ? { playOptions } : {}),
   }
 }
 

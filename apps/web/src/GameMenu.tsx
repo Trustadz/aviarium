@@ -1,6 +1,7 @@
-import { ArrowLeft, BookOpen, History, Pencil, Settings2, Trophy } from 'lucide-react'
-import type { MouseEvent, ReactNode } from 'react'
+import { ArrowLeft, BookOpen, ChevronRight, History, Pencil, Settings2, Trophy } from 'lucide-react'
+import { useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useT } from './i18n.js'
+import './game-menu.css'
 
 export function GameNavigation({ leave, history, settings, leaderboard, extraTools }: {
   leave: () => void
@@ -67,19 +68,61 @@ export function GameHeader({ title, gameTitle, titleId, leave, guide, history, s
   </div>
 }
 
-export function GameMenu({ title, leave, guide, history, settings, leaderboard, editor, children }: {
+export interface GameMenuItem {
+  key: string
+  label: string
+  icon: ReactNode
+  href: string
+  open: (event: MouseEvent<HTMLAnchorElement>) => void
+}
+
+/**
+ * The shared game-menu links. The platform decides which capabilities exist and
+ * supplies them in contract order; this component only renders the list.
+ */
+export function GameMenuLinks({ items, label }: { items: readonly GameMenuItem[]; label: string }) {
+  if (!items.length) return null
+  return <nav className="game-menu-destinations" aria-label={label}>
+    {items.map(item => <a key={item.key} className="game-menu-destination" href={item.href} onClick={item.open}>
+      <span className="game-menu-destination-icon" aria-hidden="true">{item.icon}</span>
+      <span>{item.label}</span>
+      <ChevronRight className="game-menu-destination-chevron" size={20} aria-hidden="true"/>
+    </a>)}
+  </nav>
+}
+
+/**
+ * Player-facing game menu shell. Title, mascot and the back target stay in the
+ * platform; the game supplies only its title, theme and optional mascot art.
+ */
+export function GameMenu({ title, gameId, mascot, leave, backLabel, children }: {
   title: string
+  gameId?: string
+  mascot?: string
   leave: () => void
-  guide?: { href: string; open: (event: MouseEvent<HTMLAnchorElement>) => void }
-  history?: () => void
-  settings?: { label: string; open: () => void }
-  leaderboard?: { href: string; open: (event: MouseEvent<HTMLAnchorElement>) => void }
-  editor?: { href: string; open: (event: MouseEvent<HTMLAnchorElement>) => void }
+  backLabel?: string
   children: ReactNode
 }) {
-  return <section className="catalog game-menu" aria-labelledby="game-menu-title">
-    <GameHeader title={title} titleId="game-menu-title" leave={leave} guide={guide} history={history}
-      settings={settings} leaderboard={leaderboard} editor={editor}/>
+  const t = useT()
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  const [largeText, setLargeText] = useState(false)
+  useLayoutEffect(() => {
+    const size = titleRef.current ? Number.parseFloat(getComputedStyle(titleRef.current).fontSize) : 0
+    setLargeText(size > 46)
+  }, [])
+  return <section className={'catalog game-menu-page' + (largeText ? ' game-menu-large-text' : '')} aria-labelledby="game-menu-title">
+    <div className="game-menu-top">
+      <button className="text-button game-menu-back" onClick={leave}>
+        <ArrowLeft size={17}/> {backLabel ?? t('Library')}
+      </button>
+      <div className="game-menu-title-row">
+        <h1 id="game-menu-title" ref={titleRef}>
+          <span className="game-menu-title-text">{title}</span>
+          {mascot && <img className={'game-menu-mascot game-menu-mascot-' + (gameId ?? 'generic')}
+            src={mascot} alt="" aria-hidden="true"/>}
+        </h1>
+      </div>
+    </div>
     {children}
   </section>
 }

@@ -1,0 +1,1 @@
+**Quick Play options.** Game menus keep the last Quick Play choices, store the selected presentation options with each generated save, and replace the separate game settings dialog with a compact options disclosure.

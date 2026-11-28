@@ -1,0 +1,1 @@
+**Packs destination.** The game menu now links to an illustrated Packs catalog that shows each pack's cover, range, and progress. Opening a pack leads to its chapter overview and then a chapter trail that starts at the current stop, names the puzzle needed to unlock later stops, and keeps the existing chapter rules and export tools.

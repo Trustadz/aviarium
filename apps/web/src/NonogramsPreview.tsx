@@ -11,10 +11,13 @@ const bird = [
   '.####..',
 ].join('')
 
-export function NonogramsPreview({ puzzle, marks }: { puzzle?: Puzzle; marks?: Cell[] }) {
+export function NonogramsPreview({ puzzle, marks, thumbnail = false }: {
+  puzzle?: Puzzle; marks?: Cell[]; thumbnail?: boolean
+}) {
   const size = puzzle?.rows.length ?? 7
   const pixels = marks ?? (puzzle ? Array(size * size).fill(0) : Array.from(bird, pixel => pixel === '#' ? 1 : 0))
-  return <div className="nonogram-preview" aria-hidden="true" style={{ '--preview-size': size } as CSSProperties}>
+  return <div className={'nonogram-preview' + (thumbnail ? ' nonogram-preview-thumbnail' : '')}
+    aria-hidden="true" style={{ '--preview-size': size } as CSSProperties}>
     {pixels.map((mark, index) => <span key={index} data-filled={mark === 1}/>)}
   </div>
 }

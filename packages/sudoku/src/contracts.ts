@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { difficulties, type Difficulty, type GameLevel } from '../../game-sdk/src/index.js'
-import { attemptIdentity, attemptOutcome, challengeMutationField, mutationIdentity, mutationStatus, packRevisionField, type SavedAttempt } from '../../game-sdk/src/progress.js'
+import { attemptIdentity, attemptOutcome, attemptPlayOptions, challengeMutationField, mutationIdentity, mutationStatus, packRevisionField, type SavedAttempt } from '../../game-sdk/src/progress.js'
 import { rulesFor } from './rules.js'
 
 export interface PublishedLevel extends GameLevel {
@@ -28,7 +28,7 @@ export const saveSchema = z.object({
   board,
   undo: z.array(board).max(40),
   redo: z.array(board).max(40),
-  ...attemptOutcome,
+  ...attemptOutcome, ...attemptPlayOptions,
   lives: z.number().int().min(0).max(9).optional(),
   aids: z.object({ hints: z.boolean(), autoNotes: z.boolean(), mistakes: z.boolean() }).optional(),
   /**

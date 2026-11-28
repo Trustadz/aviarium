@@ -3,12 +3,18 @@ import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { generateQuickPuzzle, quickPlayVersion } from '../dist/packages/sudoku/src/quick-play.js'
-import { formatSeedCode, quickPlayId } from '../dist/packages/sudoku/src/seed-code.js'
+import { quickPlayId } from '../dist/packages/sudoku/src/seed-code.js'
+import { formatSeedCode as formatGameSeedCode } from '../dist/packages/game-sdk/src/seed-code.js'
 import { validate } from '../dist/packages/sudoku/src/solver.js'
 import { rules } from '../dist/packages/sudoku/src/rules.js'
 import { createNonogramAttempt, nonogramLevels } from '../dist/packages/nonograms/src/contracts.js'
 import { solveByDeduction } from '../dist/packages/nonograms/src/puzzles.js'
 import { packLevels, packProgress } from '../dist/packages/sudoku/src/packs.js'
+
+function sudokuSeedCode(seed, difficulty, version = quickPlayVersion) {
+  return formatGameSeedCode({ game: 'sudoku', version, seed, board: { difficulty },
+    options: { hints: true, autoNotes: true, autoNoteDeletion: true, mistakes: true, timer: true } })
+}
 
 const origin = process.env.AVIARIUM_TEST_URL || 'http://localhost:4183'
 const adminToken = process.env.AVIARIUM_TEST_ADMIN
@@ -326,15 +332,12 @@ try {
     'https://github.com/Trustadz/aviarium')
   await page.getByRole('link', { name: 'Library', exact: true }).click()
 
-  const boardAppearance = locator => locator.evaluate(board => Array.from(board.querySelectorAll('.cell'), cell => {
-    const style = getComputedStyle(cell)
-    return [cell.textContent, style.backgroundColor, style.color, style.borderRightColor]
-  }))
-  const heroPreview = page.locator('.hero-art .board')
-  const cardPreview = page.locator('.game-card-image .board')
-  await cardPreview.waitFor()
-  assert.equal(await cardPreview.locator('.cell').count(), 81)
-  assert.deepEqual(await boardAppearance(heroPreview), await boardAppearance(cardPreview))
+  await page.locator('.hero-art .board').waitFor()
+  const cardArt = page.locator('.game-card-image .game-card-art').first()
+  await cardArt.waitFor()
+  assert.equal(await page.locator('.game-card-image .board').count(), 0)
+  assert.equal(await cardArt.evaluate(image => image.closest('.game-card-image').getBoundingClientRect().height), 184)
+  assert.equal(await cardArt.evaluate(image => image.complete && image.naturalWidth > 0), true)
   const cardMetrics = await page.locator('.game-card').evaluateAll(cards => cards.map(card => {
     const image = card.querySelector('.game-card-image')?.getBoundingClientRect()
     const play = card.querySelector('.card-play')?.getBoundingClientRect()
@@ -351,6 +354,7 @@ try {
   const featured = page.getByRole('region', { name: 'Featured', exact: true })
   const dailyDot = featured.getByRole('button', { name: 'Show Daily challenges' })
   await dailyDot.waitFor()
+  if (await dailyDot.getAttribute('aria-pressed') !== 'true') await dailyDot.tap()
   assert.equal(await dailyDot.getAttribute('aria-pressed'), 'true')
   await featured.locator('.hero-challenge-art').evaluate(image => image.decode())
   await featured.getByRole('button', { name: 'View challenges' }).tap()
@@ -409,7 +413,7 @@ try {
   await featured.getByRole('button', { name: 'Show Nonograms' }).tap()
   await featured.getByRole('button', { name: 'Explore Nonograms' }).tap()
   await page.waitForURL('**/games/nonograms')
-  await page.getByRole('button', { name: 'Back' }).tap()
+  await page.getByRole('button', { name: 'Library' }).tap()
   await featured.getByRole('heading', { name: 'Daily challenges' }).waitFor()
   const cardSurface = await page.locator('.game-card').filter({ has: page.getByRole('heading', { name: 'Sudoku', exact: true }) }).evaluate(card => getComputedStyle(card).backgroundColor)
   assert.equal(cardSurface, 'rgb(255, 253, 242)')
@@ -437,7 +441,7 @@ try {
   assert.equal(await page.getByRole('contentinfo').count(), 0)
   assert.equal(await page.locator('.header-account .account-trigger').isVisible(), true)
   assert.equal(await page.locator('.app-rail .account-menu').isVisible(), false)
-  await page.getByRole('button', { name: 'Back' }).waitFor()
+  await page.getByRole('button', { name: 'Library' }).waitFor()
   assert.equal(await page.getByRole('heading', { name: 'Browse puzzles' }).count(), 0)
 
   const catalogContext = await browser.newContext({ viewport: { width: 390, height: 844 },
@@ -455,11 +459,11 @@ try {
     }
   })
   const catalogPage = await catalogContext.newPage()
-  await catalogPage.goto(origin + '/games/sudoku')
+  await catalogPage.goto(origin + '/games/sudoku/packs')
   await catalogPage.getByText('Could not load packs.', { exact: true }).waitFor()
   assert.equal(await catalogPage.getByText('No packs available on this device yet.', { exact: true }).count(), 0)
   await catalogPage.getByRole('button', { name: 'Retry loading packs' }).click()
-  const budgies = catalogPage.getByRole('button', { name: /^Budgies/ })
+  const budgies = catalogPage.getByRole('link', { name: 'Open Budgies pack' })
   await budgies.waitFor()
   await catalogPage.waitForFunction(() => window.packCacheWriteFailed)
   await budgies.click()
@@ -468,17 +472,17 @@ try {
   const cachedCatalog = await browser.newContext({ serviceWorkers: 'block' })
   await cachedCatalog.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
   const cachedCatalogPage = await cachedCatalog.newPage()
-  await cachedCatalogPage.goto(origin + '/games/sudoku')
-  await cachedCatalogPage.getByRole('button', { name: /^Budgies/ }).waitFor()
+  await cachedCatalogPage.goto(origin + '/games/sudoku/packs')
+  await cachedCatalogPage.getByRole('link', { name: 'Open Budgies pack' }).waitFor()
   await cachedCatalogPage.waitForFunction(() => Object.keys(localStorage)
     .some(key => key.startsWith('aviarium:pack-index:') && localStorage[key].includes('budgies')))
   await cachedCatalog.route(origin + '/api/games/sudoku/packs', route => route.abort(), { times: 1 })
   await cachedCatalogPage.reload()
   await cachedCatalogPage.getByRole('button', { name: 'Retry loading packs' }).waitFor()
-  await cachedCatalogPage.getByRole('button', { name: /^Budgies/ }).waitFor()
+  await cachedCatalogPage.getByRole('link', { name: 'Open Budgies pack' }).waitFor()
   await cachedCatalogPage.getByRole('button', { name: 'Retry loading packs' }).click()
   await cachedCatalogPage.getByRole('button', { name: 'Retry loading packs' }).waitFor({ state: 'hidden' })
-  await cachedCatalogPage.getByRole('button', { name: /^Budgies/ }).waitFor()
+  await cachedCatalogPage.getByRole('link', { name: 'Open Budgies pack' }).waitFor()
   await cachedCatalog.close()
   console.info('Pack catalog checks passed: retry, cached cards during a failed refresh, and opening a pack when the cache write fails.')
 
@@ -486,15 +490,13 @@ try {
   const readerGrid = generateQuickPuzzle(readerDescriptor.seed, readerDescriptor.difficulty)
   const readerSolution = validate(Array.from(readerGrid, Number)).solution
   assert.ok(readerSolution)
-  const readerSeed = formatSeedCode(readerDescriptor.seed, readerDescriptor.difficulty, readerDescriptor.version)
-  await page.goto(`${origin}/games/sudoku?seed=${encodeURIComponent(readerSeed)}`)
-  await page.getByRole('button', { name: 'Sudoku settings' }).click()
-  await page.getByLabel('Show timer').uncheck()
+  const readerSeed = sudokuSeedCode(readerDescriptor.seed, readerDescriptor.difficulty, readerDescriptor.version)
+  await page.goto(`${origin}/games/sudoku/seed?code=${encodeURIComponent(readerSeed)}`)
+  await page.getByRole('switch', { name: 'Show timer' }).uncheck()
   assert.equal(await page.getByLabel('Theme').count(), 0)
-  await page.getByRole('button', { name: 'Close' }).click()
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
   assert.equal(await page.getByRole('button', { name: /download/i }).count(), 0)
-  await page.getByRole('button', { name: 'Play seed', exact: true }).click()
+  await page.getByRole('button', { name: 'Start puzzle', exact: true }).click()
   await page.getByLabel('Sudoku board', { exact: true }).waitFor()
   assert.equal(await page.getByRole('button', { name: 'Back' }).count(), 1)
   assert.equal(await page.getByRole('banner').count(), 0)
@@ -515,7 +517,8 @@ try {
   await page.getByRole('heading', { name: 'Game paused' }).waitFor()
   await page.getByRole('button', { name: 'Resume game' }).tap()
   await page.getByRole('button', { name: 'Back' }).tap()
-  await page.getByRole('button', { name: 'Back' }).tap()
+  await page.getByRole('button', { name: 'Sudoku' }).tap()
+  await page.getByRole('button', { name: 'Library' }).tap()
   await page.getByRole('banner').waitFor()
   await page.waitForFunction(() => caches.has('aviarium-game-sudoku'))
   assert.equal(await page.getByRole('button', { name: 'Remove Sudoku download' }).count(), 0)
@@ -528,7 +531,7 @@ try {
   await page.reload()
   await page.locator('.app.reader[data-theme=dark]').waitFor()
   const track = page.locator('.continue-track').first()
-  assert.equal(await track.evaluate(element => getComputedStyle(element).paddingBottom), '16px')
+  assert.equal(await track.evaluate(element => getComputedStyle(element).paddingBottom), '0px')
   await page.getByRole('button', { name: 'Resume', exact: true }).first().tap()
   await cell(String(readerSolution[firstBlank])).waitFor()
   const sudokuBoard = '.play-page .board'
@@ -700,7 +703,7 @@ try {
     const themedPlayer = await desktop.newPage()
     await themedPlayer.addInitScript(() => localStorage.setItem('aviarium:theme', 'dark'))
     await themedPlayer.goto(origin + '/games/sudoku/packs/' + published.id + '/' + published.revision)
-    await themedPlayer.getByRole('button', { name: 'Open chapter Studio browser check', exact: true }).click()
+    await themedPlayer.getByRole('button', { name: 'Follow the trail', exact: true }).click()
     await themedPlayer.getByRole('button', { name: 'Play Edited offline', exact: true }).click()
     await themedPlayer.locator('.play-page .board').waitFor()
     const playerBackground = await themedPlayer.locator('.game-frame').evaluate(el => getComputedStyle(el).backgroundColor)
@@ -712,8 +715,6 @@ try {
     assert.notEqual(playerBackground, 'rgb(16, 31, 26)')
     await themedPlayer.getByRole('button', { name: 'Notes', exact: true }).click()
     assert.equal(await themedPlayer.getByRole('button', { name: 'Notes', exact: true }).evaluate(el => getComputedStyle(el).backgroundColor), padBackground)
-    await themedPlayer.getByRole('button', { name: 'Sudoku settings', exact: true }).click()
-    assert.equal(await themedPlayer.getByRole('dialog', { name: 'Sudoku settings' }).evaluate(el => getComputedStyle(el).backgroundColor), boardBackground)
     await themedPlayer.close()
     await adminPage.getByRole('button', { name: 'Unpublish', exact: true }).click()
     await adminPage.getByText('Pack unpublished', { exact: true }).waitFor()
@@ -805,9 +806,9 @@ try {
     const deviceA = await first.newPage()
     await deviceA.goto(origin)
     await deviceA.getByRole('button', { name: 'Account menu' }).filter({ hasText: 'Test Player' }).waitFor()
-    const seedCode = formatSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version)
-    await deviceA.goto(`${origin}/games/sudoku?seed=${encodeURIComponent(seedCode)}`)
-    await deviceA.getByRole('button', { name: 'Play seed', exact: true }).click()
+    const seedCode = sudokuSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version)
+    await deviceA.goto(`${origin}/games/sudoku/seed?code=${encodeURIComponent(seedCode)}`)
+    await deviceA.getByRole('button', { name: 'Start puzzle', exact: true }).click()
     await deviceA.getByRole('button', { name: label + 'empty', exact: true }).press(String(digit))
     await deviceA.getByRole('button', { name: 'Back' }).click()
     await until(async () => {
@@ -824,9 +825,12 @@ try {
     await deviceB.getByRole('link', { name: 'Sudoku', exact: true }).click()
     const savedRow = deviceB.getByRole('region', { name: 'Continue' }).getByRole('listitem').filter({ hasText: 'Quick Play' })
     const savedCell = savedRow.first().locator('.saved-board .cell').nth(blank)
-    await savedCell.filter({ hasText: String(digit) }).waitFor()
-    assert.deepEqual(await deviceB.locator('.game-menu > section').evaluateAll(sections =>
-      sections.map(section => section.querySelector('h2')?.textContent)), ['Continue', 'Quick Play', 'Packs'])
+    await savedCell.waitFor()
+    assert.equal((await savedCell.textContent()).trim(), '')
+    assert.deepEqual(await deviceB.locator('.game-menu-page > section h2').evaluateAll(headings =>
+      headings.map(heading => heading.textContent)), ['Continue', 'Quick Play'])
+    assert.deepEqual(await deviceB.locator('.game-menu-destination').allTextContents(),
+      ['Play a seed', 'Packs', 'Leaderboards', 'History', 'How to play'])
     assert.match(await savedCell.getAttribute('class'), /entry/)
     await savedRow.getByRole('button', { name: 'Resume' }).first().click()
     await deviceB.getByRole('button', { name: label + digit, exact: true }).waitFor()
@@ -836,13 +840,13 @@ try {
   const packContext = await browser.newContext({ viewport: { width: 320, height: 700 }, isMobile: true, hasTouch: true })
   await packContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
   const packPage = await packContext.newPage()
-  await packPage.goto(origin + '/games/sudoku')
-  await packPage.getByRole('button', { name: /^Budgies/ }).click()
-  await packPage.getByRole('button', { name: 'Open chapter Budgies', exact: true }).click()
+  await packPage.goto(origin + '/games/sudoku/packs')
+  await packPage.getByRole('link', { name: 'Open Budgies pack' }).click()
+  await packPage.getByRole('button', { name: 'Follow the trail' }).click()
   const current = packPage.locator('.pack-trail [aria-current=step]')
   await current.getByRole('heading', { name: 'Garden Perch' }).waitFor()
-  const locked = packPage.getByRole('button', { name: 'Play Eucalyptus Grove', exact: true })
-  assert.equal(await locked.isDisabled(), true)
+  assert.equal(await packPage.getByRole('button', { name: 'Play Eucalyptus Grove', exact: true }).count(), 0)
+  assert.match(await packPage.locator('.pack-stop-card').nth(1).innerText(), /Solve Garden Perch to unlock/)
   const pins = await packPage.locator('.pack-stop-marker').evaluateAll(markers => markers.map(marker => {
     const { left, top } = marker.getBoundingClientRect()
     return { left, top }
@@ -852,11 +856,11 @@ try {
   assert.ok(pins[0].top > pins[1].top && pins[1].top > pins[2].top)
   assert.ok(pins[0].top < 700 && pins[0].top > 0)
   assert.ok(await packPage.locator('.pack-roadmap').evaluate(roadmap => {
-    const info = roadmap.querySelector('.pack-banner').getBoundingClientRect()
+    const info = roadmap.querySelector('.pack-trail-heading').getBoundingClientRect()
     const trail = roadmap.querySelector('.pack-trail').getBoundingClientRect()
     return info.bottom <= trail.top
   }))
-  assert.ok(await packPage.getByRole('button', { name: 'Back', exact: true }).evaluate(button =>
+  assert.ok(await packPage.getByRole('button', { name: 'Back Budgies pack', exact: true }).evaluate(button =>
     button.getBoundingClientRect().top >= 0 && button.getBoundingClientRect().bottom <= innerHeight))
   assert.equal(await packPage.evaluate(() => document.documentElement.scrollWidth), 320)
 
@@ -876,7 +880,7 @@ try {
     const { top, bottom } = marker.getBoundingClientRect()
     return top >= 0 && bottom <= innerHeight
   }))
-  assert.equal(await locked.isEnabled(), true)
+  assert.equal(await current.getByRole('button', { name: 'Play Eucalyptus Grove', exact: true }).isEnabled(), true)
   assert.equal(await packPage.getByRole('button', { name: 'Replay Garden Perch', exact: true }).isEnabled(), true)
 
   assert.ok(multiChapterPack)
@@ -901,26 +905,24 @@ try {
 
   const overview = origin + '/games/sudoku/packs/' + multiChapterPack.id + '/' + multiChapterPack.revision
   await packPage.goto(overview)
-  await packPage.locator('.chapter-card').first().waitFor()
-  assert.equal(await packPage.locator('.chapter-card').count(), 2)
-  assert.equal(await packPage.locator('.chapter-card').first().isEnabled(), true)
-  assert.equal(await packPage.locator('.chapter-card').nth(1).isDisabled(), true)
-  assert.match(await packPage.locator('.chapter-card').nth(1).innerText(), /Complete the previous chapter to unlock/)
+  await packPage.locator('.pack-chapter-card').first().waitFor()
+  assert.equal(await packPage.locator('.pack-chapter-card').count(), 2)
+  assert.equal(await packPage.locator('.pack-chapter-card').first().getByRole('button', { name: 'Follow the trail' }).isEnabled(), true)
+  assert.match(await packPage.locator('.pack-chapter-card').nth(1).innerText(), /Complete the previous chapter to unlock/)
 
   await packPage.goto(overview + '/chapters/second-chapter')
   await packPage.getByText('Complete the previous chapter to unlock this chapter.', { exact: true }).waitFor()
 
   await completeChapterLevel(firstChapterLevel)
   await packPage.goto(overview)
-  const secondChapterCard = packPage.getByRole('button', { name: 'Open chapter Second chapter', exact: true })
-  await secondChapterCard.waitFor()
-  assert.equal(await secondChapterCard.isDisabled(), false)
-  await secondChapterCard.click()
+  const secondChapterCard = packPage.locator('.pack-chapter-card').nth(1)
+  await secondChapterCard.getByRole('button', { name: 'Follow the trail' }).waitFor()
+  await secondChapterCard.getByRole('button', { name: 'Follow the trail' }).click()
   const secondChapterLevelButton = packPage.getByRole('button', { name: 'Play Second chapter level', exact: true })
   await secondChapterLevelButton.waitFor()
   assert.equal(await secondChapterLevelButton.isEnabled(), true)
-  await packPage.getByRole('button', { name: 'Back', exact: true }).click()
-  await packPage.locator('.chapter-card').first().click()
+  await packPage.getByRole('button', { name: /^Back .+ pack$/ }).click()
+  await packPage.locator('.pack-chapter-card').first().getByRole('button', { name: 'Follow the trail' }).click()
   await packPage.getByRole('button', { name: 'Replay First chapter level', exact: true }).waitFor()
   await packContext.close()
   console.info('Chapter overview checks passed: ordered unlock, locked direct link, server rejection, and back to the overview.')
@@ -940,7 +942,7 @@ try {
     Boolean(await caches.match('/__aviarium/last-played', { cacheName: 'aviarium-game-sudoku' }))), 'Sudoku offline download')
   await quickPlayContext.setOffline(true)
   await quickPlayPage.reload()
-  await quickPlayPage.getByRole('button', { name: 'New puzzle', exact: true }).click()
+  await quickPlayPage.getByRole('button', { name: 'Start puzzle', exact: true }).click()
   await quickPlayPage.getByRole('heading', { name: 'Quick Play', level: 1 }).waitFor()
   await quickPlayPage.getByRole('button', { name: 'Back', exact: true }).click()
 
@@ -953,19 +955,33 @@ try {
   const solutionValues = validate(Array.from(quickGrid, Number)).solution
   const blank = quickGrid.indexOf('0')
   const quickCell = `Row ${Math.floor(blank / 9) + 1}, column ${blank % 9 + 1}, `
-  await quickPlayPage.getByRole('button', { name: 'Enter seed', exact: true }).click()
-  await quickPlayPage.getByLabel('Puzzle seed', { exact: true }).fill(formatSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version))
-  await quickPlayPage.getByRole('button', { name: 'Play seed', exact: true }).click()
+  const offlineSeedUrl = `${origin}/games/sudoku/seed?code=${encodeURIComponent(sudokuSeedCode(descriptor.seed, descriptor.difficulty, descriptor.version))}`
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await quickPlayPage.goto(offlineSeedUrl, { waitUntil: 'domcontentloaded' })
+      break
+    } catch (error) {
+      if (attempt >= 2) throw error
+      await new Promise(resolve => setTimeout(resolve, 400))
+    }
+  }
+  await quickPlayPage.getByText('Review the puzzle and adjust its options.', { exact: true }).waitFor()
+  await quickPlayPage.getByText('Sudoku · Medium', { exact: true }).waitFor()
+  await quickPlayPage.getByRole('button', { name: 'Start puzzle', exact: true }).click()
   const quickBoard = quickPlayPage.getByLabel('Sudoku board', { exact: true })
   await quickBoard.waitFor()
-  assert.equal((await quickBoard.getByRole('button').allTextContents()).map(digit => digit.trim() || '0').join(''), quickGrid)
+  assert.equal((await quickBoard.getByRole('button').allTextContents()).map(digit => digit.trim() || '0').join(''), quickGrid,
+    'seed ' + descriptor.seed)
   await quickPlayPage.getByRole('button', { name: quickCell + 'empty', exact: true }).press(String(solutionValues[blank]))
   await quickPlayPage.getByRole('button', { name: 'Back', exact: true }).click()
+  await quickPlayPage.getByRole('button', { name: 'Sudoku', exact: true }).click()
+  await quickPlayPage.getByRole('heading', { name: 'Sudoku', exact: true }).waitFor()
   await quickPlayPage.reload()
   await quickPlayPage.getByRole('button', { name: 'Resume', exact: true }).first().click()
   await quickPlayPage.getByRole('button', { name: quickCell + solutionValues[blank], exact: true }).waitFor()
   await quickPlayContext.setOffline(false)
   await quickPlayPage.getByRole('button', { name: 'Back', exact: true }).click()
+  await quickPlayPage.getByRole('button', { name: 'Library', exact: true }).click()
   const playbackHeaders = playerToken ? playerHeaders : adminHeaders
   await until(async () => {
     const progress = await request('/api/progress', { headers: playbackHeaders })
@@ -995,8 +1011,9 @@ try {
   await nonogramContext.addCookies([{ name: 'aviarium', value: playbackToken, url: origin }])
   const nonogramPage = await nonogramContext.newPage()
   await nonogramPage.goto(origin + '/games/nonograms')
-  await nonogramPage.getByRole('button', { name: /Sulphur-crested Cockatoos/ }).tap()
-  await nonogramPage.getByRole('button', { name: 'Open chapter Sulphur-crested Cockatoos', exact: true }).tap()
+  await nonogramPage.goto(origin + '/games/nonograms/packs')
+  await nonogramPage.getByRole('link', { name: 'Open Sulphur-crested Cockatoos pack' }).tap()
+  await nonogramPage.getByRole('button', { name: 'Follow the trail' }).tap()
   await nonogramPage.getByRole('button', { name: 'Play Cockatoo Egg' }).tap()
   const squares = nonogramPage.locator('.nonogram-cell')
   assert.deepEqual(await nonogramPage.locator('.pack-play-art').boundingBox(), { x: 0, y: 0, width: 390, height: 844 })
@@ -1063,14 +1080,14 @@ try {
   await nonogramPage.getByRole('button', { name: 'Play Nest Hollow' }).waitFor()
   await until(async () => (await request('/api/progress', { headers: playbackHeaders })).completions
     .some(item => item.level === egg.id && item.revision === egg.revision), 'synced Nonograms completion')
-  await nonogramPage.getByRole('button', { name: 'Back', exact: true }).tap()
-  await nonogramPage.getByRole('button', { name: 'Back', exact: true }).tap()
+  await nonogramPage.goto(origin + '/games/nonograms')
   await until(() => nonogramPage.evaluate(async () =>
     Boolean(await caches.match('/__aviarium/last-played', { cacheName: 'aviarium-game-nonograms' }))), 'Nonograms offline download')
   await nonogramContext.setOffline(true)
   await nonogramPage.reload()
+  await nonogramPage.getByRole('button', { name: /Options/ }).tap()
   await nonogramPage.getByLabel('Grid size').selectOption('5')
-  await nonogramPage.getByRole('button', { name: 'New puzzle', exact: true }).tap()
+  await nonogramPage.getByRole('button', { name: 'Start puzzle', exact: true }).tap()
   await squares.first().tap()
   assert.equal(await squares.count(), 25)
   await nonogramPage.getByRole('button', { name: 'Back' }).tap()
@@ -1131,28 +1148,32 @@ try {
   const navigationPage = await navigationContext.newPage()
   await navigationPage.goto(origin)
   await navigationPage.getByRole('link', { name: 'Sudoku', exact: true }).click()
-  await navigationPage.getByRole('button', { name: /^Budgies/ }).click()
+  await navigationPage.getByRole('link', { name: 'Packs', exact: true }).click()
   assert.equal(await navigationPage.locator('.site-header').count(), 1)
   assert.equal(await navigationPage.locator('.app-rail').count(), 1)
   assert.equal(await navigationPage.getByRole('button', { name: 'Resume Garden Perch', exact: true }).count(), 0)
-  await navigationPage.getByRole('button', { name: 'Open chapter Budgies', exact: true }).click()
+  await navigationPage.getByRole('link', { name: 'Open Budgies pack' }).click()
+  await navigationPage.getByRole('button', { name: 'Follow the trail' }).click()
   await navigationPage.getByRole('button', { name: /^(Play|Replay) Garden Perch/ }).click()
   await navigationPage.getByLabel('Sudoku board', { exact: true }).waitFor()
   await navigationPage.goBack()
-  await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
+  await navigationPage.getByRole('heading', { name: 'Budgies trail', exact: true }).waitFor()
   assert.equal(await navigationPage.locator('.site-header').count(), 1)
   assert.equal(await navigationPage.locator('.app-rail').count(), 1)
   // A level opened by mistake must not leave a Resume entry behind.
   assert.equal(await navigationPage.getByRole('button', { name: 'Resume Garden Perch', exact: true }).count(), 0)
 
-  await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Back Budgies pack', exact: true }).waitFor()
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
-  await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Back Packs', exact: true }).waitFor()
   assert.equal(await navigationPage.getByRole('banner').count(), 1)
   await navigationPage.goBack()
+  await navigationPage.getByRole('heading', { name: 'Packs', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Back Sudoku', exact: true }).waitFor()
+  await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Sudoku', exact: true }).waitFor()
-  await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Library', exact: true }).waitFor()
   assert.equal(await navigationPage.locator('.header-account .account-trigger').isVisible(), true)
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Game library' }).waitFor()
@@ -1163,7 +1184,7 @@ try {
   await navigationPage.getByRole('button', { name: 'Back', exact: true }).click()
   await navigationPage.getByRole('heading', { name: 'Sudoku', exact: true }).waitFor()
   assert.equal(await navigationPage.getByRole('banner').count(), 1)
-  await navigationPage.getByRole('button', { name: 'Back', exact: true }).click()
+  await navigationPage.getByRole('button', { name: 'Library', exact: true }).click()
   await navigationPage.getByRole('heading', { name: 'Game library' }).waitFor()
 
   const navigationPack = (await request('/api/games/sudoku/packs', { headers: playbackHeaders }))
@@ -1171,17 +1192,20 @@ try {
   await navigationPage.goto(`${origin}/games/sudoku/packs/budgies/${navigationPack.revision}`)
   await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
   await navigationPage.goBack()
-  await navigationPage.getByRole('button', { name: 'Back' }).waitFor()
+  await navigationPage.getByRole('heading', { name: 'Packs', exact: true }).waitFor()
+  await navigationPage.getByRole('button', { name: 'Back Sudoku' }).waitFor()
   assert.equal(await navigationPage.getByRole('banner').count(), 1)
+  await navigationPage.goBack()
+  await navigationPage.getByRole('heading', { name: 'Sudoku', exact: true }).waitFor()
   await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Game library' }).waitFor()
 
   await navigationPage.goto(`${origin}/games/sudoku/packs/budgies/${navigationPack.revision}/chapters/chapter-1`)
+  await navigationPage.getByRole('heading', { name: 'Budgies trail', exact: true }).waitFor()
+  await navigationPage.goBack()
   await navigationPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
   await navigationPage.goBack()
-  await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
-  await navigationPage.goBack()
-  await navigationPage.getByRole('button', { name: 'Back', exact: true }).waitFor()
+  await navigationPage.getByRole('heading', { name: 'Packs', exact: true }).waitFor()
   await navigationContext.close()
 
   const desktopContext = await browser.newContext({ viewport: { width: 1280, height: 900 } })
@@ -1193,7 +1217,8 @@ try {
   await desktopPage.getByRole('link', { name: 'Sudoku', exact: true }).click()
   await desktopPage.locator('.app-rail .rail-brand .brand').waitFor()
   assert.equal(await desktopPage.getByRole('banner').count(), 0)
-  await desktopPage.getByRole('button', { name: /^Budgies/ }).click()
+  await desktopPage.getByRole('link', { name: 'Packs', exact: true }).click()
+  await desktopPage.getByRole('link', { name: 'Open Budgies pack' }).click()
   await desktopPage.getByRole('heading', { name: 'Budgies', exact: true }).waitFor()
   assert.equal(await desktopPage.locator('.app-rail').count(), 1)
   await desktopPage.goBack()

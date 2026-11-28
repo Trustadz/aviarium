@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { ArrowLeft, RotateCcw, Settings2, Timer, Undo2, WandSparkles } from 'lucide-react'
 import { resetNonogramInput, type NonogramLevel, type NonogramPack, type NonogramSave } from '../../../packages/nonograms/src/contracts.js'
 import { fillsFitClues, matchesClues, solveByDeduction, type Cell } from '../../../packages/nonograms/src/puzzles.js'
@@ -10,7 +10,7 @@ import { packStopAt, packTheme, type PackChapter } from '../../../packages/game-
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import './nonograms.css'
 
-export default function Nonograms({ level, pack, session, preferences: profilePreferences, leave, finish, persist, reset, openSettings, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel, replay }:
+export default function Nonograms({ level, pack, session, preferences: profilePreferences, leave, finish, persist, reset, openSettings, seedShare, reader, bestMs, trial = false, testMode = false, leaderboard, challenge, standingsPanel, replay }:
 GamePlayerProps & { trial?: boolean }) {
   const t = useT()
   const challengeMode = Boolean(challenge)
@@ -117,7 +117,7 @@ GamePlayerProps & { trial?: boolean }) {
 
   return <>
     <PuzzleBoard puzzle={puzzle} title={title} pack={pack as NonogramPack | undefined} chapter={chapter} packName={packName} testMode={testMode}
-      leave={exit} finish={finish} reset={reset} resetInput={resetInput} openSettings={openSettings} committed={saved.board} undo={saved.undo}
+      leave={exit} finish={finish} reset={reset} resetInput={resetInput} openSettings={openSettings} seedShare={seedShare} committed={saved.board} undo={saved.undo}
       problem={problem} trial={trial} challengeMode={challengeMode} elapsedMs={display} showTimer={showTimer} onMove={onMove} leaderboard={leaderboard} replay={replay}/>
     {celebration !== undefined && <CelebrationOverlay reader={reader}
       result={{ elapsedMs: celebration, bestMs: trial ? undefined : bestMs, stats: celebrationStats,
@@ -133,7 +133,7 @@ function markValue(current: Cell, tool: Cell, value: Cell) {
   return protectedMark ? current : value
 }
 
-function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, finish, reset, resetInput, openSettings, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard, replay }: {
+function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, finish, reset, resetInput, openSettings, seedShare, committed, undo, problem, trial, challengeMode = false, testMode, elapsedMs, showTimer, onMove, leaderboard, replay }: {
   puzzle: NonogramLevel['content']
   title: string
   pack?: NonogramPack
@@ -144,6 +144,7 @@ function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, finish, re
   reset: () => void
   resetInput: () => void
   openSettings?: () => void
+  seedShare?: ReactNode
   testMode: boolean
   committed: Cell[]
   undo: Cell[][]
@@ -275,6 +276,7 @@ function PuzzleBoard({ puzzle, title, pack, chapter, packName, leave, finish, re
         {testMode && !solved && <button className="text-button" onClick={autoSolve} title={t('Test environment')}>
           <WandSparkles size={17}/> {t('Auto solve')}
         </button>}
+        {seedShare}
         {openSettings && <button className="icon-button" title={t('Nonogram settings')} aria-label={t('Nonogram settings')} onClick={openSettings}><Settings2 size={18}/></button>}
       </div>
     </div>

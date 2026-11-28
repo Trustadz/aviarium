@@ -15,7 +15,14 @@ export const attemptOutcome = {
 
 export const packRevisionField = z.number().int().positive().optional()
 
-export const attemptHeader = z.object({ game: z.string().min(1).max(64), ...attemptIdentity, ...attemptOutcome, packRevision: packRevisionField })
+/** Player-selected presentation options captured with a generated attempt. */
+export const playOptionValue = z.union([z.boolean(), z.number(), z.string(), z.null()])
+export const playOptionsSchema = z.record(z.string(), playOptionValue)
+export type PlayOptions = Record<string, boolean | number | string | null>
+export const attemptPlayOptions = { playOptions: playOptionsSchema.optional() }
+
+export const attemptHeader = z.object({ game: z.string().min(1).max(64), ...attemptIdentity, ...attemptOutcome,
+  ...attemptPlayOptions, packRevision: packRevisionField })
 export type GameAttempt = z.infer<typeof attemptHeader> & { lives?: number; aids?: unknown }
 
 export interface SavedAttempt<Attempt extends GameAttempt = GameAttempt> {

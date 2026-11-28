@@ -98,7 +98,7 @@ export const sudokuGame: GameDefinition<PublishedLevel, SudokuSave, PackRules, Q
   play: {
     save: {
       schema: saveSchema,
-      create: (level, context) => createSave(level, context.pack as PublishedPack | undefined),
+      create: (level, context) => createSave(level, context.pack as PublishedPack | undefined, context.playOptions),
       validate: (attempt, level, context) => validateSudokuAttempt(attempt, level, context.rules),
     },
     rules: { schema: packRulesSchema, defaults: defaultRules },

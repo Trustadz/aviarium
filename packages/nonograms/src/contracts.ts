@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { GameLevel } from '../../game-sdk/src/index.js'
 import { definePackSchemas, packLevelFields, packLevelId, progressionRules, type PackRevision } from '../../game-sdk/src/packs.js'
-import { attemptIdentity, attemptOutcome, challengeMutationField, mutationHeader, packRevisionField } from '../../game-sdk/src/progress.js'
+import { attemptIdentity, attemptOutcome, attemptPlayOptions, challengeMutationField, mutationHeader, packRevisionField, type PlayOptions } from '../../game-sdk/src/progress.js'
 import { fromPicture, randomDifficulties, randomPuzzle, type Cell, type Puzzle } from './puzzles.js'
 import { sha256 } from '../../game-sdk/src/sha256.js'
 
@@ -16,7 +16,7 @@ export const puzzleSchema = z.object({ rows: lines, columns: lines }).refine(({ 
 
 const marksSchema = z.array(z.union([z.literal(0), z.literal(1), z.literal(2)])).max(100)
 export const nonogramSaveSchema = z.object({
-  ...attemptIdentity, ...attemptOutcome, packRevision: packRevisionField,
+  ...attemptIdentity, ...attemptOutcome, ...attemptPlayOptions, packRevision: packRevisionField,
   game: z.literal(nonogramsId), ruleset: z.literal(1), format: z.literal(1),
   board: marksSchema, undo: z.array(marksSchema).max(100),
 })
@@ -71,11 +71,12 @@ export function sameNonogramLevel(entry: NonogramEntry, previous: NonogramEntry)
   return JSON.stringify(entry.content) === JSON.stringify(previous.content)
 }
 
-export function createNonogramAttempt(level: NonogramLevel, pack?: PackRevision): NonogramSave {
+export function createNonogramAttempt(level: NonogramLevel, pack?: PackRevision, playOptions?: PlayOptions): NonogramSave {
   return {
     game: nonogramsId, level: level.id, levelRevision: level.revision, ruleset: 1, format: 1,
     elapsedMs: 0, completed: false, packRevision: pack?.revision,
     board: Array(level.content.rows.length * level.content.columns.length).fill(0), undo: [],
+    ...(playOptions ? { playOptions } : {}),
   }
 }
 

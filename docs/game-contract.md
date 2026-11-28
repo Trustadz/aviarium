@@ -107,6 +107,25 @@ different fills, Nonogram marks without numeric clues, and 2048 tiles without
 numbers. Keep the puzzle name, progress, and action in readable text outside the
 thumbnail. Give any future game a similarly simplified preview.
 
+## Quick Play options and shared seeds
+
+Quick Play exposes the game's board settings where they exist and keeps every
+other supported presentation option in a disclosure. The platform remembers
+the last choices per player and game, and stores the actual selected options
+with each generated attempt so a resumed, reloaded, synced, or reconnected save
+keeps the options it was started with. Pack and daily-challenge levels continue
+to use the rules supplied by their source; the stored presentation options
+never override a rule that disables an aid.
+
+Seed sharing uses one platform-owned, versioned format: `AVS1.` followed by a
+URL-safe JSON payload carrying the game, generator version, raw seed, board
+settings and played options. A game validates its board settings against its
+generation schema. The review screen must show the parsed game and board,
+allow the player to change settings, keep the raw seed text unchanged, warn
+when a board setting changes the puzzle, and start only after review. A copied
+code reflects the settings and options actually played. Malformed,
+unsupported-version, wrong-game and invalid-option codes fail closed.
+
 ## What the platform owns
 
 - Routing, navigation, library/catalog and the player shell.

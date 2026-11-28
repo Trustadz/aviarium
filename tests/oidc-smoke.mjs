@@ -257,8 +257,9 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Account menu' }).count(), 0)
   await page.getByRole('button', { name: 'Add Sudoku to favorites' }).click()
   await page.getByRole('button', { name: 'Explore Sudoku' }).click()
-  await page.getByRole('button', { name: /^Budgies/ }).click()
-  await page.getByRole('button', { name: 'Open chapter Budgies', exact: true }).click()
+  await page.getByRole('link', { name: 'Packs', exact: true }).click()
+  await page.getByRole('link', { name: 'Open Budgies pack' }).click()
+  await page.getByRole('button', { name: 'Follow the trail' }).click()
   await page.getByRole('button', { name: 'Play ' + level.title }).click()
   const blank = level.grid.indexOf('0')
   const cell = cellValue => page.getByRole('button', {
@@ -270,9 +271,10 @@ try {
   await page.getByRole('button', { name: '1', exact: true }).click()
   await cell('1').waitFor()
   await page.getByRole('button', { name: 'Back', exact: true }).click()
-  await page.getByRole('button', { name: 'Back', exact: true }).click()
-  await page.getByRole('button', { name: 'Back', exact: true }).click()
-  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Back Budgies pack', exact: true }).click()
+  await page.getByRole('button', { name: 'Back Packs', exact: true }).click()
+  await page.getByRole('button', { name: 'Back Sudoku', exact: true }).click()
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
   await page.reload()
   await page.getByRole('heading', { name: 'Game library' }).waitFor()
   await page.getByRole('button', { name: 'Remove Sudoku from favorites' }).waitFor()
@@ -285,7 +287,7 @@ try {
   // menu. (A level opened from the pack roadmap has the roadmap in between.)
   const toLibrary = async () => {
     await page.getByRole('button', { name: 'Back', exact: true }).click()
-    await page.getByRole('button', { name: 'Back', exact: true }).click()
+    await page.getByRole('button', { name: 'Library', exact: true }).click()
     await page.getByRole('heading', { name: 'Game library' }).waitFor()
   }
   await toLibrary()
@@ -311,7 +313,7 @@ try {
 
   const backgroundGame = await context.newPage()
   await backgroundGame.goto(origin + '/games/sudoku')
-  await backgroundGame.getByRole('button', { name: 'Back' }).waitFor()
+  await backgroundGame.getByRole('button', { name: 'Library' }).waitFor()
   await backgroundGame.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
   await page.bringToFront()
   await context.setOffline(true)
@@ -325,7 +327,7 @@ try {
   assert.equal(await cachedGame(), false)
   await page.getByRole('link', { name: 'Sudoku', exact: true }).click()
   await page.getByText('Connect to install Sudoku on this device.').waitFor()
-  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Library' }).click()
 
   await context.setOffline(false)
   await backgroundGame.bringToFront()

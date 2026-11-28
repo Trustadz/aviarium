@@ -14,7 +14,7 @@
  */
 import type { z } from 'zod'
 import type { GameLevel, GameMetadata } from './index.js'
-import type { GameAttempt } from './progress.js'
+import type { GameAttempt, PlayOptions } from './progress.js'
 import type { LeaderboardBoardKey, LeaderboardValueUnit } from './leaderboards.js'
 import type { PackDocument, PackEntry, PackRevision } from './packs.js'
 
@@ -78,6 +78,8 @@ export interface GameGeneration<Options, Level extends GameLevel> {
 export interface SaveContext<Rules extends GameRuleValues> {
   /** Present for an authored pack level; absent for Quick Play / challenge levels. */
   pack?: PackRevision
+  /** Player-selected presentation options captured when the attempt starts. */
+  playOptions?: PlayOptions
   rules: Rules
 }
 
