@@ -79,9 +79,9 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
     return t('{filled} of {total} cells filled', { filled: entries.filter(Boolean).length, total: entries.length })
   },
   share: level => <PuzzleShare level={level as PublishedLevel}/>,
-  async createAttempt(level, pack) {
+  async createAttempt(level, pack, playOptions) {
     const { createSave } = await import('./Player.js')
-    return createSave(level as PublishedLevel, pack as PublishedPack | undefined)
+    return createSave(level as PublishedLevel, pack as PublishedPack | undefined, playOptions)
   },
   mutationExtras: input => {
     const level = input as PublishedLevel | undefined

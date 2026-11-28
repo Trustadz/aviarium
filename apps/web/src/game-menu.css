@@ -1,0 +1,105 @@
+/* Shared player-facing game menu shell. */
+.game-menu-page {
+  width: 100%;
+  max-width: 470px;
+  margin-inline: auto;
+  padding-bottom: 28px;
+}
+
+.game-menu-top { margin-bottom: 20px; }
+
+.game-menu-back {
+  margin: 0 0 6px -6px;
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.game-menu-title-row {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: 54px;
+}
+
+.game-menu-title-row h1 {
+  max-width: calc(100% - 24px);
+  margin: 0;
+  color: var(--text);
+  font-size: 37px;
+  line-height: 1.04;
+  letter-spacing: -.055em;
+}
+
+.game-menu-mascot {
+  position: absolute;
+  z-index: 0;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* The bird touches the title edge without covering the lettering. */
+.game-menu-mascot-sudoku { left: 105px; top: -45px; width: 63px; height: 87px; }
+.game-menu-mascot-nonograms { left: 184px; top: -48px; width: 82px; height: 77px; }
+.game-menu-mascot-2048 { left: 88px; top: -16px; width: 113px; height: 53px; }
+
+.game-menu-links {
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.game-menu-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: .94rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.game-menu-link:first-child { border-top: 0; }
+.game-menu-link:hover { background: var(--tint); }
+.game-menu-link:focus-visible { outline-offset: -3px; }
+
+.game-menu-link-icon {
+  display: inline-flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.game-menu-link-chevron { margin-left: auto; color: var(--text); opacity: .9; }
+
+.game-menu-page > .continue-games { margin-top: 0; margin-bottom: 20px; }
+.game-menu-page > .quick-play { width: 100%; margin-bottom: 20px; }
+.game-menu-page > .game-menu-links { margin-top: 0; }
+
+@media (max-width: 899px) {
+  .game-menu-page { padding-inline: 7px; }
+}
+
+@media (max-width: 420px) {
+  .game-menu-page { padding-inline: 0; }
+}
+
+@media (max-width: 359px) {
+  .game-menu-title-row h1 { max-width: calc(100% - 12px); font-size: 34px; }
+  .game-menu-mascot-sudoku { left: 88px; top: -39px; width: 56px; height: 78px; }
+  .game-menu-mascot-nonograms { left: 152px; top: -41px; width: 71px; height: 67px; }
+  .game-menu-mascot-2048 { left: 72px; top: -13px; width: 96px; height: 45px; }
+  .game-menu-link { min-height: 46px; font-size: .9rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-menu-link { transition: none; }
+}

@@ -5,12 +5,12 @@ import { I18n, LanguageSelector, knownMessage, useT } from './i18n.js'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { useIntl } from 'react-intl'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeft, BookOpen, CalendarDays, Download, History, LogIn, LogOut, Newspaper,
-  Pencil, Settings2, Trophy, Users, WifiOff } from 'lucide-react'
+import { ArrowLeft, BookOpen, CalendarDays, CircleHelp, Download, History, KeyRound, LogIn, LogOut, Newspaper,
+  Package, Pencil, Settings2, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
 import { chapterProgress, packProgress, packStopAt, packTheme, upgradePackRevision, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
-import type { GameAttempt } from '../../../packages/game-sdk/src/progress.js'
+import type { GameAttempt, PlayOptions } from '../../../packages/game-sdk/src/progress.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
 import { AccountMenu, ProfileForm } from './AccountSettings.js'
 import { News } from './News.js'
@@ -21,7 +21,7 @@ import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, formatChallengeDate, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
-import { GameHeading, GameMenu, GameNavigation } from './GameMenu.js'
+import { GameHeading, GameMenu, GameMenuLinks, GameNavigation, type GameMenuItem } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
 import { CelebrationOverlay } from './CelebrationOverlay.js'
 import { registerOffline, useGameDownloads } from './offline.js'
@@ -414,7 +414,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     return result
   }
   async function open(game: WebGame, level: GameLevel, existing?: LocalSession, suppliedPack?: PackRevision,
-    options: { replace?: boolean; parent?: string; replay?: { label: string; backLabel?: string } } = {}) {
+    options: { replace?: boolean; parent?: string; replay?: { label: string; backLabel?: string };
+      playOptions?: PlayOptions } = {}) {
     if (!canPlay(game)) throw new Error(game.connectMessage)
     if (level.source === 'Challenge' && !existing?.challenge)
       throw new Error('Open this from Challenges.')
@@ -427,7 +428,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     if (!existing && pack && location && chapterId &&
         !packProgress(pack, completionEvents, chapterId).playable[location.chapterStop - 1])
       throw new Error('Solve the previous stop in this chapter first.')
-    const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack),
+    const session = existing ?? { id: randomId(), revision: 0, data: await game.createAttempt(level, pack, options.playOptions),
       archived: false, profile, updated: Date.now(), dirty: true }
     await cacheLevels([level])
     const parent = options.parent ?? (pack && chapterId ? chapterPath(pack, chapterId) : pack ? packPath(pack) : game.url)
@@ -864,20 +865,29 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             leave={() => back(openGame.url)} open={chapterId => go(chapterPath(viewedPack, chapterId))}/>
           : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
             <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
-      : openGame && path === openGame.url ? <GameMenu title={openGame.title} leave={() => back('/')}
-        leaderboard={openGame.leaderboards ? { href: openGame.url + '/leaderboards',
-          open: event => link(event, openGame.url + '/leaderboards') } : undefined}
-        editor={canEdit && openGame.Studio ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}
-        history={openGame.history ? () => go(openGame.url + '/history') : undefined}
-        settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
-        guide={openGame.guide && { href: openGame.url + '/how-to', open: event => link(event, openGame.url + '/how-to') }}>
-        {continueRow(openGame.id)}
-        {!canPlay(openGame) && <p className="notice">{t(openGame.connectMessage)}</p>}
-        {openGame.menu?.({ canPlay: canPlay(openGame), online, profile, params: new URLSearchParams(location.search),
-          launch: level => open(openGame, level), perform })}
-        {openGame.packs && <PackCards game={openGame.id} presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
-          completed={completed} status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>}
-      </GameMenu>
+      : openGame && path === openGame.url ? (() => {
+        const menuItems: GameMenuItem[] = []
+        if (openGame.leaderboards) menuItems.push({ key: 'leaderboards', label: t('Leaderboards'),
+          icon: <Trophy size={24}/>, href: openGame.url + '/leaderboards',
+          open: event => link(event, openGame.url + '/leaderboards') })
+        if (openGame.history) menuItems.push({ key: 'history', label: t('History'),
+          icon: <History size={24}/>, href: openGame.url + '/history',
+          open: event => link(event, openGame.url + '/history') })
+        if (openGame.guide) menuItems.push({ key: 'guide', label: t('How to play'),
+          icon: <CircleHelp size={24}/>, href: openGame.url + '/how-to',
+          open: event => link(event, openGame.url + '/how-to') })
+        return <GameMenu title={openGame.title} gameId={openGame.id} mascot={openGame.mascot} leave={() => back('/')}>
+          {continueRow(openGame.id)}
+          {!canPlay(openGame) && <p className="notice">{t(openGame.connectMessage)}</p>}
+          {openGame.menu?.({ canPlay: canPlay(openGame), online, profile, preferences: prefs,
+            updatePreferences: changePrefs, params: new URLSearchParams(location.search),
+            launch: (level, launchOptions) => open(openGame, level, undefined, undefined,
+              { playOptions: launchOptions?.playOptions }), perform })}
+          {openGame.packs && <PackCards game={openGame.id} presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
+            completed={completed} status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>}
+          <GameMenuLinks items={menuItems} label={t('{game} menu', { game: openGame.title })}/>
+        </GameMenu>
+      })()
       : inNews ? <News account={account} online={online}/>
       : inAbout ? <section className="panel about-page" aria-labelledby="about-heading">
         <h1 id="about-heading">{t("About Aviarium")}</h1>

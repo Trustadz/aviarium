@@ -64,7 +64,7 @@ export const twenty48Game: GameDefinition<Twenty48Level, Twenty48Save, Record<st
   play: {
     save: {
       schema: twenty48SaveSchema,
-      create: level => createTwenty48Attempt(level),
+      create: (level, context) => createTwenty48Attempt(level, context.playOptions),
       validate: (attempt, level) => validateTwenty48Attempt(attempt, level),
     },
     rules: { schema: noRules, defaults: {} },

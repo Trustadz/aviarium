@@ -66,7 +66,7 @@ export const nonogramsGame: GameDefinition<NonogramLevel, NonogramSave, Progress
   play: {
     save: {
       schema: nonogramSaveSchema,
-      create: (level, context) => createNonogramAttempt(level, context.pack as NonogramPack | undefined),
+      create: (level, context) => createNonogramAttempt(level, context.pack as NonogramPack | undefined, context.playOptions),
       validate: (attempt, level) => validateNonogramAttempt(attempt, level),
     },
     rules: { schema: z.object({ inOrder: z.boolean() }), defaults: defaultRules },

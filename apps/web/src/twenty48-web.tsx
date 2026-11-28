@@ -103,7 +103,7 @@ export const twenty48Web: Omit<WebGame, 'url'> = {
     const save = data as Twenty48Save
     return t('Score {score} · highest tile {tile}', { score: save.score, tile: Math.max(0, ...save.board) })
   },
-  createAttempt: async level => createTwenty48Attempt(level as Twenty48Level),
+  createAttempt: async (level, _pack, playOptions) => createTwenty48Attempt(level as Twenty48Level, playOptions),
   mutationExtras: input => {
     const level = input as Twenty48Level | undefined
     if (level?.source !== 'Generated' || !level.seed) return undefined

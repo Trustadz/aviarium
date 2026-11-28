@@ -114,7 +114,7 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
     const { board } = attempt as NonogramSave
     return t('{filled} of {total} cells marked', { filled: board.filter(Boolean).length, total: board.length })
   },
-  createAttempt: async (level, pack) => createNonogramAttempt(level as NonogramLevel, pack),
+  createAttempt: async (level, pack, playOptions) => createNonogramAttempt(level as NonogramLevel, pack, playOptions),
   mutationExtras: input => {
     const level = input as NonogramLevel | undefined
     if (level?.source !== 'Generated') return
