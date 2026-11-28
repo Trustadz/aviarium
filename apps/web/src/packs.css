@@ -1,0 +1,382 @@
+/* Packs destination: catalog, illustrated chapter overview, and chapter trail.
+   Scoped to the pack screens so the rest of the app keeps the shared layout. */
+
+.catalog.pack-destination {
+  width: 100%;
+  max-width: 660px;
+  margin-inline: auto;
+}
+
+/* The app shell sizes game content for its widest screen; pack destinations
+   keep the narrower single column from the design. */
+.main-frame.game-content > .catalog.pack-destination {
+  max-width: 660px;
+  margin-inline: auto;
+}
+
+/* ---- Pack catalog ------------------------------------------------------- */
+
+.pack-catalog-back {
+  min-height: 44px;
+  margin: 0 0 4px -6px;
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.pack-catalog h1 {
+  margin: 0 0 16px;
+  color: var(--text);
+  font-size: 2.375rem;
+  line-height: 1.04;
+  letter-spacing: -.055em;
+}
+
+.pack-catalog-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pack-catalog-item { min-width: 0; }
+
+.pack-catalog-card {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--pack-border, var(--border));
+  border-radius: 14px;
+  color: var(--pack-text, var(--text));
+  background: var(--pack-surface, var(--surface));
+  transition: border-color .15s ease;
+}
+
+.pack-catalog-card:hover { border-color: var(--pack-text, var(--text)); }
+.pack-catalog-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.pack-catalog-art {
+  position: relative;
+  display: block;
+  min-height: 136px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--pack-entry, var(--pack-border)) 26%, var(--pack-surface)),
+    var(--pack-surface));
+}
+
+.pack-catalog-art img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 32%;
+}
+
+.pack-catalog-art-empty {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 32% 26%,
+      color-mix(in srgb, var(--pack-entry, var(--pack-border)) 32%, transparent), transparent 62%),
+    linear-gradient(135deg, var(--pack-surface), color-mix(in srgb, var(--pack-border) 22%, var(--pack-surface)));
+}
+
+.pack-catalog-body {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+.pack-catalog-title {
+  color: var(--pack-text, var(--text));
+  font-size: 1.4rem;
+  font-weight: 780;
+  line-height: 1.16;
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+
+.pack-catalog-details {
+  color: color-mix(in srgb, var(--pack-text, var(--text)) 76%, var(--pack-surface, var(--surface)));
+  font-size: .82rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.pack-catalog-progress {
+  display: grid;
+  gap: 5px;
+  margin-top: 2px;
+  color: var(--pack-text, var(--text));
+  font-size: .82rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.pack-catalog-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--pack-text, var(--text));
+  font-size: .87rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.pack-catalog-action svg { flex: none; }
+
+/* ---- Shared progress bar ------------------------------------------------ */
+
+.pack-progress-track {
+  display: block;
+  height: 6px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pack-border, var(--border)) 30%,
+    var(--pack-surface, var(--surface)));
+}
+
+.pack-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pack-text, var(--accent));
+  transition: width 200ms ease;
+}
+
+/* ---- Chapter overview --------------------------------------------------- */
+
+.pack-overview-summary {
+  display: grid;
+  gap: 11px;
+  margin: 0 0 16px;
+}
+
+.pack-overview-description {
+  max-width: 60ch;
+  color: var(--text);
+  font-size: .95rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.pack-overview-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--text);
+  font-size: .86rem;
+  font-weight: 650;
+}
+
+.pack-overview-progress .pack-progress-track {
+  flex: 1 1 auto;
+  max-width: 220px;
+}
+
+.pack-overview-solved { flex: none; }
+
+.pack-chapter-list {
+  display: grid;
+  gap: 16px;
+}
+
+.pack-chapter-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--pack-border, var(--border));
+  border-radius: 16px;
+  color: var(--pack-text, var(--text));
+  background: var(--pack-surface, var(--surface));
+}
+
+.pack-chapter-card.is-locked { border-style: dashed; }
+
+.pack-chapter-art {
+  position: relative;
+  display: block;
+  min-height: 132px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--pack-entry, var(--pack-border)) 26%, var(--pack-surface)),
+    var(--pack-surface));
+}
+
+.pack-chapter-art img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: center 32%;
+}
+
+.pack-chapter-card.is-locked .pack-chapter-art img { opacity: .72; }
+
+.pack-chapter-art.is-empty {
+  min-height: 152px;
+  background: radial-gradient(circle at 30% 24%,
+      color-mix(in srgb, var(--pack-entry, var(--pack-border)) 34%, transparent), transparent 60%),
+    linear-gradient(135deg, var(--pack-surface), color-mix(in srgb, var(--pack-border) 22%, var(--pack-surface)));
+}
+
+.pack-chapter-badge {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-start: 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--pack-border, var(--border));
+  border-radius: 999px;
+  color: var(--pack-text, var(--text));
+  background: var(--pack-surface, var(--surface));
+  font-size: .8rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pack-chapter-body {
+  display: grid;
+  gap: 7px;
+  padding: 15px 16px 16px;
+}
+
+.pack-chapter-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pack-chapter-heading h2 {
+  margin: 0;
+  color: var(--pack-text, var(--text));
+  font-size: clamp(1.45rem, 4.6vw, 1.65rem);
+  line-height: 1.2;
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+
+.pack-chapter-heading svg { flex: none; }
+
+.pack-chapter-details {
+  color: color-mix(in srgb, var(--pack-text, var(--text)) 78%, var(--pack-surface, var(--surface)));
+  font-size: .85rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.pack-chapter-action {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 4px;
+  white-space: normal;
+  text-align: center;
+}
+
+.pack-chapter-locked {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--pack-text, var(--text));
+  font-size: .82rem;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.pack-chapter-locked svg { flex: none; margin-top: 1px; }
+
+.pack-chapter-preview-progress {
+  color: color-mix(in srgb, var(--pack-text, var(--text)) 78%, var(--pack-surface, var(--surface)));
+  font-size: .8rem;
+  font-weight: 600;
+}
+
+/* ---- Chapter trail ------------------------------------------------------ */
+
+.pack-trail-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin: 0 0 8px;
+}
+
+.pack-trail-meta {
+  min-width: 0;
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.pack-trail-pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: .76rem;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pack-roadmap .text-button.back { min-height: 44px; }
+
+/* Keep the back label and the three tools on one row at narrow widths. */
+.pack-screen-navigation .game-nav-tools { gap: 4px; }
+
+.pack-trail-screen > .pack-trail {
+  --pack-road-color: color-mix(in srgb, var(--pack-border, var(--border)) 82%,
+    var(--pack-text, var(--text)));
+}
+
+/* The fixed app destinations sit over the last part of the viewport, so the
+   current stop scrolls clear of them instead of hiding its Play action. */
+.pack-trail-screen .pack-trail > li {
+  scroll-margin-block: 56px 88px;
+}
+
+/* ---- Narrow phones ------------------------------------------------------ */
+
+@media (max-width: 420px) {
+  .pack-catalog-body { padding: 12px 13px; }
+  .pack-catalog-title { font-size: 1.34rem; }
+  .pack-chapter-art.is-empty { min-height: 132px; }
+  .pack-chapter-body { padding: 13px 14px 15px; }
+}
+
+@media (max-width: 359px) {
+  .pack-catalog-card { grid-template-columns: 104px minmax(0, 1fr); }
+  .pack-catalog-art { min-height: 124px; }
+  .pack-catalog h1 { font-size: 2rem; }
+  .pack-catalog-body { gap: 4px; padding: 10px 11px; }
+  .pack-catalog-title { font-size: 1.22rem; }
+  .pack-catalog-details, .pack-catalog-progress { font-size: .78rem; }
+  .pack-chapter-badge { inset-block-start: 9px; inset-inline-start: 9px; padding-inline: 9px; }
+  .pack-overview-progress { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .pack-overview-progress .pack-progress-track { width: 100%; max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack-catalog-card, .pack-progress-track > span { transition: none; }
+}

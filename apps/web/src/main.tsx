@@ -6,7 +6,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useSta
 import { useIntl } from 'react-intl'
 import { createRoot } from 'react-dom/client'
 import { ArrowLeft, BookOpen, CalendarDays, CircleHelp, Download, History, KeyRound, LogIn, LogOut, Newspaper,
-  Package, Pencil, Settings2, Trophy, Users, WifiOff } from 'lucide-react'
+  Package, Pencil, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
 import { chapterProgress, packProgress, packStopAt, packTheme, upgradePackRevision, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
@@ -21,7 +21,7 @@ import { GameHistory } from './GameHistory.js'
 import { GameLeaderboards, LeaderboardBoardView, LeaderboardCatalog, LeaderboardNotice, LeaderboardPackView } from './Leaderboards.js'
 import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, formatChallengeDate, type ChallengeDayView, type ChallengeSlotView, type ChallengeReplayView } from './Challenges.js'
 import type { WebGame } from './game-web.js'
-import { GameHeading, GameMenu, GameMenuLinks, GameNavigation, type GameMenuItem } from './GameMenu.js'
+import { GameHeading, GameMenu, GameMenuLinks, type GameMenuItem } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
 import { SeedScreen, SeedShare } from './SeedScreen.js'
 import { seedCode } from './seed.js'
@@ -30,7 +30,7 @@ import { registerOffline, useGameDownloads } from './offline.js'
 import { randomId } from './random.js'
 import { findGame, games } from './registry.js'
 import { useSession } from './session.js'
-import { PackCards, PackChapters, PackRoadmap, chapterPath, packApi, packExportUrl, packPath } from './GamePacks.js'
+import { PackCatalog, PackChapters, PackRoadmap, chapterPath, packApi, packExportUrl, packPath } from './GamePacks.js'
 import { packLevels } from './game-definitions.js'
 import { canGoBack, navigationLayer, pushLayer, replaceLayer, seedHistory, type ScreenRef } from './navigation.js'
 import { cacheLevels, db, deleteSavedGame, isResumable, levelKey, listSessions, packCompletionEvents, localProfile, saveLocal,
@@ -712,16 +712,17 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const canExportViewedPack = Boolean(viewedPack && online && canEdit &&
     (account?.role === 'admin' || viewedPack.ownedByViewer))
   const packNavigation = inPackRoutes && openGame && viewedPack
-    ? (leave: () => void) => <GameNavigation leave={leave}
-      leaderboard={openGame.leaderboards && { href: openGame.url + '/leaderboards',
-        open: event => link(event, openGame.url + '/leaderboards') }}
-      history={openGame.history ? () => go(openGame.url + '/history') : undefined}
-      extraTools={canExportViewedPack ? <a className="icon-button" href={packExportUrl(viewedPack)} download
-        aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a> : undefined}/>
+    ? (label: string, leave: () => void) => <div className="game-navigation">
+      <button className="text-button back" onClick={leave}><ArrowLeft size={17} aria-hidden="true"/>
+        <span className="sr-only">{t('Back')} </span>{label}</button>
+      <div className="game-nav-tools">
+        {canExportViewedPack && <a className="icon-button" href={packExportUrl(viewedPack)} download
+          aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a>}
+      </div>
+    </div>
     : undefined
   const packHeading = inPackRoutes && openGame
-    ? (title: string) => <GameHeading title={title} gameTitle={openGame.title}
-      editor={canEdit && openGame.Studio ? { href: '/studio/' + openGame.id, open: event => openStudio(event, openGame.id) } : undefined}/>
+    ? (title: string) => <GameHeading title={title} gameTitle={openGame.title}/>
     : undefined
   useLayoutEffect(() => setBrowserTheme(immersive ? gameSurface.current : app.current, immersive ? '--game-page' : '--surface'),
     [reader, surface, theme, themeGame?.id, playTheme])
@@ -854,13 +855,21 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         sections={openGame.guide} leave={event => backLink(event, openGame.url)}/>
       : openGame?.history && path === openGame.url + '/history' ? <GameHistory game={openGame} sessions={sessions} levels={savedLevels} packs={packs}
         leave={() => back(openGame.url)} replay={level => perform(() => open(openGame, level))} canPlay={canPlay(openGame)}/>
+      : openGame?.packs && path === openGame.url + '/packs' ? <PackCatalog gameTitle={openGame.title}
+        presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
+        completed={completed} sessions={sessions} status={packStatuses[openGame.id] ?? 'loading'}
+        retry={() => setPackRetry(attempt => attempt + 1)} leave={() => back(openGame.url)}
+        open={pack => go(packPath(pack))}/>
       : openGame?.packs && path.startsWith(openGame.url + '/packs/') ? viewedPack && viewedChapterId &&
           path === chapterPath(viewedPack, viewedChapterId)
         ? <PackRoadmap game={openGame.id} presentation={openGame.packs} pack={viewedPack} chapterId={viewedChapterId}
           completed={completed} sessions={sessions} canPlay={canPlay(openGame)}
-          canExport={false} navigation={packNavigation?.(() => back(packPath(viewedPack)))}
-          header={packHeading?.(viewedPack && viewedChapter
-            ? openGame.packs.chapterTitle(t, viewedPack, viewedChapter) : t('Chapters'))}
+          canExport={false}
+          navigation={packNavigation?.(t('{pack} pack', { pack: openGame.packs.title(t, viewedPack) }),
+            () => back(packPath(viewedPack)))}
+          header={packHeading?.(viewedChapter
+            ? t('{chapter} trail', { chapter: openGame.packs.chapterTitle(t, viewedPack, viewedChapter) })
+            : t('Chapters'))}
           leave={() => back(packPath(viewedPack))} play={level => perform(() => {
             const existing = sessions.find(item => isResumable(item) && item.data.game === openGame.id &&
               item.data.level === level.id && item.data.levelRevision === level.revision)
@@ -868,7 +877,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
           })}/>
         : viewedPack && path === packPath(viewedPack)
           ? <PackChapters presentation={openGame.packs} pack={viewedPack} completed={completed} sessions={sessions}
-            canExport={false} navigation={packNavigation?.(() => back(openGame.url))}
+            canExport={false} navigation={packNavigation?.(t('Packs'), () => back(openGame.url))}
             header={packHeading?.(openGame.packs.title(t, viewedPack))}
             leave={() => back(openGame.url)} open={chapterId => go(chapterPath(viewedPack, chapterId))}/>
           : <section className="catalog"><button className="text-button" onClick={() => back(openGame.url)}>{t(openGame.packs.menuLabel)}</button>
@@ -878,6 +887,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         if (openGame.seed) menuItems.push({ key: 'seed', label: t('Play a seed'),
           icon: <KeyRound size={24}/>, href: openGame.url + '/seed',
           open: event => link(event, openGame.url + '/seed') })
+        if (openGame.packs) menuItems.push({ key: 'packs', label: t('Packs'),
+          icon: <Package size={24}/>, href: openGame.url + '/packs',
+          open: event => link(event, openGame.url + '/packs') })
         if (openGame.leaderboards) menuItems.push({ key: 'leaderboards', label: t('Leaderboards'),
           icon: <Trophy size={24}/>, href: openGame.url + '/leaderboards',
           open: event => link(event, openGame.url + '/leaderboards') })
@@ -894,8 +906,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             updatePreferences: changePrefs, params: new URLSearchParams(location.search),
             launch: (level, launchOptions) => open(openGame, level, undefined, undefined,
               { playOptions: launchOptions?.playOptions }), perform })}
-          {openGame.packs && <PackCards game={openGame.id} presentation={openGame.packs} packs={packs.filter(pack => pack.data.game === openGame.id)}
-            completed={completed} status={packStatuses[openGame.id] ?? 'loading'} retry={() => setPackRetry(attempt => attempt + 1)} open={pack => go(packPath(pack))}/>}
           <GameMenuLinks items={menuItems} label={t('{game} menu', { game: openGame.title })}/>
         </GameMenu>
       })()
