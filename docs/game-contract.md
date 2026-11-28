@@ -61,6 +61,52 @@ component, a preview and presentation metadata; those are the gameplay/editor
 surface, not platform plumbing. A Quick Play-only game omits `Studio` and is
 hidden from authoring.
 
+## Game menu UX contract
+
+Use this layout for new games and for the shared menu redesign. The platform
+owns the layout and navigation. Each game supplies its title, light and dark
+themes, any supported e-reader presentation, a short How to play guide, and a
+simplified saved-game thumbnail. A title mascot, when supplied, should use the
+game palette and have a distinct, recognizable silhouette. Keep the title
+legible at narrow widths with or without the artwork. See the
+[game menu and Library design reference](game-menu-design.md) for the current
+mascots, banner artwork, and responsive checks.
+
+Use one column in this order:
+
+1. **Title.** Use the game's theme throughout the menu and its related screens.
+2. **Continue.** Put saved games and the current daily challenge in one
+   horizontally scrollable row. The daily challenge comes before the save list
+   at the far left. Order saves by recency. Keep the challenge visually
+   distinct with its own artwork and label. Offer **Start challenge**,
+   **Resume challenge**, or **View result** according to the player's state.
+   Show friends who have finished when that information is available. Give the
+   row keyboard and touch scrolling affordances, and keep full card labels and
+   actions reachable at narrow widths and with enlarged text. Omit the row
+   when it has no cards.
+3. **Quick Play.** Show difficulty where supported and collapse the remaining
+   options. Remember the last Quick Play choices as defaults for the next new
+   puzzle. Store the selected options with the generated puzzle so a saved
+   attempt reopens with the same choices. Packs and daily challenges use the
+   rules supplied by their source.
+4. **Play a seed.** For a game with shareable generation, show the board settings
+   and play options from the code before the player starts. Let players edit
+   those choices. Explain when an edit such as difficulty or grid size can
+   change the board. A copied code reflects the options actually played.
+5. **Packs, Leaderboards, History, How to play.** Keep this order and show each
+   entry when supported. Packs opens a catalog, then an illustrated chapter
+   overview and its trail. Use the pack's artwork to set the scene, and let the
+   trail alternate sides as the stops climb upward from the start. Open the
+   trail at the current stop and explain how locked stops open. When there is no
+   generated play, make Packs the primary starting action for authored
+   content. The same menu works with Quick Play,
+   Play a seed and the generated Daily Challenge tile omitted.
+
+Use thumbnails for recognition. Show Sudoku givens and player entries as
+different fills, Nonogram marks without numeric clues, and 2048 tiles without
+numbers. Keep the puzzle name, progress, and action in readable text outside the
+thumbnail. Give any future game a similarly simplified preview.
+
 ## What the platform owns
 
 - Routing, navigation, library/catalog and the player shell.
@@ -101,13 +147,15 @@ challenge board.
 
 ## Adding a game
 
-1. Create the game package with its level/attempt codecs, rules, generation,
-   pack schemas and result interpretation.
+1. Create the game package with its level and attempt codecs, rules, and the
+   supported content and result capabilities.
 2. Add the `GameDefinition` (see `packages/sudoku/src/game.ts` for the adapter
    pattern). Keep existing save formats, level ids, board keys and puzzle
    digests so old attempts and leaderboard rows stay valid.
 3. Add the browser `Player`, optional level `Studio`, preview and presentation
-   metadata. Omit `Studio` for a game with no authored content.
+   metadata. Apply the [game menu UX contract](#game-menu-ux-contract) to the
+   capabilities the game supplies. Omit `Studio` for a game with no authored
+   content.
 4. Register the definition in the server `GameRegistry` and the browser
    `GameRegistry`; add the offline asset entries.
 5. Run the game-contract tests, the parity tests and the browser suite.
