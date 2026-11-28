@@ -70,7 +70,7 @@ simplified saved-game thumbnail. A title mascot, when supplied, should use the
 game palette and have a distinct, recognizable silhouette. Keep the title
 legible at narrow widths with or without the artwork. See the
 [game menu and Library design reference](game-menu-design.md) for the current
-mascots, banner artwork, and responsive checks.
+mascots, catalog-card artwork, and responsive checks.
 
 Use one column in this order:
 
