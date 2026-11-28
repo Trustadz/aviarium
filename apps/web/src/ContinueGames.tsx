@@ -1,6 +1,7 @@
 import { useT } from './i18n.js'
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, Ellipsis, Trash2 } from 'lucide-react'
+import dailyChallengeArt from './art/game-menu/daily-challenge.png'
 import './continue.css'
 
 export type DailyStatus = 'available' | 'started' | 'completed'
@@ -40,19 +41,6 @@ function actionLabel(t: ReturnType<typeof useT>, game: ContinueGame) {
   if (game.dailyStatus === 'completed') return t('View result')
   if (game.dailyStatus === 'started') return t('Resume challenge')
   return t('Start challenge')
-}
-
-/** Small warm-palette artwork that sets the daily card apart from saved games. */
-function DailyChallengeArt() {
-  return <svg className="continue-daily-art" viewBox="0 0 36 28" aria-hidden="true" focusable="false">
-    <rect className="continue-daily-art-page" x="1.5" y="5.5" width="22" height="20" rx="4"/>
-    <path className="continue-daily-art-band" d="M1.5 9.5a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4V12h-22Z"/>
-    <circle className="continue-daily-art-sun" cx="27.5" cy="8" r="7"/>
-    <path className="continue-daily-art-star" d="m27.5 3.6.9 2.5 2.6.2-2 1.7.7 2.5-2.2-1.4-2.2 1.4.7-2.5-2-1.7 2.6-.2Z"/>
-    <rect className="continue-daily-art-mark" x="6.5" y="15.5" width="4.5" height="4.5" rx="1"/>
-    <rect className="continue-daily-art-mark is-soft" x="14" y="15.5" width="4.5" height="4.5" rx="1"/>
-    <rect className="continue-daily-art-line" x="6.5" y="22.5" width="12" height="2" rx="1"/>
-  </svg>
 }
 
 export function ContinueGames({ games, resume, remove }: Props) {
@@ -247,7 +235,8 @@ export function ContinueGames({ games, resume, remove }: Props) {
                     <span className="visually-hidden"> · {game.title}</span></h3>
                   <p className="continue-card-detail">{detail}</p>
                 </div>
-                <span className="continue-daily-art-slot"><DailyChallengeArt/></span>
+                <span className="continue-daily-art-slot"><img className="continue-daily-art-image"
+                  src={dailyChallengeArt} alt="" aria-hidden="true"/></span>
               </div>
               : <div className="continue-card-head">
                 <div className="continue-thumb" aria-hidden="true">{game.preview}</div>

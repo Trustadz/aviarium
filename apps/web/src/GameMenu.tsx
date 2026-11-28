@@ -116,9 +116,11 @@ export function GameMenu({ title, gameId, mascot, leave, backLabel, children }: 
         <ArrowLeft size={17}/> {backLabel ?? t('Library')}
       </button>
       <div className="game-menu-title-row">
-        <h1 id="game-menu-title" ref={titleRef}>{title}</h1>
-        {mascot && <img className={'game-menu-mascot game-menu-mascot-' + (gameId ?? 'generic')}
-          src={mascot} alt="" aria-hidden="true"/>}
+        <h1 id="game-menu-title" ref={titleRef}>
+          <span className="game-menu-title-text">{title}</span>
+          {mascot && <img className={'game-menu-mascot game-menu-mascot-' + (gameId ?? 'generic')}
+            src={mascot} alt="" aria-hidden="true"/>}
+        </h1>
       </div>
     </div>
     {children}

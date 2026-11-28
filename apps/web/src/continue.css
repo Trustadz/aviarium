@@ -6,7 +6,7 @@
 
 .continue-games {
   min-width: 0;
-  --continue-card-width: 154px;
+  --continue-card-width: 9.625rem;
   --daily-surface: #fff3d6;
   --daily-border: #cbab67;
   --daily-text: #3b3021;
@@ -167,26 +167,28 @@
 }
 
 .continue-games .continue-card-daily .continue-card-detail { color: var(--daily-muted); }
+.continue-games .continue-card-action-daily { font-size: .78rem; white-space: nowrap; }
 
-.continue-games .continue-card-head-daily { gap: 5px; }
+.continue-games .continue-card-head-daily { gap: 4px; }
 .continue-games .continue-card-head-daily .continue-card-title {
   font-size: .8rem;
   letter-spacing: -.02em;
+  white-space: nowrap;
 }
 .continue-games .continue-card-head-daily .continue-card-copy { padding-top: 1px; }
 
 .continue-games .continue-daily-art-slot {
   display: flex;
-  flex: 0 1 32px;
+  flex: 0 1 33px;
   align-items: flex-start;
   justify-content: flex-end;
-  width: 32px;
+  width: 33px;
   min-width: 22px;
   height: 26px;
-  margin-top: -1px;
+  margin-top: -2px;
 }
 
-.continue-games .continue-daily-art { display: block; width: 100%; height: 100%; }
+.continue-games .continue-daily-art-image { display: block; width: 100%; height: 100%; object-fit: contain; }
 .continue-games .continue-daily-art-page { fill: var(--daily-art-page); }
 .continue-games .continue-daily-art-band { fill: var(--daily-art-band); }
 .continue-games .continue-daily-art-sun { fill: var(--daily-art-sun); }
@@ -352,33 +354,54 @@
 
 .continue-games .continue-menu-delete:hover { background: var(--error-background); }
 
-/* Phone: a swipe up on a saved card reveals its delete action underneath. */
+/* Phone: a swipe up moves the card up and reveals its delete action underneath. */
+.continue-games .continue-item { position: relative; }
 .continue-games .continue-swipe { display: none; }
 
 @media (hover: hover) and (pointer: fine) {
-  .continue-games { --continue-card-width: 176px; }
+  .continue-games { --continue-card-width: 11rem; }
   .continue-games .continue-menu { display: block; }
   .continue-games .continue-item:not(.continue-item-daily) .continue-card-copy { padding-right: 22px; }
 }
 
 @media (hover: none), (pointer: coarse) {
   .continue-games .continue-menu { display: none; }
+  .continue-games .continue-viewport-controls { display: none; }
+  .continue-games .continue-track { padding-top: 40px; margin-top: -40px; }
+  .continue-games .continue-card {
+    position: relative;
+    z-index: 1;
+    transition: transform 180ms ease;
+  }
   .continue-games .continue-swipe {
-    display: grid;
-    grid-template-rows: 0fr;
-    margin-top: 6px;
+    position: absolute;
+    z-index: 0;
+    inset-inline: 0;
+    bottom: 0;
+    display: block;
+    height: 40px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease;
+  }
+  .continue-games .continue-item[data-continue-revealed] .continue-card,
+  .continue-games .continue-item:has(.continue-swipe:focus-within) .continue-card {
+    transform: translateY(-40px);
   }
   .continue-games .continue-item[data-continue-revealed] .continue-swipe,
-  .continue-games .continue-swipe:focus-within { grid-template-rows: 1fr; }
-  .continue-games .continue-swipe-inner { min-height: 0; overflow: hidden; }
+  .continue-games .continue-swipe:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .continue-games .continue-swipe-inner { height: 100%; }
   .continue-games .continue-swipe-delete {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     width: 100%;
-    min-height: 44px;
-    padding: 8px 10px;
+    height: 100%;
+    padding: 4px 10px;
     border: 1px solid var(--error-text);
     border-radius: 9px;
     background: var(--error-background);
@@ -388,13 +411,12 @@
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .continue-games .continue-swipe { transition: grid-template-rows 180ms ease; }
-  .continue-games .continue-card-action { transition: background-color 120ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .continue-games .continue-card, .continue-games .continue-swipe { transition: none; }
 }
 
 @media (max-width: 359px) {
-  .continue-games { --continue-card-width: 148px; }
+  .continue-games { --continue-card-width: 9.25rem; }
   .continue-games .continue-card { padding-inline: 9px; }
   .continue-games .continue-card-head { gap: 7px; }
   .continue-games .continue-card-title { font-size: .8rem; }

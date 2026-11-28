@@ -30,7 +30,11 @@
 }
 
 .game-menu-title-row h1 {
-  max-width: calc(100% - 24px);
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  height: 54px;
+  max-width: 100%;
   margin: 0;
   color: var(--text);
   font-size: 37px;
@@ -38,22 +42,26 @@
   letter-spacing: -.055em;
 }
 
-.game-menu-large-text .game-menu-mascot { display: none; }
+.game-menu-title-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
 .game-menu-mascot {
-  position: absolute;
-  z-index: 0;
+  position: relative;
+  flex: 0 0 auto;
   display: block;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
 }
 
-/* The bird touches the title edge without covering the lettering. The budgie
-   also shifts with the root text size so enlarged back labels stay clear. */
-.game-menu-mascot-sudoku { left: calc(73px + 2rem); top: -45px; width: 63px; height: 87px; }
-.game-menu-mascot-nonograms { left: 184px; top: -48px; width: 82px; height: 77px; }
-.game-menu-mascot-2048 { left: 82px; top: -16px; width: 113px; height: 53px; }
+/* Each bird locks to the edge of its own title text rather than the page. */
+.game-menu-mascot-sudoku { width: 63px; height: 87px; margin: 0 0 2px -21px; transform: translateY(-12px); }
+.game-menu-mascot-nonograms { width: 82px; height: 77px; margin: 0 0 2px -14px; transform: translateY(-24px); }
+.game-menu-mascot-2048 { width: 113px; height: 53px; margin: 0 0 2px 12px; transform: translateY(-15px); }
+
+.game-menu-large-text .game-menu-mascot { display: none; }
 
 .game-menu-destinations {
   margin-top: 20px;
@@ -90,26 +98,22 @@
 
 .game-menu-destination-chevron { margin-left: auto; color: var(--text); opacity: .9; }
 
-.game-menu-page.catalog > .continue-games { margin-top: 0; margin-bottom: 13px; }
-.game-menu-page.catalog > .quick-play { width: 100%; margin-bottom: 4px; }
+.game-menu-page.catalog > .continue-games { margin-top: 14px; margin-bottom: 20px; }
+.game-menu-page.catalog > .quick-play { width: 100%; margin-bottom: 20px; }
 .game-menu-page.catalog > .game-menu-destinations { margin-top: 0; }
 
 @media (max-width: 899px) {
   .game-menu-page { padding-inline: 7px; }
 }
 
-@media (max-width: 420px) {
-  .game-menu-page { padding-inline: 0; }
-}
-
 @media (max-width: 359px) {
-  .game-menu-title-row h1 { max-width: calc(100% - 12px); font-size: 34px; }
-  .game-menu-mascot-sudoku { left: calc(40px + 3rem); top: -39px; width: 56px; height: 78px; }
-  .game-menu-mascot-nonograms { left: 152px; top: -41px; width: 71px; height: 67px; }
-  .game-menu-mascot-2048 { left: 72px; top: -13px; width: 96px; height: 45px; }
   .game-menu-destination { min-height: 46px; font-size: .9rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .game-menu-destination { transition: none; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .game-menu-destination-chevron { display: none; }
 }

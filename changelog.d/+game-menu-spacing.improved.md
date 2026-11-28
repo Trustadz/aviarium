@@ -1,0 +1,1 @@
+**Game menu visual polish.** The daily challenge card uses the matching illustrated artwork, saved cards lift to reveal their delete action, section spacing is more consistent, touch menus omit redundant chevrons, and mascots are anchored to their game titles.
