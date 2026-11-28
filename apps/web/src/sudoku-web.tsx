@@ -70,8 +70,8 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
     const pack = packs.find(pack => pack.builtIn && pack.data.game === sudoku.id)
     return pack ? packLevels(pack as PublishedPack)[0] : undefined
   },
-  preview: (level, data) => level || data ? <SudokuPreview grid={(level as PublishedLevel | undefined)?.grid}
-    entries={(data as SudokuSave | undefined)?.board.entries}/> : null,
+  preview: (level, data, thumbnail) => level || data ? <SudokuPreview grid={(level as PublishedLevel | undefined)?.grid}
+    entries={(data as SudokuSave | undefined)?.board.entries} thumbnail={thumbnail}/> : null,
   levelTitle: (t, level) => levelTitle(t, level as PublishedLevel),
   resultDetail: (_t, _level, data) => displayTime(data.elapsedMs),
   progress: (t, data) => {

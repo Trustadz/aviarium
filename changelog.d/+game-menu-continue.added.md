@@ -1,0 +1,1 @@
+**Redesigned Continue row.** Saved games and the daily challenge now share a compact, horizontally scrollable card strip. The daily challenge comes first with its own warm palette, current status, and a Start, Resume, or View result action; saved games show abstract previews and can be deleted from a desktop card menu or with a swipe on phones.

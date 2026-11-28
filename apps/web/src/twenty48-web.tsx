@@ -95,8 +95,8 @@ export const twenty48Web: Omit<WebGame, 'url'> = {
   Player: lazy(() => import('./Twenty48.js')),
   menu: context => <NewGame {...context}/>,
   sample: () => quickTwenty48('preview', quickPlayVersion),
-  preview: (level, data) => <Twenty48Preview level={level as Twenty48Level | undefined}
-    attempt={data as Twenty48Save | undefined}/>,
+  preview: (level, data, thumbnail) => <Twenty48Preview level={level as Twenty48Level | undefined}
+    attempt={data as Twenty48Save | undefined} thumbnail={thumbnail}/>,
   levelTitle: title,
   resultDetail: (t, _level, data) => t('Score {score}', { score: (data as Twenty48Save).score }),
   progress: (t, data) => {

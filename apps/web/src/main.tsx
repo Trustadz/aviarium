@@ -9,6 +9,7 @@ import { ArrowLeft, BookOpen, CalendarDays, CircleHelp, Download, History, KeyRo
   Package, Pencil, Settings2, Trophy, Users, WifiOff } from 'lucide-react'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import type { LeaderboardRemovalNotice } from '../../../packages/game-sdk/src/leaderboards.js'
+import { formatLeaderboardValue } from '../../../packages/game-sdk/src/leaderboards.js'
 import { chapterProgress, packProgress, packStopAt, packTheme, upgradePackRevision, type PackRevision } from '../../../packages/game-sdk/src/packs.js'
 import type { GameAttempt, PlayOptions } from '../../../packages/game-sdk/src/progress.js'
 import { api, ApiError, errorMessage, json, type SessionAccount, type TestRole } from './api.js'
@@ -207,6 +208,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const [networkNotice, setNetworkNotice] = useState('')
   const [removalNotices, setRemovalNotices] = useState<LeaderboardRemovalNotice[]>([])
   const openGame = games.find(game => path === game.url || path.startsWith(game.url + '/'))
+  // The library and a game's top-level menu show Continue; subpages do not.
+  const continueMenu = path === '/' || Boolean(openGame && path === openGame.url)
   const studioMatch = /^\/studio\/([a-z0-9-]+)(\/admin)?$/.exec(path)
   const studioCandidate = path === '/studio/packs' ? games.find(game => game.packs && game.Studio) : studioMatch && findGame(studioMatch[1])
   const studioGame = studioCandidate?.Studio ? studioCandidate : undefined
@@ -328,13 +331,13 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
     return () => { current = false }
   }, [accountId, online, path, challengeRefresh])
   useEffect(() => {
-    if (!accountId || !online || path !== '/') { setChallengeDay(undefined); return }
+    if (!accountId || !online || !continueMenu) { setChallengeDay(undefined); return }
     let current = true
     void api<ChallengeDayView>('/challenges', undefined, accountId).then(
       value => { if (current) setChallengeDay(value) },
       () => { if (current) setChallengeDay(undefined) })
     return () => { current = false }
-  }, [accountId, online, path, challengeRefresh])
+  }, [accountId, online, continueMenu, path, challengeRefresh])
   useEffect(() => {
     if (!accountId || !online) return
     let current = true
@@ -600,6 +603,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       }
     })
   }
+  // listSessions orders saves by their latest update, so the row stays newest first.
   const continueCards = sessions.flatMap(session => {
     if (!isResumable(session) || session.challenge) return []
     const game = games.find(game => game.id === session.data.game)
@@ -611,31 +615,70 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       title: level ? game.levelTitle(t, level) : game.title,
       details: [game.title, level && game.packs?.detail(t, level), session.parentId && t("Conflict copy")].filter(Boolean).join(' · '),
       progress: game.progress(t, session.data),
-      preview: game.preview(level, session.data),
+      preview: game.preview(level, session.data, true),
       canResume: Boolean(level) && canPlay(game),
     }]
   })
-  const dailySlot = challengeDay?.enabled
-    ? challengeDay.slots.find(slot => slot.player.status === 'started') ??
-      challengeDay.slots.find(slot => slot.player.status === 'available')
-    : undefined
-  const dailyGame = dailySlot ? games.find(game => game.id === dailySlot.game) : undefined
-  const dailyCards: ContinueGame[] = dailySlot && dailyGame && challengeDay?.occurrence ? [{
-    id: 'daily:' + dailySlot.id,
-    title: dailyGame.title,
-    details: t('Daily challenge · {date}', {
-      date: formatChallengeDate(intl, challengeDay.occurrence.startsAt, challengeDay.occurrence.timezone) }),
-    progress: dailySlot.player.status === 'started' ? t('In progress') : t('Ready'),
-    preview: <span className="continue-daily-art"><CalendarDays size={24}/></span>,
-    canResume: online,
-    removable: false,
-    daily: true,
-  }] : []
+  // Daily cards prefer a started attempt, then an available challenge, then a
+  // completed one whose result can be reopened. A game menu chooses from that
+  // game's slots so it always shows its own challenge; the library shows one.
+  const playableDailySlots = challengeDay?.enabled
+    ? challengeDay.slots.filter(slot => slot.status === 'ready' &&
+        (slot.player.status === 'started' || slot.player.status === 'available' || slot.player.status === 'completed'))
+    : []
+  const dailyEndsAt = challengeDay?.occurrence?.endsAt
+  const dailyRemaining = (() => {
+    if (!dailyEndsAt) return undefined
+    const minutes = Math.ceil(Math.max(0, Date.parse(dailyEndsAt) - Date.now()) / 60_000)
+    if (minutes <= 0) return t('Closed')
+    const hours = Math.floor(minutes / 60)
+    return hours > 0 ? t('{hours}h left', { hours }) : t('{minutes}m left', { minutes })
+  })()
+  function dailySlotFor(gameId?: string) {
+    const slots = gameId ? playableDailySlots.filter(slot => slot.game === gameId) : playableDailySlots
+    return slots.find(slot => slot.player.status === 'started') ??
+      slots.find(slot => slot.player.status === 'available') ??
+      slots.find(slot => slot.player.status === 'completed')
+  }
+  function dailyCard(slot: ChallengeSlotView): ContinueGame | undefined {
+    const game = games.find(item => item.id === slot.game)
+    const status = slot.player.status
+    if (!game || !challengeDay?.occurrence ||
+      (status !== 'started' && status !== 'available' && status !== 'completed')) return undefined
+    const result = slot.player.result
+      ? [formatLeaderboardValue(slot.player.result.value, slot.player.result.unit),
+        slot.player.result.rank ? '#' + slot.player.result.rank + ' / ' + slot.player.result.total : undefined,
+      ].filter(Boolean).join(' · ')
+      : undefined
+    return {
+      id: 'daily:' + slot.id,
+      game: slot.game,
+      title: game.title,
+      details: status === 'completed'
+        ? t('Completed')
+        : [status === 'started' ? t('In progress') : t('Ready'), dailyRemaining].filter(Boolean).join(' · '),
+      result: status === 'completed' ? result : undefined,
+      canResume: online,
+      removable: false,
+      daily: true,
+      dailyStatus: status,
+    }
+  }
   function continueRow(gameId?: string) {
-    const cards = gameId ? continueCards.filter(card => card.game === gameId) : [...dailyCards, ...continueCards]
+    const slot = dailySlotFor(gameId)
+    const daily = slot && dailyCard(slot)
+    const cards = [...(daily ? [daily] : []), ...continueCards.filter(card => !gameId || card.game === gameId)]
     return <ContinueGames games={cards}
       resume={id => {
-        if (id.startsWith('daily:') && challengeDay && dailySlot) { perform(() => startChallenge(challengeDay, dailySlot)); return }
+        if (id.startsWith('daily:') && challengeDay) {
+          const clicked = challengeDay.slots.find(slot => 'daily:' + slot.id === id)
+          if (!clicked) return
+          if (clicked.player.status === 'completed' && challengeDay.occurrence) {
+            go('/challenges/' + challengeDay.occurrence.id + '/' + clicked.game)
+            return
+          }
+          perform(() => startChallenge(challengeDay, clicked)); return
+        }
         perform(() => resume(id))
       }} remove={id => {
         if (id.startsWith('daily:')) return
