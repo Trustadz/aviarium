@@ -17,10 +17,11 @@ test('a game trail moves through the library, menu, and level selector', () => {
   assert.deepEqual(routeTrail('/games/sudoku/'), ['/', '/games/sudoku'])
   assert.deepEqual(routeTrail('/games/sudoku/how-to'), ['/', '/games/sudoku', '/games/sudoku/how-to'])
   assert.deepEqual(routeTrail('/games/sudoku/history'), ['/', '/games/sudoku', '/games/sudoku/history'])
+  assert.deepEqual(routeTrail('/games/sudoku/packs'), ['/', '/games/sudoku', '/games/sudoku/packs'])
   assert.deepEqual(routeTrail('/games/sudoku/packs/budgies/1'),
-    ['/', '/games/sudoku', '/games/sudoku/packs/budgies/1'])
+    ['/', '/games/sudoku', '/games/sudoku/packs', '/games/sudoku/packs/budgies/1'])
   assert.deepEqual(routeTrail('/games/sudoku/packs/budgies/1/chapters/chapter-1'),
-    ['/', '/games/sudoku', '/games/sudoku/packs/budgies/1',
+    ['/', '/games/sudoku', '/games/sudoku/packs', '/games/sudoku/packs/budgies/1',
       '/games/sudoku/packs/budgies/1/chapters/chapter-1'])
 })
 
