@@ -82,6 +82,11 @@ unit.
 - The client creates a local save whose id is the returned `sessionId`, tags it
   with the attempt, and uses the normal game player.
 - One attempt per game/day. There is no second attempt and no timer reset.
+- The timer measures active play, and the in-game time is the leaderboard time.
+  Leaving the puzzle, closing the app, or hiding the tab pauses and persists the
+  active clock; resuming continues from the saved time. Time away from the game
+  is never added to the result. The server does not use its start timestamp as
+  a time floor.
 - The board reset action clears the input only. It preserves elapsed time,
   lives, aids, the attempt id and the level/pack revisions. The timer continues.
 - A completion posts only if the server verifies and receives it before
@@ -106,7 +111,7 @@ unit.
 - A verified completion writes **two** result rows for the same save: the
   challenge row (`board_kind='challenge'`) and the normal game row on the
   matching Quick Play difficulty/size board. The game row carries the same
-  authoritative time, aids, rules version and board metadata; the challenge
+  recorded active time, aids, rules version and board metadata; the challenge
   row remains excluded from general summaries.
 - Standings show the best active result per account (one result per account in a
   challenge), tie ranks, avatars for the top three and the viewer, and the
@@ -214,8 +219,8 @@ the Leaderboards **General | Challenges** tabs with the search below the tabs
 and tab-style underline controls, a meta countdown in place of the reset label,
 both challenge and normal-game leaderboard results, the Leaderboards a current-day and paginated past list, all-mode
 after-game standings on the played level's board with a secondary
-pack-leaderboard link, server-authoritative challenge times (the server start
-time is a floor and time away counts), games-in-rotation admin controls,
+pack-leaderboard link, active-time challenge results (time away does not
+count), games-in-rotation admin controls,
 English/Dutch, mobile and offline/error states. Starting a run no longer shows a
 confirmation alert or one-attempt/timed-run copy; the server still enforces one
 attempt. Challenge rows have no separate leaderboard button: the top-three
@@ -223,10 +228,13 @@ attempt. Challenge rows have no separate leaderboard button: the top-three
 **View leaderboard** action. There is no **Play the other challenge** button.
 Every leaderboard view highlights the current player.
 
-Challenge results for time-based games use the server start time as a floor for
-both the challenge row and the matching game row: a completion cannot post a
-faster time than the wall clock allowed, so leaving and resuming cannot reduce
-the recorded time.
+Challenge results for time-based games use the active elapsed time from the
+saved attempt for both the challenge row and the matching game row. That is the
+same value the in-game timer shows, so pausing by leaving the puzzle, closing
+the app, or hiding the tab cannot inflate the result. Resuming keeps the
+accumulated active time; it neither resets nor adds time away. The server keeps
+the attempt's start and completion timestamps for the occurrence lifecycle but
+does not derive the score from them.
 
 Deferred: the secondary pack aggregate panel; pack-rule variants
 (hints/Auto notes/lives/timer/diagonal); admin recovery UI; per-game custom
@@ -243,9 +251,10 @@ offline sync retry.
   cooldowns, player summaries or the busiest board; a challenge completion also
   appears on the matching Quick Play board with the right difficulty/size. The browser suite now runs
   `tests/challenges-smoke.mjs`, which covers two slots, one claim, the second
-  start rejection, the server time floor, a late close, history, replay, the
-  nav badge using the test clock, and that **View leaderboard** waits for a
-  delayed completion post before showing the player's row.
+  start rejection, an active-time result after a long pause, a late close,
+  history, replay, the nav badge using the test clock, and that **View
+  leaderboard** waits for a delayed completion post before showing the player's
+  row.
 - Manual browser: nav/badge, today/day/closed/replay, start/resume, input-only reset,
   leaderboard, after-game panel, Continue daily card, Completed section,
   admin settings, en/nl, 360/393/200%, offline/error states.

@@ -88,8 +88,9 @@ GamePlayerProps & { trial?: boolean }) {
         void commit({ ...previous.current, elapsedMs: takeElapsed() })
     }, 5000)
     function visibility() {
-      // A daily challenge is timed; hiding the tab must not stop the clock.
-      if (previous.current.completed || challengeMode) return
+      // The clock records active play in every mode. Hiding the tab or leaving
+      // the app pauses it, so time away never reaches the leaderboard.
+      if (previous.current.completed) return
       if (!document.hidden) { started.current = Date.now(); return }
       void commit({ ...previous.current, elapsedMs: takeElapsed() })
     }
@@ -99,7 +100,7 @@ GamePlayerProps & { trial?: boolean }) {
       clearInterval(checkpoint)
       document.removeEventListener('visibilitychange', visibility)
     }
-  }, [challengeMode, saved.completed, showTimer])
+  }, [saved.completed, showTimer])
 
   const celebrationStats = celebration !== undefined ? [
     { label: t('Grid size'), value: puzzle.rows.length + ' × ' + puzzle.columns.length },
