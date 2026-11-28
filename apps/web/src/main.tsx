@@ -23,6 +23,8 @@ import { ChallengesPage, ChallengeBoard, ChallengeStandingsPanel, formatChalleng
 import type { WebGame } from './game-web.js'
 import { GameHeading, GameMenu, GameMenuLinks, GameNavigation, type GameMenuItem } from './GameMenu.js'
 import { GameGuide } from './GameGuide.js'
+import { SeedScreen, SeedShare } from './SeedScreen.js'
+import { seedCode } from './seed.js'
 import { CelebrationOverlay } from './CelebrationOverlay.js'
 import { registerOffline, useGameDownloads } from './offline.js'
 import { randomId } from './random.js'
@@ -669,6 +671,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const challengeParts = path.split('/').filter(Boolean)
   const inChallenges = challengeParts[0] === 'challenges'
   const challengeOccurrence = inChallenges ? challengeParts[1] : undefined
+  const seedCodeParam = new URLSearchParams(location.search).get('code') ??
+    new URLSearchParams(location.search).get('sharedSeed') ?? undefined
   const challengeBoard = Boolean(inChallenges && challengeOccurrence && challengeParts.length === 3)
   const challengeGame = challengeBoard ? challengeParts[2] : undefined
   const playingNow = active && path === (active.playerPath ?? active.game.url) ? active : undefined
@@ -702,7 +706,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const app = useRef<HTMLDivElement>(null)
   const gameSurface = useRef<HTMLElement>(null)
   const themeGame = openGame ?? playing?.game ?? studioGame
-  const settings = (openGame ?? playing?.game)?.settings
   const viewedChapter = viewedPack && viewedChapterId
     ? viewedPack.data.chapters.find(chapter => chapter.id === viewedChapterId)
     : undefined
@@ -713,7 +716,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       leaderboard={openGame.leaderboards && { href: openGame.url + '/leaderboards',
         open: event => link(event, openGame.url + '/leaderboards') }}
       history={openGame.history ? () => go(openGame.url + '/history') : undefined}
-      settings={settings && { label: t(settings.title), open: () => showDialog('game') }}
       extraTools={canExportViewedPack ? <a className="icon-button" href={packExportUrl(viewedPack)} download
         aria-label={t('Export pack')} title={t('Export pack')}><Download size={18}/></a> : undefined}/>
     : undefined
@@ -726,6 +728,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
   const bestMs = playing ? Math.min(...sessions.filter(item => item.id !== playing.session.id &&
     item.data.game === playing.game.id && item.data.level === playing.level.id &&
     item.data.levelRevision === playing.level.revision && item.data.completed).map(item => item.data.elapsedMs)) : Number.POSITIVE_INFINITY
+  const playedSeedCode = playing ? seedCode(playing.game, playing.level,
+    { ...prefs, ...playing.session.data.playOptions }) : undefined
   const bestScore = playing ? sessions.reduce((best, item) => {
     if (item.id === playing.session.id || item.data.game !== playing.game.id || !item.data.completed) return best
     const score = (item.data as { score?: unknown }).score
@@ -794,7 +798,8 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
       </>
       : inLeaderboards ? <LeaderboardCatalog games={games} sessions={sessions} accountId={account?.id} online={online} link={link}/>
       : playing ? <playing.game.Player key={playing.session.id} session={playing.session} level={playing.level} pack={playing.pack}
-        preferences={prefs} reader={reader} bestMs={playing.challenge ? undefined : Number.isFinite(bestMs) ? bestMs : undefined}
+        preferences={{ ...prefs, ...playing.session.data.playOptions }} reader={reader} seedShare={playedSeedCode ? <SeedShare code={playedSeedCode}/> : undefined}
+        bestMs={playing.challenge ? undefined : Number.isFinite(bestMs) ? bestMs : undefined}
         bestScore={playing.challenge ? undefined : bestScore || undefined}
         testMode={Boolean(account?.testRole)} persist={data => record(playing, data)}
         launch={playing.challenge || playing.replay ? undefined : level => perform(async () => {
@@ -811,7 +816,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         leaderboard={playing.challenge
           ? { open: () => viewLeaderboard('/challenges/' + playing.challenge!.occurrenceId + '/' + playing.challenge!.game) }
           : playing.game.leaderboards ? { open: () => viewLeaderboard(playing.game.leaderboards!.boardHref(playing.level)) } : undefined}
-        openSettings={settings && !playing.challenge ? () => showDialog('game') : undefined}
         leave={() => perform(async () => {
           await saves.current.catch(() => undefined)
           try { await refreshLocal() }
@@ -833,6 +837,10 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         replay={replay => perform(() => playReplay(replay))}
         openDay={occurrenceId => go('/challenges/' + occurrenceId)}
         openToday={() => go('/challenges')}/>
+      : openGame?.seed && path === openGame.url + '/seed' ? <SeedScreen key={openGame.id + ':' + (seedCodeParam ?? '')}
+        game={openGame} initialCode={seedCodeParam}
+        launch={(level, options) => open(openGame, level, undefined, undefined, { playOptions: options?.playOptions })}
+        back={() => back(openGame.url)}/>
       : openGame?.leaderboards && path === openGame.url + '/leaderboards' ? <GameLeaderboards game={openGame}
         accountId={account?.id} online={online} link={link} back={() => back(openGame.url)}/>
       : openGame?.leaderboards && leaderboardBoardKey !== undefined ? <LeaderboardBoardView game={openGame}
@@ -867,6 +875,9 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             <p role={packProblem ? 'alert' : 'status'}>{(packProblem && knownMessage(t, packProblem)) || t('Loading pack…')}</p></section>
       : openGame && path === openGame.url ? (() => {
         const menuItems: GameMenuItem[] = []
+        if (openGame.seed) menuItems.push({ key: 'seed', label: t('Play a seed'),
+          icon: <KeyRound size={24}/>, href: openGame.url + '/seed',
+          open: event => link(event, openGame.url + '/seed') })
         if (openGame.leaderboards) menuItems.push({ key: 'leaderboards', label: t('Leaderboards'),
           icon: <Trophy size={24}/>, href: openGame.url + '/leaderboards',
           open: event => link(event, openGame.url + '/leaderboards') })
@@ -919,8 +930,7 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
         (playPack ? ` pack-palette pack-${playTheme}` : '') : '')}
         role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={event => event.stopPropagation()}>
         <div className="section-heading"><h2 id="settings-title">
-          {dialog === 'display' ? t('Device settings') : dialog === 'game' && settings ? t(settings.title)
-            : t(account ? 'Account settings' : 'Player settings')}
+          {dialog === 'display' ? t('Device settings') : t(account ? 'Account settings' : 'Player settings')}
         </h2><button autoFocus className="secondary" onClick={() => showDialog(undefined)}>{t("Close")}</button></div>
         {dialog === 'display' && <>
           <label className="setting-row">{t("Theme")}<select value={preference}
@@ -948,10 +958,6 @@ function Library({ account, online, activate, refreshSession, signOut, languageE
             </div>
           </>}
         </>}
-        {dialog === 'game' && settings?.toggles.map(setting => <label className="setting-row" key={setting.key}>
-          {t(setting.label)}<input type="checkbox" checked={Boolean(prefs[setting.key] ?? setting.default)}
-            onChange={event => changePrefs({ [setting.key]: event.target.checked })}/>
-        </label>)}
         {dialog === 'account' && <>
           <LanguageSelector/>
           {languageError && <p role="status" className="error">{knownMessage(t, languageError)}</p>}

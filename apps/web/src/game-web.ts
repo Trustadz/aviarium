@@ -102,7 +102,6 @@ export interface WebGame extends GameMetadata {
   createAttempt(level: GameLevel, pack?: PackRevision, playOptions?: PlayOptions): Promise<GameAttempt>
   mutationExtras?(level: GameLevel | undefined): Record<string, unknown> | undefined
   favorite?: string
-  settings?: { title: Message; toggles: readonly { key: string; label: Message; default: boolean }[] }
   connectMessage: Message
   history: boolean
   leaderboards?: {

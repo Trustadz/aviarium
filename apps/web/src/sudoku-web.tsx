@@ -1,6 +1,7 @@
 import type { PublishedLevel } from '../../../packages/sudoku/src/contracts.js'
 import { lazy } from 'react'
 import { defaults, quickPlayVersion, type SudokuSave } from '../../../packages/sudoku/src/contracts.js'
+import { difficulties, type Difficulty } from '../../../packages/game-sdk/src/index.js'
 import { sudoku } from '../../../packages/sudoku/src/metadata.js'
 import { effectivePackRules, packLevels, type PublishedPack } from '../../../packages/sudoku/src/packs.js'
 import { sudokuBoardKey } from '../../../packages/sudoku/src/leaderboards.js'
@@ -8,7 +9,9 @@ import type { GuideSection } from './GameGuide.js'
 import type { GamePlayerProps, WebGame } from './game-web.js'
 import { SudokuPreview } from './Grid.js'
 import { levelTitle, sudokuResultTags } from './sudoku-copy.js'
-import { displayTime, PuzzleShare, QuickPlay, sudokuPackPresentation } from './SudokuMenu.js'
+import { displayTime, QuickPlay, sudokuPackPresentation } from './SudokuMenu.js'
+import { createQuickPlayLevel } from './quick-play.js'
+import type { GameMenuContext } from './game-web.js'
 import type { LocalSession } from './storage.js'
 
 const sudokuGuide: readonly GuideSection[] = [
@@ -54,11 +57,8 @@ const SudokuPlayer = lazy(async () => {
   } }
 })
 
-function SudokuMenuOptions({ canPlay, profile, launch }: Parameters<NonNullable<WebGame['menu']>>[0]) {
-  return <QuickPlay canPlay={canPlay} profile={profile} generate={async (difficulty, seed, version) => {
-    const { createQuickPlayLevel } = await import('./Player.js')
-    await launch(await createQuickPlayLevel(difficulty, seed, version))
-  }}/>
+function SudokuMenuOptions(context: GameMenuContext) {
+  return <QuickPlay {...context}/>
 }
 
 export const sudokuWeb: Omit<WebGame, 'url'> = {
@@ -66,6 +66,17 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
   theme: 'sudoku-theme', guide: sudokuGuide,
   Studio: lazy(() => import('./SudokuStudio.js')), Player: SudokuPlayer, packs: sudokuPackPresentation,
   menu: context => <SudokuMenuOptions {...context}/>,
+  playOptions: [
+    { key: 'hints', label: 'Hints', default: true },
+    { key: 'autoNotes', label: 'Auto notes', default: true },
+    { key: 'autoNoteDeletion', label: 'Remove conflicting notes', default: true },
+    { key: 'mistakes', label: 'Highlight conflicts', default: true },
+    { key: 'timer', label: 'Show timer', default: true },
+  ],
+  seed: {
+    generate: (seed, board) => createQuickPlayLevel(board.difficulty as Difficulty, seed, quickPlayVersion),
+    summary: (t, board) => t(board.difficulty as Difficulty),
+  },
   sample: packs => {
     const pack = packs.find(pack => pack.builtIn && pack.data.game === sudoku.id)
     return pack ? packLevels(pack as PublishedPack)[0] : undefined
@@ -78,7 +89,6 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
     const entries = (data as SudokuSave).board.entries
     return t('{filled} of {total} cells filled', { filled: entries.filter(Boolean).length, total: entries.length })
   },
-  share: level => <PuzzleShare level={level as PublishedLevel}/>,
   async createAttempt(level, pack, playOptions) {
     const { createSave } = await import('./Player.js')
     return createSave(level as PublishedLevel, pack as PublishedPack | undefined, playOptions)
@@ -89,13 +99,6 @@ export const sudokuWeb: Omit<WebGame, 'url'> = {
       ? { quickPlay: { seed: level.seed, difficulty: level.difficulty, version: quickPlayVersion } } : undefined
   },
   favorite: 'favorite',
-  settings: { title: 'Sudoku settings', toggles: [
-    { key: 'mistakes', label: 'Highlight conflicts', default: defaults.mistakes },
-    { key: 'timer', label: 'Show timer', default: defaults.timer },
-    { key: 'hints', label: 'Enable hints', default: defaults.hints },
-    { key: 'autoNotes', label: 'Show Auto notes button', default: defaults.autoNotes },
-    { key: 'autoNoteDeletion', label: 'Automatically remove conflicting notes', default: defaults.autoNoteDeletion },
-  ] },
   connectMessage: 'Connect to install Sudoku on this device.',
   history: true,
   leaderboards: {

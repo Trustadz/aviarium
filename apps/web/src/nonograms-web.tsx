@@ -1,5 +1,4 @@
 import { lazy, useState } from 'react'
-import { Shuffle } from 'lucide-react'
 import {
   createNonogramAttempt, gridSizeSchema, nonogramsId, quickNonogram, quickDescriptor,
   type NonogramLevel, type NonogramSave,
@@ -9,6 +8,7 @@ import { nonogramBoardKey } from '../../../packages/nonograms/src/leaderboards.j
 import { knownMessage, useT, type Translate } from './i18n.js'
 import { randomId } from './random.js'
 import type { GameMenuContext, WebGame } from './game-web.js'
+import { QuickPlayCard } from './QuickPlay.js'
 import type { PackPresentation } from './GamePacks.js'
 import type { GameLevel } from '../../../packages/game-sdk/src/index.js'
 import { NonogramsPreview } from './NonogramsPreview.js'
@@ -35,7 +35,7 @@ export const nonogramPresentation: PackPresentation = {
   challenge: () => '',
 }
 
-function QuickPlay({ canPlay, profile, launch, perform }: GameMenuContext) {
+function QuickPlay({ canPlay, profile, preferences, updatePreferences, launch, perform }: GameMenuContext) {
   const t = useT()
   const key = 'aviarium:nonograms-options:' + profile
   const [options, setOptions] = useState<RandomOptions>(() => {
@@ -51,39 +51,36 @@ function QuickPlay({ canPlay, profile, launch, perform }: GameMenuContext) {
     setOptions(next)
     try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* The current selection stays usable. */ }
   }
-
-  return <section className="quick-play panel" aria-labelledby="nonogram-random-title">
-    <form onSubmit={event => {
-      event.preventDefault()
+  const timer = Boolean(preferences.nonogramTimer ?? true)
+  const summary = options.size + ' × ' + options.size + ' · ' + t('Timer') + ' ' + (timer ? t('On') : t('Off'))
+  return <QuickPlayCard primary={{
+    key: 'difficulty', label: t('Difficulty'), value: options.difficulty,
+    choices: randomDifficulties.map(value => ({ value, label: t(value) })),
+    disabled: busy,
+    onChange: value => {
+      const difficulty = randomDifficulties.find(item => item === value)
+      if (difficulty) update({ ...options, difficulty })
+    },
+  }} options={[
+    { key: 'size', label: t('Grid size'), value: options.size,
+      choices: randomSizes.map(size => ({ value: size, label: size + ' × ' + size })),
+      disabled: busy,
+      onChange: (value: string) => update({ ...options, size: gridSizeSchema.parse(Number(value)) }) },
+    { key: 'timer', label: t('Show timer'), checked: timer,
+      onChange: (checked: boolean) => updatePreferences({ nonogramTimer: checked }) },
+  ]} summary={summary} actionLabel={t('Start puzzle')} busyLabel={t('Preparing puzzle…')}
+    busy={busy} disabled={!canPlay}
+    onSubmit={() => {
       if (!canPlay || busy) return
       setBusy(true)
       perform(async () => {
         try {
           const level = await quickNonogram({ ...options, seed: randomId(), version: 1 })
           if (!level) throw new Error('No random puzzle found. Try again.')
-          await launch(level)
+          await launch(level, { playOptions: { timer } })
         } finally { setBusy(false) }
       })
-    }}>
-      <div className="quick-play-header"><h2 id="nonogram-random-title">{t('Quick Play')}</h2></div>
-      <div className="quick-play-actions nonogram-options">
-        <select aria-label={t('Grid size')} value={options.size} disabled={busy} onChange={event => {
-          update({ ...options, size: gridSizeSchema.parse(Number(event.target.value)) })
-        }}>
-          {randomSizes.map(size => <option key={size} value={size}>{size} × {size}</option>)}
-        </select>
-        <select aria-label={t('Difficulty')} value={options.difficulty} disabled={busy} onChange={event => {
-          const difficulty = randomDifficulties.find(value => value === event.target.value)
-          if (difficulty) update({ ...options, difficulty })
-        }}>
-          {randomDifficulties.map(difficulty => <option key={difficulty} value={difficulty}>{t(difficulty)}</option>)}
-        </select>
-        <button className="primary" type="submit" disabled={!canPlay || busy}>
-          <Shuffle size={17}/> {t(busy ? 'Preparing puzzle…' : 'New puzzle')}
-        </button>
-      </div>
-    </form>
-  </section>
+    }}/>
 }
 
 export const nonogramsWeb: Omit<WebGame, 'url'> = {
@@ -106,6 +103,17 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
   Studio: lazy(() => import('./NonogramsStudio.js')),
   packs: nonogramPresentation,
   menu: context => <QuickPlay {...context}/>,
+  playOptions: [{ key: 'nonogramTimer', label: 'Show timer', default: true }],
+  seed: {
+    generate: async (seed, board) => {
+      const level = await quickNonogram({ seed, size: gridSizeSchema.parse(Number(board.size)),
+        difficulty: randomDifficulties.find(value => value === board.difficulty) ?? 'Medium', version: 1 })
+      if (!level) throw new Error('Could not prepare this seed.')
+      return level
+    },
+    summary: (t, board) => [t(randomDifficulties.find(value => value === board.difficulty) ?? 'Medium'),
+      String(board.size) + ' × ' + String(board.size)].join(' · '),
+  },
   preview: (level, data) => <NonogramsPreview puzzle={(level as NonogramLevel | undefined)?.content}
     marks={(data as NonogramSave | undefined)?.board}/>,
   levelTitle: title,
@@ -123,9 +131,6 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
     return parsed.success ? { quickPlay: parsed.data } : undefined
   },
   favorite: 'favoriteNonograms',
-  settings: { title: 'Nonogram settings', toggles: [
-    { key: 'nonogramTimer', label: 'Show timer', default: true },
-  ] },
   history: true,
   leaderboards: { boardHref: level => '/games/nonograms/leaderboards/board/' + encodeURIComponent(nonogramBoardKey(level as NonogramLevel).key) },
 }

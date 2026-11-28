@@ -1,0 +1,1 @@
+**Shareable game seeds.** Sudoku, Nonograms, and 2048 now use one versioned seed code. A code opens a review screen with editable board settings and played options before the puzzle starts, and the player can copy the code for the run.

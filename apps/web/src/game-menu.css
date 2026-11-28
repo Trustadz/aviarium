@@ -1,4 +1,9 @@
 /* Shared player-facing game menu shell. */
+.main-frame.game-content > .catalog.game-menu-page {
+  max-width: 470px;
+  margin-inline: auto;
+}
+
 .game-menu-page {
   width: 100%;
   max-width: 470px;
@@ -45,7 +50,7 @@
 .game-menu-mascot-nonograms { left: 184px; top: -48px; width: 82px; height: 77px; }
 .game-menu-mascot-2048 { left: 88px; top: -16px; width: 113px; height: 53px; }
 
-.game-menu-links {
+.game-menu-destinations {
   margin-top: 20px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -53,7 +58,7 @@
   background: var(--surface);
 }
 
-.game-menu-link {
+.game-menu-destination {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -66,11 +71,11 @@
   line-height: 1.25;
 }
 
-.game-menu-link:first-child { border-top: 0; }
-.game-menu-link:hover { background: var(--tint); }
-.game-menu-link:focus-visible { outline-offset: -3px; }
+.game-menu-destination:first-child { border-top: 0; }
+.game-menu-destination:hover { background: var(--tint); }
+.game-menu-destination:focus-visible { outline-offset: -3px; }
 
-.game-menu-link-icon {
+.game-menu-destination-icon {
   display: inline-flex;
   flex: 0 0 24px;
   align-items: center;
@@ -78,11 +83,11 @@
   color: var(--text);
 }
 
-.game-menu-link-chevron { margin-left: auto; color: var(--text); opacity: .9; }
+.game-menu-destination-chevron { margin-left: auto; color: var(--text); opacity: .9; }
 
-.game-menu-page > .continue-games { margin-top: 0; margin-bottom: 20px; }
-.game-menu-page > .quick-play { width: 100%; margin-bottom: 20px; }
-.game-menu-page > .game-menu-links { margin-top: 0; }
+.game-menu-page.catalog > .continue-games { margin-top: 0; margin-bottom: 20px; }
+.game-menu-page.catalog > .quick-play { width: 100%; margin-bottom: 20px; }
+.game-menu-page.catalog > .game-menu-destinations { margin-top: 0; }
 
 @media (max-width: 899px) {
   .game-menu-page { padding-inline: 7px; }
@@ -97,9 +102,9 @@
   .game-menu-mascot-sudoku { left: 88px; top: -39px; width: 56px; height: 78px; }
   .game-menu-mascot-nonograms { left: 152px; top: -41px; width: 71px; height: 67px; }
   .game-menu-mascot-2048 { left: 72px; top: -13px; width: 96px; height: 45px; }
-  .game-menu-link { min-height: 46px; font-size: .9rem; }
+  .game-menu-destination { min-height: 46px; font-size: .9rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .game-menu-link { transition: none; }
+  .game-menu-destination { transition: none; }
 }

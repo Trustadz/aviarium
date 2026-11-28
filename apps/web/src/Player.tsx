@@ -13,7 +13,7 @@ export { createSave } from '../../../packages/sudoku/src/save.js'
 import { validate } from '../../../packages/sudoku/src/solver.js'
 import { Grid } from './Grid.js'
 import { HintDrawer, type Hint } from './HintDrawer.js'
-import { displayTime, PuzzleShare } from './SudokuMenu.js'
+import { displayTime } from './SudokuMenu.js'
 import { CelebrationOverlay, type CelebrationAction } from './CelebrationOverlay.js'
 import type { LocalSession } from './storage.js'
 
@@ -23,7 +23,8 @@ export { createQuickPlayLevel } from './quick-play.js'
 
 interface Props {
   session: LocalSession<SudokuSave>; level: PublishedLevel; preferences: Preferences; reader: boolean; pack?: PublishedPack
-  persist: (data: SudokuSave) => Promise<void>; leave: () => void; finish?: () => void; reset: () => void; openSettings?: () => void; trial?: boolean
+  persist: (data: SudokuSave) => Promise<void>; leave: () => void; finish?: () => void; reset: () => void; openSettings?: () => void
+  seedShare?: ReactNode; trial?: boolean
   leaderboard?: { open: () => void }
   bestMs?: number; testMode?: boolean
   challenge?: { occurrenceId: string; slotId: string; game: string; attemptId: string; endsAt: string
@@ -44,7 +45,7 @@ function challengePreferences(rules: Record<string, string | number | boolean | 
   return result
 }
 
-export default function Player({ session, level, preferences: profilePreferences, reader, pack, persist, leave, finish, reset, openSettings, trial = false, bestMs, testMode = false, leaderboard, challenge, standingsPanel, replay }: Props) {
+export default function Player({ session, level, preferences: profilePreferences, reader, pack, persist, leave, finish, reset, openSettings, seedShare, trial = false, bestMs, testMode = false, leaderboard, challenge, standingsPanel, replay }: Props) {
   const t = useT()
   const challengeMode = Boolean(challenge)
   const preferences = { ...profilePreferences, ...challengePreferences(challenge?.rules) }
@@ -327,6 +328,7 @@ export default function Player({ session, level, preferences: profilePreferences
       <div className="game-nav-tools">
         {testMode && !finished && <button className="text-button" disabled={paused} onClick={autoSolve}
           title={t("Test environment")}><WandSparkles size={17}/>{" "}{t("Auto solve")}</button>}
+        {seedShare}
         {openSettings && <button className="icon-button" title={t("Sudoku settings")} aria-label={t("Sudoku settings")} onClick={openSettings}><Settings2 size={18}/></button>}
       </div>
     </div>
@@ -356,7 +358,6 @@ export default function Player({ session, level, preferences: profilePreferences
           <button className="primary" onClick={gameOver ? (challengeMode ? leave : reset) : finish ?? leave}>{gameOver ? (challengeMode ? t('Back to challenges') : t('Retry puzzle')) : challengeMode ? t('Back to challenges') : pack ? t("Back to roadmap") : t("Choose another puzzle")}</button>
           {!gameOver && <div className="button-bar">
             {leaderboard && <button className="secondary" onClick={leaderboard.open}>{t('View leaderboard')}</button>}
-            <PuzzleShare level={level}/>
           </div>}
         </section>
           : <><div className="number-pad" aria-label={t("Digits")}>{Array.from({ length: 9 }, (_, index) => {
@@ -387,7 +388,6 @@ export default function Player({ session, level, preferences: profilePreferences
           {lostLife !== undefined && <p role="status" className="error">
             {t('Wrong digit. {count, plural, one {# life} other {# lives}} left.', { count: lostLife })}
           </p>}
-          {!pack && !challengeMode && level.seed && <PuzzleShare level={level}/>}
           </>}
         {!finished && <div className="play-footer">
           {showHints && <button type="button" className="hint-trigger" disabled={paused || (!visibleHint && hintCoolingDown)}

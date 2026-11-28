@@ -82,11 +82,11 @@ export interface GameMenuItem {
  */
 export function GameMenuLinks({ items, label }: { items: readonly GameMenuItem[]; label: string }) {
   if (!items.length) return null
-  return <nav className="game-menu-links" aria-label={label}>
-    {items.map(item => <a key={item.key} className="game-menu-link" href={item.href} onClick={item.open}>
-      <span className="game-menu-link-icon" aria-hidden="true">{item.icon}</span>
+  return <nav className="game-menu-destinations" aria-label={label}>
+    {items.map(item => <a key={item.key} className="game-menu-destination" href={item.href} onClick={item.open}>
+      <span className="game-menu-destination-icon" aria-hidden="true">{item.icon}</span>
       <span>{item.label}</span>
-      <ChevronRight className="game-menu-link-chevron" size={20} aria-hidden="true"/>
+      <ChevronRight className="game-menu-destination-chevron" size={20} aria-hidden="true"/>
     </a>)}
   </nav>
 }
