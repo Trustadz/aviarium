@@ -1,0 +1,403 @@
+/*
+ * Continue strip: a compact, horizontally scrollable row of recent saves and
+ * the current daily challenge. Scoped under .continue-games so the older
+ * .continue-* rules in styles.css continue to serve GameHistory unchanged.
+ */
+
+.continue-games {
+  min-width: 0;
+  --continue-card-width: 154px;
+  --daily-surface: #fff3d6;
+  --daily-border: #cbab67;
+  --daily-text: #3b3021;
+  --daily-muted: #6b5433;
+  --daily-button: #3b3021;
+  --daily-button-text: #fff3d6;
+  --daily-button-hover: #55452f;
+  --daily-art-page: #fff8e6;
+  --daily-art-band: #e4c885;
+  --daily-art-sun: #e0a63f;
+  --daily-art-star: #fff8e6;
+  --daily-art-mark: #3b3021;
+  --daily-art-line: #cbab67;
+}
+
+.app[data-theme=dark] .continue-games {
+  --daily-surface: #392e1e;
+  --daily-border: #977340;
+  --daily-text: #f8ecd8;
+  --daily-muted: #dcc79f;
+  --daily-button: #b7a98b;
+  --daily-button-text: #423726;
+  --daily-button-hover: #cdc0a4;
+  --daily-art-page: #f4e6c4;
+  --daily-art-band: #c9a86b;
+  --daily-art-sun: #e6b45f;
+  --daily-art-star: #5c4628;
+  --daily-art-mark: #3b3021;
+  --daily-art-line: #977340;
+}
+
+.continue-games .continue-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-inline: 4px;
+}
+
+.continue-games .continue-heading h2 {
+  margin: 0;
+  font-size: .95rem;
+  line-height: 1.25;
+  letter-spacing: -.015em;
+}
+
+.continue-games .continue-viewport-controls {
+  display: flex;
+  gap: 2px;
+}
+
+.continue-games .continue-scroll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+}
+
+.continue-games .continue-scroll:hover:not(:disabled) { background: var(--tint); }
+.continue-games .continue-scroll:disabled { opacity: .32; }
+.continue-games .continue-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.continue-games .continue-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--continue-card-width);
+  align-items: start;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 4px 16px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 4px;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+.continue-games .continue-track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+.continue-games .continue-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.continue-games .continue-item > .continue-card { flex: 1; }
+
+.continue-games .continue-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  min-height: 118px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  scroll-snap-align: start;
+}
+
+.continue-games .continue-card-daily {
+  border-color: var(--daily-border);
+  background: var(--daily-surface);
+  color: var(--daily-text);
+}
+
+.continue-games .continue-card-head {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.continue-games .continue-card-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.continue-games .continue-card-title {
+  margin: 0;
+  color: inherit;
+  font-size: .8125rem;
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: -.03em;
+  overflow-wrap: anywhere;
+}
+
+.continue-games .continue-card-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: .65rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.continue-games .continue-card-daily .continue-card-detail { color: var(--daily-muted); }
+
+.continue-games .continue-card-head-daily { gap: 5px; }
+.continue-games .continue-card-head-daily .continue-card-title {
+  font-size: .8rem;
+  letter-spacing: -.02em;
+}
+.continue-games .continue-card-head-daily .continue-card-copy { padding-top: 1px; }
+
+.continue-games .continue-daily-art-slot {
+  display: flex;
+  flex: 0 1 32px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  width: 32px;
+  min-width: 22px;
+  height: 26px;
+  margin-top: -1px;
+}
+
+.continue-games .continue-daily-art { display: block; width: 100%; height: 100%; }
+.continue-games .continue-daily-art-page { fill: var(--daily-art-page); }
+.continue-games .continue-daily-art-band { fill: var(--daily-art-band); }
+.continue-games .continue-daily-art-sun { fill: var(--daily-art-sun); }
+.continue-games .continue-daily-art-star { fill: var(--daily-art-star); }
+.continue-games .continue-daily-art-mark { fill: var(--daily-art-mark); }
+.continue-games .continue-daily-art-mark.is-soft { opacity: .5; }
+.continue-games .continue-daily-art-line { fill: var(--daily-art-line); }
+
+.continue-games .continue-thumb {
+  display: flex;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--tint);
+}
+
+.continue-games .continue-thumb > * { min-width: 0; }
+
+/* Sudoku: givens and player entries are fills only, with no digits. */
+.continue-games .continue-thumb .board {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: var(--tint);
+}
+
+.continue-games .continue-thumb .board .cell {
+  border: 0;
+  background: transparent;
+  font-size: 0;
+  line-height: 0;
+}
+
+.continue-games .continue-thumb .board .cell.given { background: var(--accent-strong); }
+.continue-games .continue-thumb .board .cell.entry.filled {
+  background: color-mix(in srgb, var(--accent) 58%, var(--tint));
+}
+
+/* Nonograms: marks stay, clues and cell rules stay out of the tiny preview. */
+.continue-games .continue-thumb .nonogram-preview {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: var(--tint);
+  box-shadow: none;
+}
+
+.continue-games .continue-thumb .nonogram-preview span { border: 0; }
+.continue-games .continue-thumb .nonogram-preview [data-filled=true] { background: var(--accent); }
+
+/* 2048: tile colors only, with no numbers or mascot. */
+.continue-games .continue-thumb .twenty48-preview {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 2px;
+  border-radius: 6px;
+  box-shadow: none;
+  transform: none;
+}
+
+.continue-games .continue-thumb .twenty48-preview-board { gap: 1px; }
+.continue-games .continue-thumb .twenty48-preview-cell {
+  border-radius: 1px;
+  font-size: 0;
+  line-height: 0;
+}
+
+.continue-games .continue-thumb .twenty48-parrot { display: none; }
+
+.continue-games .continue-card-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: .875rem;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.continue-games .continue-card-action:hover:not(:disabled) { background: var(--tint); }
+
+.continue-games .continue-card-action-daily {
+  border-color: transparent;
+  background: var(--daily-button);
+  color: var(--daily-button-text);
+}
+
+.continue-games .continue-card-action-daily:hover:not(:disabled) { background: var(--daily-button-hover); }
+.continue-games .continue-card-action-daily:focus-visible { outline-color: var(--daily-text); }
+.continue-games .continue-card-action-daily:disabled { opacity: .6; }
+
+/* Desktop: the discrete options button sits in the card's upper-right corner. */
+.continue-games .continue-menu {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  display: none;
+}
+
+.continue-games .continue-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.continue-games .continue-menu-button:hover,
+.continue-games .continue-menu-button[aria-expanded=true] {
+  background: var(--tint);
+  color: var(--accent-strong);
+}
+
+.continue-games .continue-menu-button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+.continue-games .continue-menu-panel {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 6px 18px #19133f22;
+}
+
+.continue-games .continue-menu-delete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--error-text);
+  font-size: .82rem;
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.continue-games .continue-menu-delete:hover { background: var(--error-background); }
+
+/* Phone: a swipe up on a saved card reveals its delete action underneath. */
+.continue-games .continue-swipe { display: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  .continue-games { --continue-card-width: 176px; }
+  .continue-games .continue-menu { display: block; }
+  .continue-games .continue-item:not(.continue-item-daily) .continue-card-copy { padding-right: 22px; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .continue-games .continue-menu { display: none; }
+  .continue-games .continue-swipe {
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-top: 6px;
+  }
+  .continue-games .continue-item[data-continue-revealed] .continue-swipe,
+  .continue-games .continue-swipe:focus-within { grid-template-rows: 1fr; }
+  .continue-games .continue-swipe-inner { min-height: 0; overflow: hidden; }
+  .continue-games .continue-swipe-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--error-text);
+    border-radius: 9px;
+    background: var(--error-background);
+    color: var(--error-text);
+    font-size: .82rem;
+    font-weight: 700;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .continue-games .continue-swipe { transition: grid-template-rows 180ms ease; }
+  .continue-games .continue-card-action { transition: background-color 120ms ease; }
+}
+
+@media (max-width: 359px) {
+  .continue-games { --continue-card-width: 148px; }
+  .continue-games .continue-card { padding-inline: 9px; }
+  .continue-games .continue-card-head { gap: 7px; }
+  .continue-games .continue-card-title { font-size: .8rem; }
+  .continue-games .continue-card-head-daily .continue-card-title { font-size: .76rem; }
+  .continue-games .continue-daily-art-slot {
+    flex-basis: 24px;
+    width: 24px;
+    min-width: 18px;
+    height: 20px;
+  }
+}

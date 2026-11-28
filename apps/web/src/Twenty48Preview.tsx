@@ -14,15 +14,17 @@ function Parrot() {
   </svg>
 }
 
-export function Twenty48Preview({ level, attempt }: { level?: Twenty48Level; attempt?: Twenty48Save }) {
+export function Twenty48Preview({ level, attempt, thumbnail = false }: {
+  level?: Twenty48Level; attempt?: Twenty48Save; thumbnail?: boolean
+}) {
   const source = level?.content.start ?? quickTwenty48('preview', 1).content.start
   const board = attempt?.board ?? boardFromTiles(tilesFromBoard(source))
   return <div className="twenty48-preview" aria-hidden="true">
     <div className="twenty48-preview-board">
       {board.map((value, index) => <span key={index} className="twenty48-preview-cell" data-value={value}>
-        {value || ''}
+        {thumbnail ? '' : value || ''}
       </span>)}
     </div>
-    <Parrot/>
+    {!thumbnail && <Parrot/>}
   </div>
 }

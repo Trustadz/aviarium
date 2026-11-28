@@ -117,8 +117,8 @@ export const nonogramsWeb: Omit<WebGame, 'url'> = {
     summary: (t, board) => [t(randomDifficulties.find(value => value === board.difficulty) ?? 'Medium'),
       String(board.size) + ' × ' + String(board.size)].join(' · '),
   },
-  preview: (level, data) => <NonogramsPreview puzzle={(level as NonogramLevel | undefined)?.content}
-    marks={(data as NonogramSave | undefined)?.board}/>,
+  preview: (level, data, thumbnail) => <NonogramsPreview puzzle={(level as NonogramLevel | undefined)?.content}
+    marks={(data as NonogramSave | undefined)?.board} thumbnail={thumbnail}/>,
   levelTitle: title,
   resultDetail: (_t, _level, data) => displayTime(data.elapsedMs),
   progress: (t, attempt) => {

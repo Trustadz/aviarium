@@ -17,12 +17,16 @@ function cellClasses(cell: number, selected: number, given: boolean, related = t
   ].filter(Boolean).join(' ')
 }
 
-export function SudokuPreview({ grid, entries }: { grid?: string; entries?: readonly number[] }) {
+export function SudokuPreview({ grid, entries, thumbnail = false }: {
+  grid?: string; entries?: readonly number[]; thumbnail?: boolean
+}) {
   const previewGivens = Array.from(grid ?? '', Number)
-  const previewSelection = entries ? -1 : previewGivens.indexOf(0)
-  return <div className={entries ? 'board saved-board' : 'board'} aria-hidden="true">
+  const previewSelection = thumbnail || entries ? -1 : previewGivens.indexOf(0)
+  const classes = ['board', entries && 'saved-board', thumbnail && 'board-thumbnail'].filter(Boolean).join(' ')
+  return <div className={classes} aria-hidden="true">
     {(entries ?? previewGivens).map((value, cell) =>
-      <span key={cell} className={cellClasses(cell, previewSelection, Boolean(previewGivens[cell]), !entries)}>{value || ''}</span>)}
+      <span key={cell} className={cellClasses(cell, previewSelection, Boolean(previewGivens[cell]), !entries) +
+        (thumbnail && value ? ' filled' : '')}>{thumbnail ? '' : value || ''}</span>)}
   </div>
 }
 
