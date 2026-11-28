@@ -41,8 +41,8 @@ export function QuickPlay({ canPlay, profile, preferences, updatePreferences, la
       onChange: (checked: boolean) => updatePreferences({ timer: checked }) },
   ]
   const summary = [
-    t('Hints') + ' ' + (playOptions.hints ? t('On') : t('Off')),
-    t('Auto notes') + ' ' + (playOptions.autoNotes ? t('On') : t('Off')),
+    t('Hints') + ' ' + (playOptions.hints ? t('On').toLocaleLowerCase() : t('Off').toLocaleLowerCase()),
+    t('Auto notes') + ' ' + (playOptions.autoNotes ? t('On').toLocaleLowerCase() : t('Off').toLocaleLowerCase()),
   ].join(' · ')
   return <QuickPlayCard primary={{
     key: 'difficulty', label: t('Difficulty'), value: difficulty,

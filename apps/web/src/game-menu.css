@@ -11,10 +11,12 @@
   padding-bottom: 28px;
 }
 
-.game-menu-top { margin-bottom: 20px; }
+.game-menu-top { margin-bottom: 0; }
 
-.game-menu-back {
-  margin: 0 0 6px -6px;
+.game-menu-back.text-button {
+  display: flex;
+  width: max-content;
+  margin: 0 0 -18px -6px;
   color: var(--text);
   font-size: .9rem;
   font-weight: 600;
@@ -35,6 +37,8 @@
   line-height: 1.04;
   letter-spacing: -.055em;
 }
+
+.game-menu-large-text .game-menu-mascot { display: none; }
 
 .game-menu-mascot {
   position: absolute;
@@ -86,8 +90,8 @@
 
 .game-menu-destination-chevron { margin-left: auto; color: var(--text); opacity: .9; }
 
-.game-menu-page.catalog > .continue-games { margin-top: 0; margin-bottom: 20px; }
-.game-menu-page.catalog > .quick-play { width: 100%; margin-bottom: 20px; }
+.game-menu-page.catalog > .continue-games { margin-top: 0; margin-bottom: 13px; }
+.game-menu-page.catalog > .quick-play { width: 100%; margin-bottom: 4px; }
 .game-menu-page.catalog > .game-menu-destinations { margin-top: 0; }
 
 @media (max-width: 899px) {

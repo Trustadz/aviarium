@@ -69,7 +69,7 @@ export function PackCatalog({ gameTitle, presentation, packs, completed, session
           t('{count, plural, one {# chapter} other {# chapters}}', { count: pack.data.chapters.length })]
           .filter(Boolean).join(' · ')
         return <li className={`pack-catalog-item pack-${packTheme(pack)}`} key={pack.id}>
-          <a className="pack-catalog-card" href={packPath(pack)} onClick={event => {
+          <a className="pack-catalog-card" href={packPath(pack)} aria-label={t('Open {pack} pack', { pack: presentation.title(t, pack) })} onClick={event => {
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
             event.preventDefault(); open(pack)
           }}>

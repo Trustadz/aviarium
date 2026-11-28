@@ -1,5 +1,5 @@
 import { ArrowLeft, BookOpen, ChevronRight, History, Pencil, Settings2, Trophy } from 'lucide-react'
-import type { MouseEvent, ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useT } from './i18n.js'
 import './game-menu.css'
 
@@ -104,13 +104,19 @@ export function GameMenu({ title, gameId, mascot, leave, backLabel, children }: 
   children: ReactNode
 }) {
   const t = useT()
-  return <section className="catalog game-menu-page" aria-labelledby="game-menu-title">
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  const [largeText, setLargeText] = useState(false)
+  useLayoutEffect(() => {
+    const size = titleRef.current ? Number.parseFloat(getComputedStyle(titleRef.current).fontSize) : 0
+    setLargeText(size > 46)
+  }, [])
+  return <section className={'catalog game-menu-page' + (largeText ? ' game-menu-large-text' : '')} aria-labelledby="game-menu-title">
     <div className="game-menu-top">
       <button className="text-button game-menu-back" onClick={leave}>
         <ArrowLeft size={17}/> {backLabel ?? t('Library')}
       </button>
       <div className="game-menu-title-row">
-        <h1 id="game-menu-title">{title}</h1>
+        <h1 id="game-menu-title" ref={titleRef}>{title}</h1>
         {mascot && <img className={'game-menu-mascot game-menu-mascot-' + (gameId ?? 'generic')}
           src={mascot} alt="" aria-hidden="true"/>}
       </div>

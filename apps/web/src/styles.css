@@ -1687,7 +1687,7 @@ h1 { overflow-wrap: anywhere; }
   overscroll-behavior: contain;
 }
 @media (max-width: 899px) {
-  .app-destinations a span { white-space: normal; overflow-wrap: anywhere; line-height: 1.05; }
+  .app-destinations a span { white-space: nowrap; overflow-wrap: normal; line-height: 1.05; }
 }
 @media (max-width: 760px) {
   .text-button, .primary, .secondary, .icon-button, .search input, select,
@@ -1754,7 +1754,7 @@ h1 { overflow-wrap: anywhere; }
 }
 
 @media (max-width: 359px) {
-  .app-destinations a, .account-trigger { font-size: .6rem; }
+  .app-destinations a, .account-trigger { font-size: .55rem; }
 }
 
 /* Pack aggregates and avatar-rich mini overviews */
@@ -1999,4 +1999,10 @@ input:not([type=checkbox], [type=file], [type=radio]):focus-visible, textarea:fo
   .challenge-add-choices { grid-template-columns: minmax(0, 1fr); }
   .challenge-selection { align-items: start; }
   .challenge-selection > .text-button { padding-inline: 4px; }
+}
+
+/* Keep destination labels legible without letting enlarged root text overlap
+   the fixed mobile navigation targets. */
+@media (max-width: 899px) {
+  .app-destinations a, .account-trigger { font-size: clamp(9px, 2.6vw, 12px); }
 }

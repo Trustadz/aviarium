@@ -1,25 +1,27 @@
 .quick-play-card {
-  padding: 13px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 13px;
   background: var(--surface);
 }
 
-.quick-play-card form { display: grid; gap: 10px; }
+.quick-play-card form { display: grid; gap: 6px; }
 .quick-play-card-heading h2 { margin: 0; color: var(--text); font-size: 1.125rem; line-height: 1.2; }
 
 .quick-play-card-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: end;
 }
 
-.quick-play-card-main.is-single { grid-template-columns: minmax(0, 1fr); }
+.quick-play-card-main.is-single { display: grid; grid-template-columns: minmax(0, 1fr); }
 
-.quick-play-choice, .quick-play-option-select {
+.quick-play-choice {
+  position: relative;
   display: grid;
-  gap: 3px;
+  flex: 1 1 150px;
+  gap: 0;
   min-width: 0;
   color: var(--muted);
   font-size: .64rem;
@@ -27,10 +29,11 @@
   letter-spacing: .01em;
 }
 
-.quick-play-choice select, .quick-play-option-select select {
+.quick-play-choice select {
   width: 100%;
   min-height: 44px;
-  padding: 8px 11px;
+  height: auto;
+  padding: 1.15em 2.1em .25em .75em;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--tint);
@@ -39,7 +42,18 @@
   font-weight: 600;
 }
 
-.quick-play-start { min-height: 44px; padding-inline: 18px; border-radius: 10px; }
+.quick-play-choice > span {
+  position: absolute;
+  z-index: 1;
+  top: 5px;
+  left: 11px;
+  color: var(--muted);
+  font-size: .6rem;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.quick-play-start { flex: 0 1 auto; min-height: 44px; padding: .55em 1.1em; border-radius: 10px; white-space: normal; }
 
 .quick-play-options-toggle {
   display: grid;

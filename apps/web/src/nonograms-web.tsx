@@ -54,7 +54,7 @@ function QuickPlay({ canPlay, profile, preferences, updatePreferences, launch, p
     try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* The current selection stays usable. */ }
   }
   const timer = Boolean(preferences.nonogramTimer ?? true)
-  const summary = options.size + ' × ' + options.size + ' · ' + t('Timer') + ' ' + (timer ? t('On') : t('Off'))
+  const summary = options.size + ' × ' + options.size + ' · ' + t('Timer') + ' ' + (timer ? t('On').toLocaleLowerCase() : t('Off').toLocaleLowerCase())
   return <QuickPlayCard primary={{
     key: 'difficulty', label: t('Difficulty'), value: options.difficulty,
     choices: randomDifficulties.map(value => ({ value, label: t(value) })),

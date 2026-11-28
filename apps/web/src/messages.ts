@@ -204,6 +204,7 @@ export const dutch = {
   "Off": "Uit",
   "On": "Aan",
   "Open pack": "Pakket openen",
+  "Open {pack} pack": "Pakket {pack} openen",
   "Pack rules": "Pakketregels",
   "Pack verification took too long. Try a smaller update.": "De pakketcontrole duurde te lang. Probeer een kleinere update.",
   "Publish update": "Update publiceren",
